@@ -1,8 +1,8 @@
-"""Value objects produced by the METAR parser.
+"""The observation produced by a METAR or SPECI report.
 
-Plain frozen dataclasses with no framework imports. The parsing layer has to stay boring:
-every field here should be directly assertable in a test, and nothing should depend on a
-web framework or a database driver to be exercised.
+Condition groups (wind, visibility, clouds, weather) come from `domain.weather`; this
+module adds the parts specific to an observation: when it was taken, temperature and
+altimeter, and the remarks.
 """
 
 from __future__ import annotations
@@ -10,44 +10,21 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-#: Inches of mercury per hectopascal.
-HPA_PER_INHG = 33.8639
+from app.domain.weather.models import (
+    HPA_PER_INHG,
+    CloudLayer,
+    Visibility,
+    Wind,
+    lowest_ceiling,
+    lowest_ceiling_layer,
+)
 
-
-@dataclass(frozen=True, slots=True)
-class Wind:
-    direction_deg: int | None
-    speed_kt: int | None
-    gust_kt: int | None = None
-    is_variable: bool = False
-    variation_from_deg: int | None = None
-    variation_to_deg: int | None = None
-    raw: str = ""
-
-    @property
-    def is_calm(self) -> bool:
-        return self.speed_kt == 0
-
-
-@dataclass(frozen=True, slots=True)
-class Visibility:
-    """Statute miles, with the direction of the qualifier preserved.
-
-    AWC reports "10+" for ten miles or more; the flag is what tells you the value is a
-    floor rather than an exact reading.
-    """
-
-    statute_miles: float | None
-    is_greater_than: bool = False
-    is_less_than: bool = False
-    raw: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class CloudLayer:
-    cover: str  # FEW | SCT | BKN | OVC | VV
-    base_ft: int | None
-    cloud_type: str | None = None  # CB | TCU
+__all__ = [
+    "CloudLayer",
+    "Observation",
+    "Visibility",
+    "Wind",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,22 +55,11 @@ class Observation:
 
     @property
     def ceiling_ft(self) -> int | None:
-        """Lowest broken, overcast, or vertical-visibility layer. None means no ceiling."""
-        bases = [
-            layer.base_ft
-            for layer in self.clouds
-            if layer.cover in {"BKN", "OVC", "VV"} and layer.base_ft is not None
-        ]
-        return min(bases) if bases else None
+        return lowest_ceiling(self.clouds)
 
     @property
     def ceiling_layer(self) -> CloudLayer | None:
-        candidates = [
-            layer
-            for layer in self.clouds
-            if layer.cover in {"BKN", "OVC", "VV"} and layer.base_ft is not None
-        ]
-        return min(candidates, key=lambda layer: layer.base_ft or 0) if candidates else None
+        return lowest_ceiling_layer(self.clouds)
 
     @property
     def visibility_sm(self) -> float | None:

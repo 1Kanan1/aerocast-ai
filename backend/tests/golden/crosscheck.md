@@ -1,21 +1,21 @@
 # METAR cross-check
 
-- parser: `metar-1.0.0`
-- generated: 2026-11-01T15:45:21+04:00
+- parser: `metar-1.1.0`
+- generated: 2026-11-01T15:52:28+04:00
 - source: https://aviationweather.gov/data/cache/metars.cache.csv.gz
-- observations: 2,381 parsed, 0 skipped, 2,381 rows considered
+- observations: 2,373 parsed, 0 skipped, 2,373 rows considered
 
 | Field | Compared | Agree | Disagree | Missing | Agreement |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| temperature | 2,356 | 2,355 | 1 | 25 | 99.96% |
-| dewpoint | 2,344 | 2,344 | 0 | 37 | 100.00% |
-| wind_direction | 2,349 | 2,349 | 0 | 32 | 100.00% |
-| wind_speed | 2,349 | 2,349 | 0 | 32 | 100.00% |
-| wind_gust | 86 | 86 | 0 | 2,295 | 100.00% |
-| visibility | 2,312 | 2,312 | 0 | 69 | 100.00% |
-| altimeter | 2,374 | 2,374 | 0 | 7 | 100.00% |
-| clouds | 1,806 | 1,806 | 0 | 575 | 100.00% |
-| flight_category | 2,312 | 2,311 | 1 | 69 | 99.96% |
+| temperature | 2,349 | 2,348 | 1 | 24 | 99.96% |
+| dewpoint | 2,337 | 2,337 | 0 | 36 | 100.00% |
+| wind_direction | 2,342 | 2,342 | 0 | 31 | 100.00% |
+| wind_speed | 2,342 | 2,342 | 0 | 31 | 100.00% |
+| wind_gust | 82 | 82 | 0 | 2,291 | 100.00% |
+| visibility | 2,303 | 2,303 | 0 | 70 | 100.00% |
+| altimeter | 2,366 | 2,366 | 0 | 7 | 100.00% |
+| clouds | 1,806 | 1,806 | 0 | 567 | 100.00% |
+| flight_category | 2,303 | 2,302 | 1 | 70 | 99.96% |
 
 Agreement is measured only where both decoders produced a value. `Missing`
 counts rows where one side had nothing, which is usually a group the other
