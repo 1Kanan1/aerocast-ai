@@ -1,7 +1,7 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import type { ApiResult, HealthResponse } from '../lib/api.ts'
+import type { ApiResult, HealthResponse, ProviderStatus } from '../lib/api.ts'
 import { Document } from './document.tsx'
 
 interface HomePageProps {
@@ -14,7 +14,8 @@ export function HomePage(handle: Handle<HomePageProps>) {
     let body = health.data
     let reachable = health.ok && body !== undefined
     let databaseOk = body?.database.ok ?? false
-    let modelConfigured = Boolean(body?.llm.zai_configured || body?.llm.gemini_configured)
+    let providers = body?.llm.providers ?? []
+    let activeProvider = pickProvider(providers)
 
     return (
       <Document
@@ -57,12 +58,14 @@ export function HomePage(handle: Handle<HomePageProps>) {
               />
               <StatusRow
                 detail={
-                  modelConfigured
-                    ? `${body?.llm.primary ?? 'provider'} configured`
-                    : 'no key, deterministic summaries only'
+                  activeProvider
+                    ? `${activeProvider.name} · ${activeProvider.kind}`
+                    : providers.length > 0
+                      ? 'no provider reachable'
+                      : 'deterministic summaries only'
                 }
                 label="Explanation"
-                ok={modelConfigured}
+                ok={activeProvider !== undefined}
               />
             </section>
 
@@ -78,6 +81,14 @@ export function HomePage(handle: Handle<HomePageProps>) {
       </Document>
     )
   }
+}
+
+function pickProvider(providers: ProviderStatus[]): ProviderStatus | undefined {
+  // A remote provider with a key counts as usable. The local one also has to answer,
+  // because a base URL on a laptop proves nothing when the server is not running.
+  return providers.find(
+    (provider) => provider.configured && (provider.kind === 'remote' || provider.reachable === true),
+  )
 }
 
 function StatusRow(handle: Handle<{ detail: string; label: string; ok: boolean }>) {

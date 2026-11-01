@@ -10,11 +10,34 @@ async def _get_health() -> httpx.Response:
         return await client.get("/api/health")
 
 
-async def test_health_reports_ok_when_database_reachable(monkeypatch) -> None:
+def _fake_providers(monkeypatch, database_ok: bool) -> None:
     async def fake_ping() -> tuple[bool, str | None]:
-        return True, None
+        return (True, None) if database_ok else (False, "OSError")
+
+    async def fake_statuses(_settings) -> list[dict[str, object]]:
+        return [
+            {
+                "name": "zai",
+                "model": "glm-4.7-flash",
+                "kind": "remote",
+                "configured": True,
+                "reachable": None,
+            },
+            {
+                "name": "mlx",
+                "model": "mlx-community/gemma-4-e2b-it-4bit",
+                "kind": "local",
+                "configured": True,
+                "reachable": False,
+            },
+        ]
 
     monkeypatch.setattr(health_module, "ping", fake_ping)
+    monkeypatch.setattr(health_module, "provider_statuses", fake_statuses)
+
+
+async def test_health_reports_ok_when_database_reachable(monkeypatch) -> None:
+    _fake_providers(monkeypatch, database_ok=True)
 
     response = await _get_health()
 
@@ -22,19 +45,13 @@ async def test_health_reports_ok_when_database_reachable(monkeypatch) -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["database"] == {"ok": True, "error": None}
-    assert set(body["llm"]) == {
-        "primary",
-        "fallback",
-        "zai_configured",
-        "gemini_configured",
-    }
+    assert "zai" in body["llm"]["chain"]
+    assert [provider["name"] for provider in body["llm"]["providers"]] == ["zai", "mlx"]
+    assert body["llm"]["providers"][1]["reachable"] is False
 
 
 async def test_health_reports_degraded_when_database_unreachable(monkeypatch) -> None:
-    async def fake_ping() -> tuple[bool, str | None]:
-        return False, "OSError"
-
-    monkeypatch.setattr(health_module, "ping", fake_ping)
+    _fake_providers(monkeypatch, database_ok=False)
 
     response = await _get_health()
 

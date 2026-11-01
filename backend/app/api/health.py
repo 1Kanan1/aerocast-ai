@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.config import get_settings
 from app.db.session import ping
+from app.llm.providers import statuses as provider_statuses
 
 router = APIRouter(tags=["system"])
 
@@ -28,10 +29,8 @@ async def health() -> JSONResponse:
         "env": settings.aerocast_env,
         "database": {"ok": database_ok, "error": database_error},
         "llm": {
-            "primary": settings.llm_primary,
-            "fallback": settings.llm_fallback,
-            "zai_configured": settings.zai_configured,
-            "gemini_configured": settings.gemini_configured,
+            "chain": list(settings.llm_providers),
+            "providers": await provider_statuses(settings),
         },
     }
     return JSONResponse(payload, status_code=200 if database_ok else 503)

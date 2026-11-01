@@ -27,9 +27,21 @@ def test_database_url_rejects_non_postgres() -> None:
         make_settings(database_url="mysql://localhost/db")
 
 
-def test_empty_fallback_becomes_none() -> None:
-    assert make_settings(llm_fallback="").llm_fallback is None
-    assert make_settings(llm_fallback="gemini").llm_fallback == "gemini"
+@pytest.mark.parametrize(
+    ("chain", "expected"),
+    [
+        ("zai,gemini,mlx", ("zai", "gemini", "mlx")),
+        (" zai , omlx ", ("zai", "omlx")),
+        ("mlx", ("mlx",)),
+        ("zai,,gemini", ("zai", "gemini")),
+    ],
+)
+def test_llm_chain_is_parsed_in_order(chain: str, expected: tuple[str, ...]) -> None:
+    assert make_settings(llm_chain=chain).llm_providers == expected
+
+
+def test_unknown_providers_are_dropped_from_the_chain() -> None:
+    assert make_settings(llm_chain="zai,openai,gpt4all").llm_providers == ("zai",)
 
 
 def test_provider_configuration_reflects_empty_keys() -> None:
@@ -40,6 +52,12 @@ def test_provider_configuration_reflects_empty_keys() -> None:
     configured = make_settings(zai_api_key="secret", gemini_api_key="")
     assert configured.zai_configured is True
     assert configured.gemini_configured is False
+
+
+def test_local_provider_configuration() -> None:
+    assert make_settings(mlx_base_url="http://127.0.0.1:8080/v1").mlx_configured is True
+    assert make_settings(mlx_base_url="").mlx_configured is False
+    assert make_settings(mlx_base_url="").mlx_base_url is None
 
 
 def test_secrets_do_not_render_in_repr() -> None:

@@ -36,7 +36,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.error("database connection failed: %s", database_error)
 
     if not settings.zai_configured and not settings.gemini_configured:
-        logger.warning("/ask will run in degraded mode: no model provider configured")
+        logger.warning("no remote model configured; /ask will rely on the local provider")
+    if not settings.mlx_configured:
+        logger.info("local model disabled (MLX_BASE_URL unset)")
 
     yield
 

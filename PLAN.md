@@ -43,7 +43,7 @@ accounts, no go/no-go anything.
 | Frontend runtime | Node 26, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running |
 | Map | MapLibre GL JS v6 | ESM only, WebGL2, no Mapbox account |
 | Basemap | OpenFreeMap `positron`, restyled monochrome | no key, no rate limit, MIT-ish terms, good enough to desaturate |
-| AI | Z.ai GLM-4.7-Flash primary, Gemini Flash fallback, template floor | free tiers; provider chain behind one OpenAI-compatible client |
+| AI | Z.ai GLM-4.7-Flash, Gemini Flash, local Gemma 4 E2B via oMLX, template floor | free tiers plus an offline rung; one OpenAI-compatible client for all of them |
 | Deploy | Hetzner + Coolify + Caddy, `docker compose` underneath | ~EUR 4/mo, real TLS, git-push deploys |
 
 Remix never touches Postgres. FastAPI owns the database, the parsers, ingestion, and
@@ -467,7 +467,7 @@ allowed to know arrives as a fact bundle; everything it says has to point at a r
 question
   -> pre-check: does it ask for a decision? (regex)  -> fixed refusal, no model call
   -> cache: sha256(brief_hash + normalized_question + prompt_version)
-  -> provider chain: zai -> gemini -> template
+  -> provider chain: LLM_CHAIN order, default zai -> gemini -> mlx -> template
   -> validate
   -> store in ai_answers
   -> respond
@@ -514,8 +514,38 @@ laziness.
 
 Free tiers meter by concurrency and a daily cap, so: per-IP token bucket (5/min, 50/day),
 answer cache keyed on brief hash with 15 minute TTL, and a hard per-process concurrency
-of 1. Failover to the second provider on 429 or timeout, one attempt each, never retrying
+of 1. Failover to the next provider on 429 or timeout, one attempt each, never retrying
 into the same provider.
+
+### The local rung
+
+`mlx-community/gemma-4-e2b-it-4bit` served by **oMLX** (omlx.ai) on Apple Silicon. It
+exists for three reasons: no quota, no network, and no weather data leaving the machine.
+
+Use oMLX rather than `mlx_lm.server`. The Gemma 4 E2B conversion is a vision build
+(`mlx_vlm`, 5B parameters, 3.55 GB at 4 bit), and `mlx_lm.server` is the text-only
+reference implementation. oMLX serves MLX vision models and exposes
+`/v1/chat/completions`, so it needs no special handling in the client.
+
+```sh
+# via oMLX, then point it at mlx-community/gemma-4-e2b-it-4bit
+MLX_BASE_URL=http://127.0.0.1:8080/v1
+MLX_MODEL=mlx-community/gemma-4-e2b-it-4bit
+```
+
+Three honest caveats:
+
+1. **It is the last rung by default.** A 4 bit, 2B effective model follows the citation
+   contract less reliably than GLM or Gemini, so putting it first would make the product
+   look worse for no gain. `LLM_CHAIN=mlx,zai,gemini` flips it for an offline demo.
+2. **Expect more rejections, not worse answers.** The validator drops unsupported claims
+   and falls through. That is the design working, and the eval fixture should report pass
+   rates per provider so the difference is measured rather than assumed.
+3. **Long fact bundles are a risk.** If the local model truncates, Phase 5 gives local
+   providers a compressed brief (top N facts, short glossary) rather than the full one.
+
+MLX is Apple Silicon only, so `MLX_BASE_URL` stays empty in production and the chain
+degrades to the two hosted providers without any code change.
 
 ### Eval fixture
 
@@ -625,13 +655,17 @@ Two owners, two sets of variables. They never mix.
 AEROCAST_ENV=local
 DATABASE_URL=postgresql+asyncpg://aerocast@localhost:5432/aerocast
 
-LLM_PRIMARY=zai
-LLM_FALLBACK=gemini
+LLM_CHAIN=zai,gemini,mlx
+LLM_TIMEOUT_SECONDS=20
+
 ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
 ZAI_MODEL=glm-4.7-flash
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-flash-latest
+
+MLX_BASE_URL=http://127.0.0.1:8080/v1
+MLX_MODEL=mlx-community/gemma-4-e2b-it-4bit
 ```
 
 **The web container gets exactly one variable**, set in `compose.yaml` or the shell, not
@@ -714,6 +748,7 @@ Those are the portfolio.
 | AWC has no SLA | last-known-good in Postgres, staleness badges, `ingest_runs` telemetry, never blank the screen |
 | Cross-check disagreement rate unknown | triage into fixtures, publish the number either way; a documented 98% is more credible than a claimed 100% |
 | Free LLM quota | cache, rate limits, template fallback, provider chain |
+| Local model output quality below the hosted ones | it is the last rung; the validator rejects and falls through, and eval reports pass rates per provider |
 | Scope creep toward a real briefing tool | the "not in scope" list in section 1 is the answer to every such idea |
 
 ## 16. Open items

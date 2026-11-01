@@ -15,16 +15,22 @@ export interface ApiResult<T> {
   error?: string
 }
 
+export interface ProviderStatus {
+  name: string
+  model: string
+  kind: 'remote' | 'local'
+  configured: boolean
+  reachable: boolean | null
+}
+
 export interface HealthResponse {
   status: 'ok' | 'degraded'
   version: string
   env: string
   database: { ok: boolean; error: string | null }
   llm: {
-    primary: string
-    fallback: string | null
-    zai_configured: boolean
-    gemini_configured: boolean
+    chain: string[]
+    providers: ProviderStatus[]
   }
 }
 
