@@ -1,0 +1,19 @@
+# secrets and local state
+.env
+.env.local
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+
+# editor and os
+.DS_Store
+
+# snapshot backups left by the editor tooling
+*.bak-*

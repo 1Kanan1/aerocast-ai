@@ -1,0 +1,46 @@
+name: aerocast
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aerocast
+      POSTGRES_PASSWORD: aerocast
+      POSTGRES_DB: aerocast
+    ports:
+      # 5433 on the host so a local Postgres on 5432 keeps working.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aerocast -d aerocast"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file:
+      - .env
+    environment:
+      # .env points at localhost for native dev. Inside the container the database
+      # is a service, so this overrides just that one value.
+      DATABASE_URL: postgresql+asyncpg://aerocast:aerocast@db:5432/aerocast
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    environment:
+      API_BASE_URL: http://api:8000
+      PORT: "44100"
+    ports:
+      - "44100:44100"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
