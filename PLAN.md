@@ -549,6 +549,11 @@ into the same provider.
 Every provider names an exact model id: `glm-4.7-flash`, `gemini-3.8-flash`,
 `mlx-community/gemma-4-e2b-it-4bit`. No `-latest` aliases anywhere.
 
+Gemini is a ladder rather than a single id. `GEMINI_MODELS` lists the models tried in order
+behind one endpoint, because one provider can hold several usable models and the only
+difference that matters between them is latency. Each entry is still pinned; only the
+ordering is configuration.
+
 An alias that rolls forward is worse than one that expires. The thing it silently changes
 is the output of a system validated by a frozen eval fixture and a versioned prompt, so a
 model swap would move the eval numbers and look like a prompt regression. Pinned ids make
@@ -588,10 +593,12 @@ Consequence for timeouts: they are per provider, not global. 20s for the fast pa
 for a provider that thinks. One global value either fails Gemini too early or lets a hung
 Z.ai request stall for two minutes before the failover.
 
-Consequence for the fallback rung: a 63s explanation is not an interactive experience. The
-chain order can stay, but `gemini-3.8-flash` earns its place only if the answer quality is
-measurably better than a lite model on the eval fixture. That is a Phase 5 decision with
-numbers, not a preference.
+Consequence for the fallback rung: a 63s explanation is not an interactive experience, so
+the Gemini rung is a **ladder**, not a single model: `gemini-3.8-flash` for quality first,
+then `gemini-3.6-flash`, then `gemini-3.5-flash-lite`. The first rung that answers inside
+its budget wins, and a timeout or a rejected claim falls through to the next. Dropping
+`gemini-3.8-flash` from `GEMINI_MODELS` makes the rung fast first and good second, which is
+a one line change once the eval fixture says how much quality it is actually buying.
 
 ### The local rung
 
@@ -755,7 +762,7 @@ ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
 ZAI_MODEL=glm-4.7-flash
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODELS=gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite
 
 LOCAL_BASE_URL=http://127.0.0.1:8080/v1
 LOCAL_MODEL=mlx-community/gemma-4-e2b-it-4bit

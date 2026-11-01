@@ -45,11 +45,11 @@ class Settings(BaseSettings):
 
     gemini_api_key: SecretStr | None = None
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
-    gemini_model: str = "gemini-3.8-flash"
-    # Gemini 3 cannot disable thinking, and "minimal" is rejected for gemini-3.8-flash.
-    # Measured on a two-field JSON task: low = 63.6s / 105 tokens, medium = 99.4s / 314.
-    # gemini-3.5-flash-lite answered the same task in 1.3s, which is why the fallback
-    # rung is worth revisiting before Phase 5.
+    # Ordered fallback ladder inside the Gemini rung, tried left to right. Gemini 3
+    # cannot disable thinking, so the models differ mostly in latency: on a two-field
+    # JSON task 3.8-flash at low effort took 63.6s, 3.6-flash 3.1s, 3.5-flash-lite 1.3s.
+    # Drop 3.8-flash from this list to make the rung fast first and good second.
+    gemini_models: str = "gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
     gemini_reasoning_effort: str = "low"
 
     # Any OpenAI-compatible server on the machine: oMLX, Ollama, LM Studio, llama.cpp.
@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     def llm_providers(self) -> tuple[str, ...]:
         names = tuple(part.strip().lower() for part in self.llm_chain.split(",") if part.strip())
         return tuple(name for name in names if name in KNOWN_PROVIDERS)
+
+    @property
+    def gemini_model_list(self) -> tuple[str, ...]:
+        return tuple(model.strip() for model in self.gemini_models.split(",") if model.strip())
 
     @property
     def zai_configured(self) -> bool:

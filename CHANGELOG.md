@@ -112,6 +112,14 @@ Checked against the live endpoints rather than the docs, which were wrong in two
 - Thinking cannot be disabled on Gemini 3, so timeouts are per provider: 20s for the fast
   path, 120s for a thinking model.
 
+### Changed, Gemini ladder
+
+The Gemini rung is an ordered list of models (`GEMINI_MODELS`) behind one endpoint instead
+of a single id, because the measured difference between them is latency. Default order is
+`gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`: quality first, then two
+fast rungs. Chain de-duplication now keys on provider and model, so one provider can hold
+several rungs without collapsing to one.
+
 ### Fixed
 
 - **Temperature agreement with AWC fell from 42% to 99.96%** once remarks `T`-groups were

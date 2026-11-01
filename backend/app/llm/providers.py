@@ -39,33 +39,45 @@ class ProviderStatus:
         return asdict(self)
 
 
-def _resolve(settings: Settings, name: str) -> ProviderStatus | None:
+def _resolve(settings: Settings, name: str) -> list[ProviderStatus]:
+    """Expand one chain entry into provider statuses.
+
+    Most providers are one entry. Gemini is a ladder of models behind one endpoint, so a
+    single chain entry becomes several rungs in the order they will be tried.
+    """
     match name:
         case "zai":
-            return ProviderStatus(
-                name="zai",
-                model=settings.zai_model,
-                kind="remote",
-                configured=settings.zai_configured,
-                reachable=None,
-            )
+            return [
+                ProviderStatus(
+                    name="zai",
+                    model=settings.zai_model,
+                    kind="remote",
+                    configured=settings.zai_configured,
+                    reachable=None,
+                )
+            ]
         case "gemini":
-            return ProviderStatus(
-                name="gemini",
-                model=settings.gemini_model,
-                kind="remote",
-                configured=settings.gemini_configured,
-                reachable=None,
-            )
+            return [
+                ProviderStatus(
+                    name="gemini",
+                    model=model,
+                    kind="remote",
+                    configured=settings.gemini_configured,
+                    reachable=None,
+                )
+                for model in settings.gemini_model_list
+            ]
         case "local" | "mlx" | "omlx":
-            return ProviderStatus(
-                name="local",
-                model=settings.local_model,
-                kind="local",
-                configured=settings.local_configured,
-                reachable=None,
-            )
-    return None
+            return [
+                ProviderStatus(
+                    name="local",
+                    model=settings.local_model,
+                    kind="local",
+                    configured=settings.local_configured,
+                    reachable=None,
+                )
+            ]
+    return []
 
 
 async def _probe(base_url: str) -> bool:
@@ -87,23 +99,30 @@ async def _probe(base_url: str) -> bool:
 
 
 async def statuses(settings: Settings) -> list[dict[str, object]]:
-    """Describe each configured provider in chain order, de-duplicated."""
+    """Describe each rung in chain order.
+
+    De-duplication is keyed on provider and model, not provider alone, because one
+    provider can contribute several models.
+    """
     described: list[dict[str, object]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
 
     for name in settings.llm_providers:
-        status = _resolve(settings, name)
-        if status is None:
-            logger.warning("ignoring unknown provider in LLM_CHAIN: %s", name)
+        resolved = _resolve(settings, name)
+        if not resolved:
+            logger.warning("provider in LLM_CHAIN has no models: %s", name)
             continue
-        if status.name in seen:
-            continue
-        seen.add(status.name)
 
-        if status.kind == "local" and status.configured and settings.local_base_url:
-            status = replace(status, reachable=await _probe(settings.local_base_url))
+        for status in resolved:
+            key = (status.name, status.model)
+            if key in seen:
+                continue
+            seen.add(key)
 
-        described.append(status.as_dict())
+            if status.kind == "local" and status.configured and settings.local_base_url:
+                status = replace(status, reachable=await _probe(settings.local_base_url))
+
+            described.append(status.as_dict())
 
     return described
 

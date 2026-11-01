@@ -74,7 +74,7 @@ def test_local_provider_configuration() -> None:
 def test_no_provider_uses_a_moving_model_alias() -> None:
     """`-latest` aliases drift without a commit. Pinned ids only."""
     settings = make_settings()
-    for model in (settings.zai_model, settings.gemini_model, settings.local_model):
+    for model in (settings.zai_model, *settings.gemini_model_list, settings.local_model):
         assert not model.endswith("-latest"), model
         assert model.count("/") <= 1, model
 

@@ -46,4 +46,40 @@ async def test_chain_order_is_preserved() -> None:
 
     described = await statuses(settings)
 
-    assert [provider["name"] for provider in described] == ["local", "zai", "gemini"]
+    assert [provider["name"] for provider in described] == [
+        "local",
+        "zai",
+        "gemini",
+        "gemini",
+        "gemini",
+    ]
+    assert described[2]["model"] == "gemini-3.8-flash"
+
+
+async def test_gemini_expands_into_its_model_ladder() -> None:
+    settings = make_settings(
+        llm_chain="gemini",
+        gemini_api_key="secret",
+        gemini_models="gemini-3.6-flash, gemini-3.5-flash-lite",
+        local_base_url="",
+    )
+
+    described = await statuses(settings)
+
+    assert [provider["model"] for provider in described] == [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+    ]
+    assert all(provider["name"] == "gemini" for provider in described)
+    assert all(provider["configured"] is True for provider in described)
+
+
+async def test_the_same_model_twice_appears_once() -> None:
+    settings = make_settings(
+        llm_chain="gemini,gemini",
+        gemini_api_key="secret",
+        gemini_models="gemini-3.6-flash",
+        local_base_url="",
+    )
+
+    assert len(await statuses(settings)) == 1
