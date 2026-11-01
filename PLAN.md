@@ -740,10 +740,12 @@ API_BASE_URL=http://localhost:8000
 
 Rules that follow from running a local database and running the API natively:
 
-- `DATABASE_URL` is normalized in `config.py`: a bare `postgresql://` and a legacy
-  `postgres://` both get rewritten to `postgresql+asyncpg://`, because SQLAlchemy's async
-  engine needs the driver in the scheme and this is a five minute bug otherwise. Anything
-  that is not a Postgres URL fails at startup with the variable name in the message.
+- `DATABASE_URL` is normalized in `config.py`: a bare `postgresql://` becomes
+  `postgresql+asyncpg://`, because `create_async_engine()` does not infer an async driver
+  and otherwise resolves the sync default and dies on a missing `psycopg` import. The
+  pre-2009 `postgres://` alias is rejected rather than rewritten, since SQLAlchemy dropped
+  it. Anything that is not a Postgres URL fails at startup with the variable named in the
+  message.
 - `.env` is written for native dev, so it points at `localhost`. Compose **overrides just
   that one variable** in the api service rather than duplicating the file:
   ```yaml

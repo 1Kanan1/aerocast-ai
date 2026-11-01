@@ -19,9 +19,8 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 - FastAPI app with `/api/health`, `/api/docs`, `/api/openapi.json`, and a lifespan that
   logs database and provider status at boot.
 - Settings layer reading the repo-root `.env`: `SecretStr` for every credential,
-  `DATABASE_URL` scheme normalisation (`postgres://`, `postgresql://` and
-  `postgresql+asyncpg://` all accepted), ordered `LLM_CHAIN`, and aliases so `mlx` and
-  `omlx` both resolve to the local provider.
+  `DATABASE_URL` gaining the `asyncpg` driver when the scheme omits it, ordered `LLM_CHAIN`,
+  and aliases so `mlx` and `omlx` both resolve to the local provider.
 - Lazy async SQLAlchemy engine, session factory, a `ping()` that returns only the exception
   class name, and engine disposal on shutdown.
 - Provider inventory that describes each configured provider in chain order and probes the
@@ -60,6 +59,9 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 
 ### Changed
 
+- **`DATABASE_URL` no longer accepts `postgres://`.** The pre-2009 alias is rejected instead
+  of rewritten, since SQLAlchemy dropped it. Plain `postgresql://` still gains the
+  `postgresql+asyncpg://` driver, which the async engine needs.
 - **Provider chain** is now an ordered list (`LLM_CHAIN`) instead of two fixed slots, so a
   third rung and offline ordering are configuration rather than code.
 - **Local provider renamed** from `mlx` to `local`, configured by `LOCAL_BASE_URL` and

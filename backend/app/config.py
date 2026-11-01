@@ -57,21 +57,19 @@ class Settings(BaseSettings):
 
     @field_validator("database_url")
     @classmethod
-    def normalize_database_url(cls, value: str) -> str:
-        """Accept postgres:// and postgresql:// and hand SQLAlchemy asyncpg.
+    def name_the_async_driver(cls, value: str) -> str:
+        """Name asyncpg in the scheme when it is missing.
 
-        The async engine needs the driver named in the scheme, and a bare
-        postgresql:// URL produces a confusing missing-driver failure.
+        create_async_engine() does not infer an async driver from a bare
+        postgresql:// URL: it resolves the sync default (psycopg) and fails on import.
         """
         url = value.strip()
-        if url.startswith("postgres://"):
-            url = "postgresql://" + url.removeprefix("postgres://")
         if url.startswith("postgresql://"):
             url = "postgresql+asyncpg://" + url.removeprefix("postgresql://")
         if not url.startswith("postgresql+asyncpg://"):
             raise ValueError(
                 "DATABASE_URL must be a PostgreSQL URL "
-                "(postgres://, postgresql://, or postgresql+asyncpg://)"
+                "(postgresql:// or postgresql+asyncpg://)"
             )
         return url
 

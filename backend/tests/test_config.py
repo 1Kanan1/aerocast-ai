@@ -15,18 +15,27 @@ def make_settings(**overrides: Any) -> Settings:
     ("raw", "expected"),
     [
         ("postgresql://u:p@localhost:5432/db", "postgresql+asyncpg://u:p@localhost:5432/db"),
-        ("postgres://u:p@localhost:5432/db", "postgresql+asyncpg://u:p@localhost:5432/db"),
         ("postgresql+asyncpg://u:p@localhost/db", "postgresql+asyncpg://u:p@localhost/db"),
         ("  postgresql://u:p@localhost/db  ", "postgresql+asyncpg://u:p@localhost/db"),
     ],
 )
-def test_database_url_scheme_is_normalized(raw: str, expected: str) -> None:
+def test_database_url_gets_the_async_driver(raw: str, expected: str) -> None:
     assert make_settings(database_url=raw).database_url == expected
 
 
-def test_database_url_rejects_non_postgres() -> None:
+@pytest.mark.parametrize(
+    "url",
+    [
+        "mysql://localhost/db",
+        # The pre-2009 alias. SQLAlchemy dropped it, so accepting it would only delay
+        # the failure to the first connection.
+        "postgres://u:p@localhost/db",
+        "sqlite+aiosqlite:///db.sqlite",
+    ],
+)
+def test_database_url_rejects_anything_not_postgres(url: str) -> None:
     with pytest.raises(ValidationError, match="must be a PostgreSQL URL"):
-        make_settings(database_url="mysql://localhost/db")
+        make_settings(database_url=url)
 
 
 @pytest.mark.parametrize(
