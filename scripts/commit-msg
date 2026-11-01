@@ -1,0 +1,24 @@
+#!/bin/sh
+# Conventional Commits gate for subject lines.
+#
+#   feat(scope)!: summary
+#
+# Allowed types: feat fix chore docs refactor test build ci perf style
+# Install with: make hooks
+
+subject=$(head -n 1 "$1")
+
+# Commits git generates itself are exempt.
+case "$subject" in
+  "Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+esac
+
+pattern='^(feat|fix|chore|docs|refactor|test|build|ci|perf|style)(\([a-z0-9._/-]+\))?!?: .+'
+
+if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+  printf 'commit-msg: subject must be a Conventional Commit\n\n' >&2
+  printf '  got:      %s\n' "$subject" >&2
+  printf '  expected: type(scope)!: summary\n' >&2
+  printf '  types:    feat fix chore docs refactor test build ci perf style\n' >&2
+  exit 1
+fi

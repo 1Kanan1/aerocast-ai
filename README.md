@@ -76,6 +76,23 @@ make test    # pytest, then Remix's test runner
 make lint    # ruff, then tsc
 ```
 
+## Commits
+
+Conventional Commits, enforced by a hook:
+
+```sh
+make hooks   # installs scripts/commit-msg as .git/hooks/commit-msg
+```
+
+```
+feat(map): add advisory polygons
+fix(metar): treat P6SM as greater than six miles
+refactor(llm): make the local provider runtime-agnostic
+```
+
+Types: `feat fix chore docs refactor test build ci perf style`. Git-generated
+`Merge` and `Revert` commits are exempt.
+
 ## Data and attribution
 
 Weather data comes from the US National Weather Service Aviation Weather Center

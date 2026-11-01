@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install db db-down api web test lint fmt up down
+.PHONY: help install hooks db db-down api web test lint fmt up down
 
 help: ## show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -9,6 +9,10 @@ help: ## show available targets
 install: ## install backend and frontend dependencies
 	cd backend && uv sync
 	cd frontend && bun install
+
+hooks: ## install git hooks (conventional commits)
+	cp scripts/commit-msg .git/hooks/commit-msg
+	chmod +x .git/hooks/commit-msg
 
 db: ## start Postgres in Docker on localhost:5433
 	docker compose up -d db
