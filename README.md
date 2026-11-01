@@ -76,6 +76,12 @@ make test    # pytest, then Remix's test runner
 make lint    # ruff, then tsc
 ```
 
+The METAR parser is checked against AWC's own decoder, which needs network:
+
+```sh
+make crosscheck   # writes backend/tests/golden/crosscheck.md
+```
+
 ## Commits
 
 Conventional Commits, enforced by a hook:

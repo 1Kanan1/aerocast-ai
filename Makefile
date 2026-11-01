@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install hooks db db-down api web test lint fmt up down
+.PHONY: help install hooks db db-down api web test lint fmt crosscheck up down
 
 help: ## show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -33,6 +33,9 @@ test: ## run backend and frontend tests
 lint: ## ruff and typecheck
 	cd backend && uv run ruff check .
 	cd frontend && bun run typecheck
+
+crosscheck: ## compare the METAR parser against AWC's decoder (needs network)
+	cd backend && uv run python -m app.tools.crosscheck_metar
 
 fmt: ## format the backend
 	cd backend && uv run ruff format .
