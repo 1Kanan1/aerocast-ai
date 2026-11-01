@@ -1,13 +1,6 @@
 """Deterministic METAR parser.
 
-Grammar in, frozen dataclasses out. No network, no database, and no implicit clock: the
-caller supplies the reference time used to resolve the day-of-month, because a METAR only
-carries `DDHHMMZ` and determinism matters more than convenience here.
-
-The parser is tolerant by design. Anything it does not recognise lands in `unparsed`
-rather than raising, so a single odd token cannot take out a whole observation. Only a
-report with no station or no valid timestamp is a hard failure, because those cannot be
-placed on a timeline at all.
+Unknown tokens land in `unparsed`; only a missing station or timestamp raises.
 """
 
 from __future__ import annotations
@@ -20,8 +13,7 @@ from app.domain.metar.models import Observation
 from app.domain.weather.models import HPA_PER_INHG
 from app.domain.weather.tokens import scan_conditions
 
-#: Bumped whenever parsed output changes, and stored with every observation so a
-#: historical row can be traced to the code that produced it.
+#: Stored with every observation, so a row traces to the code that produced it.
 PARSER_VERSION = "metar-1.1.0"
 
 _REPORT_TIME = re.compile(r"^(?P<day>\d{2})(?P<hour>\d{2})(?P<minute>\d{2})Z$")
@@ -29,8 +21,7 @@ _STATION = re.compile(r"^[A-Z][A-Z0-9]{2,3}$")
 _TEMPERATURE = re.compile(r"^(?P<temperature>M?\d{2})/(?P<dewpoint>M?\d{2}|//)?$")
 _ALTIMETER_INHG = re.compile(r"^A(?P<value>\d{4})$")
 _ALTIMETER_HPA = re.compile(r"^Q(?P<value>\d{4})$")
-#: Precise temperatures live in the remarks as tenths: T00221017 is +2.2 / -1.7.
-#: The dewpoint half is optional in the wild: T0178 and T0151//// both occur.
+#: Remarks carry tenths: T00221017 is +2.2 / -1.7. Dewpoint half optional: T0178.
 _TEMPERATURE_GROUP = re.compile(
     r"\bT(?P<temp_sign>[01])(?P<temperature>\d{3})"
     r"(?:(?P<dew_sign>[01])(?P<dewpoint>\d{3}))?\b"
@@ -44,11 +35,7 @@ class MetarParseError(ValueError):
 
 
 def parse_metar(raw: str, reference: datetime | None = None) -> Observation:
-    """Parse one raw METAR or SPECI report.
-
-    `reference` anchors the day-of-month. Pass the fetch time, or the upstream report
-    time when it is available. Without it, the current UTC time is used.
-    """
+    """Parse one report. `reference` anchors the day-of-month; defaults to now."""
     text = " ".join(raw.split()).rstrip("=").strip()
     if not text:
         raise MetarParseError("empty report")
@@ -91,8 +78,7 @@ def parse_metar(raw: str, reference: datetime | None = None) -> Observation:
         conditions.unparsed
     )
 
-    # The remarks carry tenths of a degree, which is what AWC publishes. Prefer them:
-    # the body group is rounded to whole degrees and loses information the sensor had.
+    # Remarks carry tenths; the body group is rounded. Dewpoint half is optional: T0178.
     precise_temperature, precise_dewpoint = _parse_precise_temperatures(remarks)
     if precise_temperature is not None:
         temperature_c = precise_temperature
@@ -129,7 +115,7 @@ def _split_remarks(tokens: list[str]) -> tuple[list[str], str | None]:
 def _scan_observation_groups(
     tokens: list[str],
 ) -> tuple[float | None, float | None, float | None, list[str]]:
-    """Pull the groups that only a METAR carries out of the leftover tokens."""
+    """Extract temperature and altimeter, which only a METAR carries."""
     temperature_c: float | None = None
     dewpoint_c: float | None = None
     altimeter_in_hg: float | None = None
@@ -165,11 +151,7 @@ def _resolve_time(
     minute: int,
     reference: datetime | None,
 ) -> datetime:
-    """Pick the month the report belongs to.
-
-    A METAR carries no month, so the day-of-month is resolved against the reference time
-    and rolled back a month when the timestamp would otherwise be in the future.
-    """
+    """Roll back a month when the timestamp would otherwise be in the future."""
     ref = reference or datetime.now(UTC)
     ref = ref.astimezone(UTC)
 

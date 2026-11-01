@@ -15,11 +15,7 @@ router = APIRouter(tags=["system"])
 
 @router.get("/api/health")
 async def health() -> JSONResponse:
-    """Report process, database, and explanation-service status.
-
-    Returns 503 when the database is unreachable so a container healthcheck fails
-    loudly instead of serving an app that cannot read anything.
-    """
+    """503 when the database is unreachable, so a healthcheck fails loudly."""
     settings = get_settings()
     database_ok, database_error = await ping()
 

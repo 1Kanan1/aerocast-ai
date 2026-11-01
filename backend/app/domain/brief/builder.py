@@ -1,15 +1,7 @@
-"""Build the fact bundle that the explanation layer is allowed to read.
+"""The fact bundle the explanation layer is allowed to read.
 
-This lives in `domain/` on purpose. It is deterministic, it has tests, and it still
-produces a usable summary when every model provider is switched off. If it lived next to
-the provider code, someone would eventually put a model call inside it.
-
-Two rules hold the safety story together:
-
-1. Every leaf value that a sentence might cite carries a `ref` path, built from structure
-   rather than typed by hand.
-2. The bundle hashes its own canonical JSON, so an answer can be tied to exactly the facts
-   it was written against.
+In `domain/` on purpose: deterministic, tested, and it still works with every provider off.
+Every citable value carries a `ref`, and the bundle hashes its own canonical JSON.
 """
 
 from __future__ import annotations

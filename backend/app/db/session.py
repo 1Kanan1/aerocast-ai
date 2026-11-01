@@ -1,7 +1,4 @@
-"""Database engine and session plumbing.
-
-The engine is created lazily, so importing this module never opens a connection.
-"""
+"""Lazy async engine and session factory."""
 
 from __future__ import annotations
 
@@ -49,11 +46,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def ping() -> tuple[bool, str | None]:
-    """Cheap liveness check for /api/health.
-
-    Returns the exception class name, never the message, so a driver error cannot
-    echo connection details into a response.
-    """
+    """Exception class name only: never echo connection details."""
     try:
         async with get_engine().connect() as connection:
             await connection.execute(text("select 1"))

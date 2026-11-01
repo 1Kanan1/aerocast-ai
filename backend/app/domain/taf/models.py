@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.domain.weather.models import CloudLayer, Visibility, Wind, lowest_ceiling
 
-#: Labels used for the first period and for each change group.
+#: Labels for the first period and for each change group.
 INITIAL = "INITIAL"
 FM = "FM"
 BECMG = "BECMG"
@@ -15,8 +15,7 @@ TEMPO = "TEMPO"
 PROB = "PROB"
 INTER = "INTER"
 
-#: Change groups that are temporary fluctuations inside the prevailing period rather than
-#: a new prevailing period.
+#: Fluctuations inside the prevailing period, not new periods.
 TRANSIENT_CHANGES = frozenset({TEMPO, PROB, INTER, f"{PROB} {TEMPO}"})
 
 

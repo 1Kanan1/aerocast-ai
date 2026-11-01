@@ -1,9 +1,4 @@
-"""The observation produced by a METAR or SPECI report.
-
-Condition groups (wind, visibility, clouds, weather) come from `domain.weather`; this
-module adds the parts specific to an observation: when it was taken, temperature and
-altimeter, and the remarks.
-"""
+"""A parsed METAR or SPECI observation."""
 
 from __future__ import annotations
 

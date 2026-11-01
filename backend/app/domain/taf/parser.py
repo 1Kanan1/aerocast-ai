@@ -1,16 +1,7 @@
 """Deterministic TAF parser.
 
-A TAF is a validity window plus a chain of change groups. The chain is the part worth
-getting right:
-
-- the first group is the prevailing conditions from `valid_from`
-- `FM` starts a new prevailing period and truncates the previous one
-- `BECMG` starts a gradual transition; the new conditions are treated as prevailing from
-  the start of its window, which is what AWC publishes
-- `TEMPO`, `PROB30/40` and `INTER` are fluctuations *inside* the prevailing period and do
-  not terminate it
-
-Report order is preserved so the UI can show the forecast as written.
+`FM` truncates the prevailing period, `BECMG` starts a new one, and `TEMPO`, `PROB30/40`
+and `INTER` are windows inside it that never truncate. Report order is preserved.
 """
 
 from __future__ import annotations
@@ -69,11 +60,7 @@ class _Resolved:
 
 
 def parse_taf(raw: str, reference: datetime | None = None) -> Taf:
-    """Parse one raw TAF.
-
-    `reference` anchors the day-of-month; pass the issue or receipt time. Without it, the
-    current UTC time is used.
-    """
+    """Parse one TAF. `reference` anchors the day-of-month; defaults to now."""
     text = " ".join(raw.split()).rstrip("=").strip()
     if not text:
         raise TafParseError("empty report")

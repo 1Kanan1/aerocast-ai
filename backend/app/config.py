@@ -1,8 +1,4 @@
-"""Application settings.
-
-Environment variables are read here and nowhere else. The API is the only process that
-holds secrets; the web app gets API_BASE_URL and nothing more.
-"""
+"""Settings. The API is the only process that holds secrets."""
 
 from __future__ import annotations
 
@@ -15,8 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = REPO_ROOT / ".env"
 
-#: Providers the chain understands. "mlx" and "omlx" are accepted as aliases for
-#: "local" because those are the names people reach for when they set the box up.
+#: "mlx" and "omlx" are aliases for "local".
 KNOWN_PROVIDERS = frozenset({"zai", "gemini", "local", "mlx", "omlx"})
 
 
@@ -30,13 +25,8 @@ class Settings(BaseSettings):
     aerocast_env: str = "local"
     database_url: str = "postgresql+asyncpg://aerocast:aerocast@localhost:5432/aerocast"
 
-    # Tried left to right. The local model is last by default because a 4 bit
-    # 2B effective model follows the citation contract less reliably than the hosted
-    # ones. Set LLM_CHAIN=local to run fully offline.
     llm_chain: str = "zai,gemini,local"
     llm_timeout_seconds: float = 20.0
-    # Thinking-capable models need their own budget. Gemini 3 answers in about a minute
-    # at its lowest supported effort, so a single 20s budget would fail over too early.
     llm_thinking_timeout_seconds: float = 120.0
 
     zai_api_key: SecretStr | None = None
@@ -45,15 +35,11 @@ class Settings(BaseSettings):
 
     gemini_api_key: SecretStr | None = None
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
-    # Ordered fallback ladder inside the Gemini rung, tried left to right. Gemini 3
-    # cannot disable thinking, so the models differ mostly in latency: on a two-field
-    # JSON task 3.8-flash at low effort took 63.6s, 3.6-flash 3.1s, 3.5-flash-lite 1.3s.
-    # Drop 3.8-flash from this list to make the rung fast first and good second.
+    #: Ladder, tried left to right. Quality first, then the two fast models.
     gemini_models: str = "gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
     gemini_reasoning_effort: str = "low"
 
-    # Any OpenAI-compatible server on the machine: oMLX, Ollama, LM Studio, llama.cpp.
-    # oMLX documents port 8000, which is taken by this API, so 8080 is the default here.
+    #: oMLX defaults to port 8000, which this API already uses.
     local_base_url: str | None = "http://127.0.0.1:8080/v1"
     local_model: str = "mlx-community/gemma-4-e2b-it-4bit"
 
@@ -67,11 +53,7 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def name_the_async_driver(cls, value: str) -> str:
-        """Name asyncpg in the scheme when it is missing.
-
-        create_async_engine() does not infer an async driver from a bare
-        postgresql:// URL: it resolves the sync default (psycopg) and fails on import.
-        """
+        """create_async_engine() will not infer an async driver."""
         url = value.strip()
         if url.startswith("postgresql://"):
             url = "postgresql+asyncpg://" + url.removeprefix("postgresql://")

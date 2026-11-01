@@ -1,9 +1,4 @@
-"""Value objects that describe weather conditions, independent of report type.
-
-A METAR observation and a TAF forecast period describe the same things: wind, visibility,
-cloud layers, present weather. Those live here so the two parsers share one definition and
-one ceiling rule.
-"""
+"""Value objects shared by METAR and TAF."""
 
 from __future__ import annotations
 
@@ -33,11 +28,7 @@ class Wind:
 
 @dataclass(frozen=True, slots=True)
 class Visibility:
-    """Statute miles, with the direction of the qualifier preserved.
-
-    AWC reports "10+" for ten miles or more; the flag is what tells you the value is a
-    floor rather than an exact reading.
-    """
+    """Statute miles with the qualifier preserved: a value may be a floor, not a reading."""
 
     statute_miles: float | None
     is_greater_than: bool = False
@@ -53,11 +44,7 @@ class CloudLayer:
 
 
 def lowest_ceiling_layer(layers: Sequence[CloudLayer]) -> CloudLayer | None:
-    """The ceiling is the lowest broken, overcast, or vertical-visibility layer.
-
-    Order in the report is not trusted: KS24 in the live cache lists BKN070 before OVC010,
-    and the FAA definition is still 1,000 ft.
-    """
+    """Lowest broken, overcast or VV layer. Report order is not trusted (see KS24)."""
     candidates = [
         layer for layer in layers if layer.cover in CEILING_COVERS and layer.base_ft is not None
     ]

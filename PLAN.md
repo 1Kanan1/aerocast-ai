@@ -108,6 +108,14 @@ Four rules that make the split worth having:
    framework this young. One generated type file, produced by `make types`.
 4. **Only `backend/` has DB drivers or secrets.** The frontend env is `API_BASE_URL`.
 
+### Code style
+
+Comments explain only what the code cannot: a deliberate oddity, a gotcha that looks like a
+bug, or an external constraint. Rationale, history and measurements belong in this file and
+in `CHANGELOG.md`. One line, declarative, no restating the signature.
+
+Python: ruff at line length 100, plus ty. TypeScript: strict, `tsc --noEmit`.
+
 ## 4. Data source
 
 **AWC only. Open-Meteo is out of scope.** Recorded as a decision because it will come

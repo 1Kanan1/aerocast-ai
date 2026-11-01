@@ -1,23 +1,14 @@
-"""Flight category.
+"""Flight category, FAA definitions.
 
-FAA definitions, applied deterministically:
+| Category | Ceiling        | Visibility |
+|----------|----------------|------------|
+| VFR      | > 3,000 ft     | > 5 SM     |
+| MVFR     | 1,000-3,000 ft | 3-5 SM     |
+| IFR      | 500-<1,000 ft  | 1-<3 SM    |
+| LIFR     | < 500 ft       | < 1 SM     |
 
-| Category | Ceiling          | Visibility |
-|----------|------------------|------------|
-| VFR      | greater than 3000 | greater than 5 |
-| MVFR     | 1000 to 3000     | 3 to 5     |
-| IFR      | 500 to under 1000 | 1 to under 3 |
-| LIFR     | under 500        | under 1    |
-
-The worse of ceiling and visibility wins. Boundaries are inclusive at the bottom of each
-band: a 3000 ft ceiling is MVFR, a 1000 ft ceiling is MVFR, a 500 ft ceiling is IFR.
-That is the definition AWC uses, which matters because the cross-check harness measures
-us against it.
-
-Visibility is required. A report with no visibility group cannot be classified, because
-"ceiling unlimited" only resolves half the definition, and returning a category anyway
-would be a judgement about conditions nobody measured. This matches AWC, which publishes
-no flight category for those reports.
+Worst of the two wins. Visibility is required: without it only half the definition is
+known, so the category is null, as AWC also publishes.
 """
 
 from __future__ import annotations
@@ -33,8 +24,7 @@ LIFR = "LIFR"
 
 CATEGORY_ORDER = (VFR, MVFR, IFR, LIFR)
 
-#: Cloud cover codes read as words in the basis string, because that string is quoted
-#: verbatim by the brief and by anything the model is allowed to say.
+#: Cover codes as words, since the basis string is quoted verbatim.
 COVER_WORDS = {
     "FEW": "few",
     "SCT": "scattered",
@@ -84,11 +74,7 @@ def category_for(ceiling_ft: int | None, visibility_sm: float | None) -> str | N
 
 
 def classify(observation: Observation) -> FlightCategory:
-    """Classify a parsed observation and explain the reasoning in one line.
-
-    The basis string is what the brief shows and what the model is allowed to quote, so
-    it is generated here rather than assembled downstream.
-    """
+    """Category plus the basis string the brief and the model may quote."""
     ceiling_ft = observation.ceiling_ft
     visibility_sm = observation.visibility_sm
     category = category_for(ceiling_ft, visibility_sm)

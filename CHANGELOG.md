@@ -120,6 +120,12 @@ of a single id, because the measured difference between them is latency. Default
 fast rungs. Chain de-duplication now keys on provider and model, so one provider can hold
 several rungs without collapsing to one.
 
+### Changed, comment style
+
+Comments were cut back to gotchas only: a deliberate oddity, a trap that looks like a bug,
+or an external constraint. The rationale that had accumulated in docstrings moved into
+PLAN.md and this file, where it is actually readable. Recorded as a rule in PLAN.
+
 ### Fixed
 
 - **Temperature agreement with AWC fell from 42% to 99.96%** once remarks `T`-groups were

@@ -1,9 +1,4 @@
-"""The token grammar shared by METAR and TAF.
-
-Both report types describe the same conditions with the same groups, so the matchers live
-here once. Each parser keeps its own scanner only for the parts that differ: METAR has
-remarks, temperature and altimeter; TAF has change groups.
-"""
+"""Token grammar shared by METAR and TAF."""
 
 from __future__ import annotations
 
@@ -17,7 +12,7 @@ METRES_PER_STATUTE_MILE = 1609.344
 KNOTS_PER_METRE_PER_SECOND = 1.943844
 KNOTS_PER_KM_PER_HOUR = 0.539957
 
-#: CAVOK means 10 km or more, no cloud below 5,000 ft, no CB or TCU, no significant weather.
+#: CAVOK: 10 km or more, no cloud below 5,000 ft, no CB/TCU, no significant weather.
 CAVOK_STATUTE_MILES = round(10_000 / METRES_PER_STATUTE_MILE, 2)
 
 WIND = re.compile(

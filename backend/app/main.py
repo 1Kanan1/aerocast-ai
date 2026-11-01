@@ -1,8 +1,4 @@
-"""AeroCast AI API.
-
-FastAPI owns the database, the deterministic parsers, ingestion, and the only outbound
-calls to AWC and the model providers. The Remix app is presentation plus a thin proxy.
-"""
+"""AeroCast AI API. FastAPI owns the database, parsers, ingestion and model calls."""
 
 from __future__ import annotations
 

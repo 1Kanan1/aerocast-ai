@@ -1,20 +1,9 @@
 """Compare the METAR parser against AWC's own decoder.
 
-This is the harness that makes "I wrote a parser" into a measured claim. It pulls AWC's
-bulk cache of every current observation, parses each `raw_text` with our parser, and
-compares field by field against the values AWC decoded from the same report.
-
     uv run python -m app.tools.crosscheck_metar
 
-Exit code is 0 unless `--enforce` is passed, in which case a per-field agreement
-threshold turns a regression into a CI failure.
-
-Deliberate limits:
-
-- It measures agreement, not correctness. Where we differ, AWC is usually right, but the
-  disagreements are the interesting output and every one gets triaged.
-- US stations by default, because that is the MVP's coverage and mixing in international
-  report dialects would hide US-specific noise behind a different set of failures.
+Measures agreement, not correctness. US stations by default; `--enforce` exits 1 when a
+per-field threshold regresses.
 """
 
 from __future__ import annotations
@@ -258,8 +247,7 @@ def _compare(
         row, f"wind_gust ours={our_gust} awc={row.wind_gust}"
     )
 
-    # A "P6SM" floor agrees with any upstream value at or above six miles, because the
-    # cache caps "10 km or more" at 6.0 rather than carrying the converted number.
+    # A "P6SM" floor agrees with an upstream 6.0, which is where the cache caps it.
     if observation.visibility is not None and observation.visibility.is_greater_than:
         visibility_ok = True if row.visibility is not None and row.visibility >= 6 else None
     else:
@@ -289,8 +277,7 @@ def _compare(
 def _clouds_match(
     ours: Sequence[CloudLayer], theirs: Sequence[tuple[str, int | None]]
 ) -> bool | None:
-    # A layer with an unknown base (BKN///) cannot be compared against a value, and AWC
-    # drops those rows from the cache rather than emitting them.
+    # A layer with an unknown base cannot be compared; AWC drops those rows.
     mine = [(layer.cover, layer.base_ft) for layer in ours if layer.base_ft is not None]
     upstream = list(theirs)
 
@@ -298,8 +285,7 @@ def _clouds_match(
         return None
     if mine == upstream:
         return True
-    # The cache carries at most four cloud layers, so a fifth layer from us is
-    # truncation upstream rather than a disagreement.
+    # The cache carries at most four layers; a fifth from us is truncation.
     return len(upstream) == 4 and mine[:4] == upstream
 
 
@@ -373,11 +359,7 @@ def _text(values: Sequence[str], position: int) -> str | None:
 
 
 def _number(value: str | None) -> float | None:
-    """Parse a cache value that may carry a comparison suffix.
-
-    AWC writes "10+" for ten miles or more, so a plain float() drops 1,460 of 2,383 rows.
-    Leading "<" and ">" appear on some other fields.
-    """
+    """AWC writes "10+" for ten miles or more; a plain float() drops those rows."""
     if value is None:
         return None
     cleaned = value.strip().lstrip("<>").rstrip("+")
@@ -402,13 +384,7 @@ def _timestamp(value: str | None) -> datetime | None:
 
 
 def _normalize_cover(cover: str) -> str:
-    """Map AWC's CSV encoding onto METAR codes.
-
-    The cache writes vertical visibility as `OVX`, which is not a METAR sky cover. The
-    raw report says `VV`, so that is what we parse and what this compares against.
-    Mapping it here rather than in the parser keeps a legacy cache quirk out of the
-    domain layer.
-    """
+    """The cache writes vertical visibility as `OVX`; the report says `VV`."""
     return "VV" if cover == "OVX" else cover
 
 
