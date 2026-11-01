@@ -563,6 +563,36 @@ recorded.
 `ai_answers.model` stores the id that produced each answer, so results stay attributable
 after a bump.
 
+### Provider behaviour, measured
+
+Verified against the live endpoints on 2026-11-01, because the documentation and the API
+disagreed twice.
+
+- Base URL `https://generativelanguage.googleapis.com/v1beta/openai/`, Bearer auth, and
+  `gemini-3.8-flash` all confirmed against the account's own model list.
+- `response_format: {"type": "json_schema", ...}` is enforced. The response came back
+  matching the schema exactly, which is stronger than `json_object` mode and is what the
+  claim contract should use.
+- `reasoning_effort: "minimal"` is **rejected** for `gemini-3.8-flash`, despite the docs'
+  mapping table. Omitting the parameter means high effort: the request exceeded 60s.
+- Measured on a two-field JSON task: `gemini-3.8-flash` at `low` took **63.6s** and 105
+  tokens; at `medium`, **99.4s** and 314. `gemini-3.5-flash-lite` did the same task in
+  **1.3s**, and `gemini-3.6-flash` in 3.1s.
+- `gemini-2.5-flash` appears in `/models` but returns 404 "no longer available to new
+  users", so listing a model does not mean it is callable.
+- Thinking cannot be disabled on Gemini 3. `reasoning_effort` must therefore be set
+  explicitly, per provider. The Z.ai `thinking` parameter is Z.ai-specific and must not be
+  sent to Gemini.
+
+Consequence for timeouts: they are per provider, not global. 20s for the fast path and 120s
+for a provider that thinks. One global value either fails Gemini too early or lets a hung
+Z.ai request stall for two minutes before the failover.
+
+Consequence for the fallback rung: a 63s explanation is not an interactive experience. The
+chain order can stay, but `gemini-3.8-flash` earns its place only if the answer quality is
+measurably better than a lite model on the eval fixture. That is a Phase 5 decision with
+numbers, not a preference.
+
 ### The local rung
 
 One OpenAI-compatible endpoint on the developer's machine, configured by URL and model id

@@ -98,6 +98,20 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 - **Open-Meteo as a weather source.** It has no METAR, TAF, PIREP or advisories, and mixing
   model grids into a screen of verified station observations would be misleading.
 
+### Measured provider behaviour
+
+Checked against the live endpoints rather than the docs, which were wrong in two places:
+
+- Gemini's OpenAI-compatible base URL, Bearer auth, and `gemini-3.8-flash` all confirmed.
+  `response_format: {"type": "json_schema"}` is enforced and returns exactly the schema.
+- `reasoning_effort: "minimal"` is rejected for `gemini-3.8-flash`; omitting it means high
+  effort. On a two-field JSON task, `low` took 63.6s and `medium` 99.4s, while
+  `gemini-3.5-flash-lite` took 1.3s and `gemini-3.6-flash` 3.1s.
+- `gemini-2.5-flash` is listed by `/models` but returns 404 "no longer available to new
+  users".
+- Thinking cannot be disabled on Gemini 3, so timeouts are per provider: 20s for the fast
+  path, 120s for a thinking model.
+
 ### Fixed
 
 - **Temperature agreement with AWC fell from 42% to 99.96%** once remarks `T`-groups were

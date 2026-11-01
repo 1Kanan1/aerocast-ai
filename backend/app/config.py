@@ -35,13 +35,22 @@ class Settings(BaseSettings):
     # ones. Set LLM_CHAIN=local to run fully offline.
     llm_chain: str = "zai,gemini,local"
     llm_timeout_seconds: float = 20.0
+    # Thinking-capable models need their own budget. Gemini 3 answers in about a minute
+    # at its lowest supported effort, so a single 20s budget would fail over too early.
+    llm_thinking_timeout_seconds: float = 120.0
 
     zai_api_key: SecretStr | None = None
     zai_base_url: str = "https://api.z.ai/api/paas/v4/"
     zai_model: str = "glm-4.7-flash"
 
     gemini_api_key: SecretStr | None = None
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     gemini_model: str = "gemini-3.8-flash"
+    # Gemini 3 cannot disable thinking, and "minimal" is rejected for gemini-3.8-flash.
+    # Measured on a two-field JSON task: low = 63.6s / 105 tokens, medium = 99.4s / 314.
+    # gemini-3.5-flash-lite answered the same task in 1.3s, which is why the fallback
+    # rung is worth revisiting before Phase 5.
+    gemini_reasoning_effort: str = "low"
 
     # Any OpenAI-compatible server on the machine: oMLX, Ollama, LM Studio, llama.cpp.
     # oMLX documents port 8000, which is taken by this API, so 8080 is the default here.
