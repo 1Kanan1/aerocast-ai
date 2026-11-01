@@ -60,6 +60,14 @@ def test_local_provider_configuration() -> None:
     assert make_settings(local_base_url="").local_base_url is None
 
 
+def test_no_provider_uses_a_moving_model_alias() -> None:
+    """`-latest` aliases drift without a commit. Pinned ids only."""
+    settings = make_settings()
+    for model in (settings.zai_model, settings.gemini_model, settings.local_model):
+        assert not model.endswith("-latest"), model
+        assert model.count("/") <= 1, model
+
+
 def test_secrets_do_not_render_in_repr() -> None:
     settings = make_settings(zai_api_key="super-secret-key")
     assert "super-secret-key" not in repr(settings)

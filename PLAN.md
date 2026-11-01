@@ -517,6 +517,25 @@ answer cache keyed on brief hash with 15 minute TTL, and a hard per-process conc
 of 1. Failover to the next provider on 429 or timeout, one attempt each, never retrying
 into the same provider.
 
+### Model pinning
+
+Every provider names an exact model id: `glm-4.7-flash`, `gemini-3.8-flash`,
+`mlx-community/gemma-4-e2b-it-4bit`. No `-latest` aliases anywhere.
+
+An alias that rolls forward is worse than one that expires. The thing it silently changes
+is the output of a system validated by a frozen eval fixture and a versioned prompt, so a
+model swap would move the eval numbers and look like a prompt regression. Pinned ids make
+a model change a one line commit with a measurable before and after.
+
+The cost is maintenance. Google gives roughly two weeks notice before retiring a snapshot,
+and other providers vary, so a pinned id will break eventually. That is a scheduled,
+visible failure with a published replacement, which is the failure mode you want. The
+commit that bumps an id should name the replacement and rerun `make eval` so the delta is
+recorded.
+
+`ai_answers.model` stores the id that produced each answer, so results stay attributable
+after a bump.
+
 ### The local rung
 
 One OpenAI-compatible endpoint on the developer's machine, configured by URL and model id
@@ -679,7 +698,7 @@ ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
 ZAI_MODEL=glm-4.7-flash
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-flash-latest
+GEMINI_MODEL=gemini-3.8-flash
 
 LOCAL_BASE_URL=http://127.0.0.1:8080/v1
 LOCAL_MODEL=mlx-community/gemma-4-e2b-it-4bit

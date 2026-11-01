@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     zai_model: str = "glm-4.7-flash"
 
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-flash-latest"
+    gemini_model: str = "gemini-3.8-flash"
 
     # Any OpenAI-compatible server on the machine: oMLX, Ollama, LM Studio, llama.cpp.
     # oMLX documents port 8000, which is taken by this API, so 8080 is the default here.
