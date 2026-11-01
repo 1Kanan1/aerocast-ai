@@ -1,12 +1,14 @@
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
 from app.config import Settings
 
 
-def make_settings(**overrides: object) -> Settings:
+def make_settings(**overrides: Any) -> Settings:
     """Build settings without reading the repo .env or the developer's environment."""
-    return Settings(_env_file=None, **overrides)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **overrides)
 
 
 @pytest.mark.parametrize(

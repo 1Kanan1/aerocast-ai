@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 from app.domain.brief import BriefAdvisory, BriefStation, build_brief, refs_in
 from app.domain.metar import parse_metar
@@ -37,13 +38,13 @@ def station(with_taf: bool = True) -> BriefStation:
     )
 
 
-def brief_for(with_taf: bool = True) -> dict[str, object]:
+def brief_for(with_taf: bool = True) -> dict[str, Any]:
     return build_brief([station(with_taf=with_taf)], GENERATED_AT)
 
 
 def test_bundle_carries_the_observation_with_a_basis() -> None:
     bundle = brief_for()
-    metar = bundle["stations"][0]["metar"]  # type: ignore[index]
+    metar = bundle["stations"][0]["metar"]
 
     assert metar["ref"] == "metar.KSFO"
     assert metar["observed_at"] == datetime(2026, 11, 1, 8, 56, tzinfo=UTC).isoformat()
@@ -57,7 +58,7 @@ def test_bundle_carries_the_observation_with_a_basis() -> None:
 
 def test_bundle_carries_the_forecast_chain() -> None:
     bundle = brief_for()
-    taf = bundle["stations"][0]["taf"]  # type: ignore[index]
+    taf = bundle["stations"][0]["taf"]
 
     assert taf["ref"] == "taf.KSFO"
     assert [period["change"] for period in taf["periods"]] == ["INITIAL", "FM", "FM"]
@@ -67,7 +68,7 @@ def test_bundle_carries_the_forecast_chain() -> None:
 
 def test_advisories_carry_their_own_refs() -> None:
     bundle = brief_for()
-    advisories = bundle["stations"][0]["advisories"]  # type: ignore[index]
+    advisories = bundle["stations"][0]["advisories"]
 
     assert advisories[0]["ref"] == "adv.KSFO.0"
     assert advisories[0]["hazard"] == "IFR"
@@ -76,7 +77,7 @@ def test_advisories_carry_their_own_refs() -> None:
 
 def test_missing_reports_are_null_rather_than_absent() -> None:
     bundle = brief_for(with_taf=False)
-    station_brief = bundle["stations"][0]  # type: ignore[index]
+    station_brief = bundle["stations"][0]
 
     assert station_brief["metar"] is not None
     assert station_brief["taf"] is None
@@ -107,7 +108,7 @@ def test_bundle_hash_changes_when_a_fact_changes() -> None:
 
 def test_age_never_goes_negative() -> None:
     bundle = build_brief([station()], datetime(2026, 11, 1, 8, 0, tzinfo=UTC))
-    metar = bundle["stations"][0]["metar"]  # type: ignore[index]
+    metar = bundle["stations"][0]["metar"]
 
     assert metar["age_seconds"] == 0
 

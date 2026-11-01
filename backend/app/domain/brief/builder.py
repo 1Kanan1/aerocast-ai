@@ -19,6 +19,7 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from app.domain.metar import Observation, classify
 from app.domain.taf import Taf, TafPeriod
@@ -62,9 +63,9 @@ class BriefStation:
     advisories: tuple[BriefAdvisory, ...] = ()
 
 
-def build_brief(stations: Sequence[BriefStation], generated_at: datetime) -> dict[str, object]:
+def build_brief(stations: Sequence[BriefStation], generated_at: datetime) -> dict[str, Any]:
     """Assemble the bundle. Same inputs and time produce the same hash."""
-    bundle: dict[str, object] = {
+    bundle: dict[str, Any] = {
         "generated_at": generated_at.isoformat(),
         "definition_version": DEFINITION_VERSION,
         "stations": [_station(station, generated_at) for station in stations],
@@ -93,7 +94,7 @@ def refs_in(bundle: object) -> list[str]:
     return found
 
 
-def _station(station: BriefStation, generated_at: datetime) -> dict[str, object]:
+def _station(station: BriefStation, generated_at: datetime) -> dict[str, Any]:
     return {
         "icao": station.icao,
         "name": station.name,
@@ -108,7 +109,7 @@ def _station(station: BriefStation, generated_at: datetime) -> dict[str, object]
     }
 
 
-def _metar(station: BriefStation, generated_at: datetime) -> dict[str, object] | None:
+def _metar(station: BriefStation, generated_at: datetime) -> dict[str, Any] | None:
     observation = station.observation
     if observation is None:
         return None
@@ -142,7 +143,7 @@ def _metar(station: BriefStation, generated_at: datetime) -> dict[str, object] |
     }
 
 
-def _wind(observation: Observation, root: tuple[str, ...]) -> dict[str, object] | None:
+def _wind(observation: Observation, root: tuple[str, ...]) -> dict[str, Any] | None:
     wind = observation.wind
     if wind is None:
         return None
@@ -156,7 +157,7 @@ def _wind(observation: Observation, root: tuple[str, ...]) -> dict[str, object] 
     }
 
 
-def _visibility(observation: Observation, root: tuple[str, ...]) -> dict[str, object] | None:
+def _visibility(observation: Observation, root: tuple[str, ...]) -> dict[str, Any] | None:
     visibility = observation.visibility
     if visibility is None:
         return None
@@ -168,7 +169,7 @@ def _visibility(observation: Observation, root: tuple[str, ...]) -> dict[str, ob
     }
 
 
-def _temperature(observation: Observation, root: tuple[str, ...]) -> dict[str, object] | None:
+def _temperature(observation: Observation, root: tuple[str, ...]) -> dict[str, Any] | None:
     if observation.temperature_c is None:
         return None
     spread = None
@@ -182,11 +183,11 @@ def _temperature(observation: Observation, root: tuple[str, ...]) -> dict[str, o
     }
 
 
-def _cloud(layer: CloudLayer) -> dict[str, object]:
+def _cloud(layer: CloudLayer) -> dict[str, Any]:
     return {"cover": layer.cover, "base_ft": layer.base_ft, "cloud_type": layer.cloud_type}
 
 
-def _taf(station: BriefStation) -> dict[str, object] | None:
+def _taf(station: BriefStation) -> dict[str, Any] | None:
     taf = station.taf
     if taf is None:
         return None
@@ -205,7 +206,7 @@ def _taf(station: BriefStation) -> dict[str, object] | None:
     }
 
 
-def _taf_period(period: TafPeriod, root: tuple[str, ...], index: int) -> dict[str, object]:
+def _taf_period(period: TafPeriod, root: tuple[str, ...], index: int) -> dict[str, Any]:
     return {
         "ref": _ref(*root, "period", str(index)),
         "change": period.change,
@@ -227,7 +228,7 @@ def _taf_period(period: TafPeriod, root: tuple[str, ...], index: int) -> dict[st
     }
 
 
-def _advisory(icao: str, index: int, advisory: BriefAdvisory) -> dict[str, object]:
+def _advisory(icao: str, index: int, advisory: BriefAdvisory) -> dict[str, Any]:
     return {
         "ref": _ref("adv", icao, str(index)),
         "kind": advisory.kind,
@@ -242,12 +243,12 @@ def _ref(*parts: str) -> str:
     return ".".join(parts)
 
 
-def _hash(bundle: dict[str, object]) -> str:
+def _hash(bundle: dict[str, Any]) -> str:
     canonical = json.dumps(bundle, sort_keys=True, separators=(",", ":"), default=str)
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def iter_station_briefs(bundle: dict[str, object]) -> Iterable[dict[str, object]]:
+def iter_station_briefs(bundle: dict[str, Any]) -> Iterable[dict[str, Any]]:
     stations = bundle.get("stations")
     if isinstance(stations, list):
         yield from (station for station in stations if isinstance(station, dict))

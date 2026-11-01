@@ -7,7 +7,7 @@ calls to AWC and the model providers. The Remix app is presentation plus a thin 
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -25,7 +25,7 @@ logger = logging.getLogger("aerocast")
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
     logger.info("starting AeroCast API %s (env=%s)", __version__, settings.aerocast_env)
 

@@ -17,6 +17,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=1.0",
     "ruff>=0.9",
+    "ty>=0.0.95",
 ]
 
 [tool.uv]

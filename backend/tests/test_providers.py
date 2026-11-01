@@ -1,9 +1,11 @@
+from typing import Any
+
 from app.config import Settings
 from app.llm.providers import reset_probe_cache, statuses
 
 
-def make_settings(**overrides: object) -> Settings:
-    return Settings(_env_file=None, **overrides)  # type: ignore[arg-type]
+def make_settings(**overrides: Any) -> Settings:
+    return Settings(_env_file=None, **overrides)
 
 
 async def test_local_aliases_collapse_to_one_provider() -> None:

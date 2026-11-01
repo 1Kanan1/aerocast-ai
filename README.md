@@ -73,7 +73,7 @@ the part that has to be right and the part that is worth reading.
 
 ```sh
 make test    # pytest, then Remix's test runner
-make lint    # ruff, then tsc
+make lint    # ruff, ty, then tsc
 ```
 
 The METAR parser is checked against AWC's own decoder, which needs network:

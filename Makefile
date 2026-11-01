@@ -30,8 +30,9 @@ test: ## run backend and frontend tests
 	cd backend && uv run pytest -q
 	cd frontend && bun run test
 
-lint: ## ruff and typecheck
+lint: ## ruff, ty, and typecheck
 	cd backend && uv run ruff check .
+	cd backend && uv run ty check
 	cd frontend && bun run typecheck
 
 crosscheck: ## compare the METAR parser against AWC's decoder (needs network)
