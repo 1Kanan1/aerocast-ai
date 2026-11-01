@@ -12,8 +12,10 @@ cannot assess your aircraft, currency, or ratings.
 
 ## Status
 
-Phase 0 complete: both services run, the web app renders live API health, backend tests
-and frontend typecheck/test pass. See [PLAN.md](PLAN.md) for the full build order.
+Phases 0 and 1 are complete. Both services run, the web app renders live API health, and the
+deterministic METAR and TAF layer is measured against AWC's own decoder. See
+[PLAN.md](PLAN.md) for the full build order and [CHANGELOG.md](CHANGELOG.md) for what has
+landed so far.
 
 ## Stack
 
