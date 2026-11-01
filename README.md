@@ -23,7 +23,7 @@ and frontend typecheck/test pass. See [PLAN.md](PLAN.md) for the full build orde
 | Web | Remix 3.1 on Node 26, Bun for packages and scripts |
 | Map | MapLibre GL JS (Phase 4) |
 | Weather data | aviationweather.gov (AWC Data API and bulk cache files) |
-| Explanations | GLM-4.7-Flash, Gemini Flash, or local Gemma 4 E2B via oMLX, behind a citation validator |
+| Explanations | GLM-4.7-Flash, Gemini Flash, or a local model via any OpenAI-compatible server, behind a citation validator |
 
 ## Run it
 
@@ -41,12 +41,15 @@ make db                   # Postgres on localhost:5433
 ```
 
 For a fully offline explanation path (Apple Silicon only), serve the MLX model with
-[oMLX](https://omlx.ai) and put it first in the chain:
+[oMLX](https://omlx.ai) on port 8080 and put it first in the chain:
 
 ```sh
 # oMLX serving mlx-community/gemma-4-e2b-it-4bit on :8080
-LLM_CHAIN=mlx make api
+LLM_CHAIN=local make api
 ```
+
+Any OpenAI-compatible local server works: point `LOCAL_BASE_URL` and `LOCAL_MODEL` at
+Ollama, LM Studio, or whatever else you run.
 
 Full stack in containers, which is what production looks like:
 

@@ -59,7 +59,7 @@ export function HomePage(handle: Handle<HomePageProps>) {
               <StatusRow
                 detail={
                   activeProvider
-                    ? `${activeProvider.name} · ${activeProvider.kind}`
+                    ? `${activeProvider.name} · ${activeProvider.model}`
                     : providers.length > 0
                       ? 'no provider reachable'
                       : 'deterministic summaries only'

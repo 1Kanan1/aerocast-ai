@@ -467,7 +467,7 @@ allowed to know arrives as a fact bundle; everything it says has to point at a r
 question
   -> pre-check: does it ask for a decision? (regex)  -> fixed refusal, no model call
   -> cache: sha256(brief_hash + normalized_question + prompt_version)
-  -> provider chain: LLM_CHAIN order, default zai -> gemini -> mlx -> template
+  -> provider chain: LLM_CHAIN order, default zai -> gemini -> local -> template
   -> validate
   -> store in ai_answers
   -> respond
@@ -519,33 +519,50 @@ into the same provider.
 
 ### The local rung
 
-`mlx-community/gemma-4-e2b-it-4bit` served by **oMLX** (omlx.ai) on Apple Silicon. It
-exists for three reasons: no quota, no network, and no weather data leaving the machine.
+One OpenAI-compatible endpoint on the developer's machine, configured by URL and model id
+rather than by vendor. That indirection earned itself: the runtime choice changed twice
+during setup, and none of it should reach application code.
 
-Use oMLX rather than `mlx_lm.server`. The Gemma 4 E2B conversion is a vision build
-(`mlx_vlm`, 5B parameters, 3.55 GB at 4 bit), and `mlx_lm.server` is the text-only
-reference implementation. oMLX serves MLX vision models and exposes
-`/v1/chat/completions`, so it needs no special handling in the client.
+Default is `mlx-community/gemma-4-e2b-it-4bit` served by **oMLX** (omlx.ai) on Apple
+Silicon, at `http://127.0.0.1:8080/v1`. It exists for three reasons: no quota, no network,
+and no weather data leaving the machine.
+
+Why oMLX and not `mlx_lm.server`: the Gemma 4 E2B conversion is a vision build
+(`mlx_vlm`, 5B parameters, 3.55 GB at 4 bit) and `mlx_lm.server` is the text-only
+reference implementation. oMLX loads MLX vision models and exposes
+`/v1/chat/completions`, so the client needs no special handling.
+
+Why port 8080: FastAPI owns 8000, and oMLX's documented default is 8000. One of them has
+to move, and it is not going to be the API.
+
+Swapping runtimes is an env change, not a code change:
 
 ```sh
-# via oMLX, then point it at mlx-community/gemma-4-e2b-it-4bit
-MLX_BASE_URL=http://127.0.0.1:8080/v1
-MLX_MODEL=mlx-community/gemma-4-e2b-it-4bit
+LOCAL_BASE_URL=http://127.0.0.1:11434/v1   # Ollama instead of oMLX
+LOCAL_MODEL=gemma4:e2b-it-qat              # GGUF QAT, the portable flavor
 ```
+
+**Why not the ONNX build.** `onnx-community/gemma-4-E2B-it-qat-mobile-ONNX` ships raw ONNX
+graphs plus a hand-written numpy generation loop, with no `genai_config.json`, and
+onnxruntime-genai does not support Gemma 4's Per-Layer Embeddings yet. No off-the-shelf
+server can host it, so serving it means writing a generator and a shim, for a checkpoint
+whose quantisation is tuned for phones. Not worth it while an MLX or GGUF build is one
+command away. (`huggingworld/...` is also just a duplicate of the `onnx-community` repo
+with seven downloads, so even that choice was the wrong URL.)
 
 Three honest caveats:
 
 1. **It is the last rung by default.** A 4 bit, 2B effective model follows the citation
    contract less reliably than GLM or Gemini, so putting it first would make the product
-   look worse for no gain. `LLM_CHAIN=mlx,zai,gemini` flips it for an offline demo.
+   look worse for no gain. `LLM_CHAIN=local,zai,gemini` flips it for an offline demo.
 2. **Expect more rejections, not worse answers.** The validator drops unsupported claims
    and falls through. That is the design working, and the eval fixture should report pass
    rates per provider so the difference is measured rather than assumed.
 3. **Long fact bundles are a risk.** If the local model truncates, Phase 5 gives local
    providers a compressed brief (top N facts, short glossary) rather than the full one.
 
-MLX is Apple Silicon only, so `MLX_BASE_URL` stays empty in production and the chain
-degrades to the two hosted providers without any code change.
+Every local runtime is laptop-bound in practice, so `LOCAL_BASE_URL` stays empty in
+production and the chain degrades to the two hosted providers without any code change.
 
 ### Eval fixture
 
@@ -655,7 +672,7 @@ Two owners, two sets of variables. They never mix.
 AEROCAST_ENV=local
 DATABASE_URL=postgresql+asyncpg://aerocast@localhost:5432/aerocast
 
-LLM_CHAIN=zai,gemini,mlx
+LLM_CHAIN=zai,gemini,local
 LLM_TIMEOUT_SECONDS=20
 
 ZAI_API_KEY=
@@ -664,8 +681,8 @@ ZAI_MODEL=glm-4.7-flash
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-flash-latest
 
-MLX_BASE_URL=http://127.0.0.1:8080/v1
-MLX_MODEL=mlx-community/gemma-4-e2b-it-4bit
+LOCAL_BASE_URL=http://127.0.0.1:8080/v1
+LOCAL_MODEL=mlx-community/gemma-4-e2b-it-4bit
 ```
 
 **The web container gets exactly one variable**, set in `compose.yaml` or the shell, not

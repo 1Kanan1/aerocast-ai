@@ -37,8 +37,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     if not settings.zai_configured and not settings.gemini_configured:
         logger.warning("no remote model configured; /ask will rely on the local provider")
-    if not settings.mlx_configured:
-        logger.info("local model disabled (MLX_BASE_URL unset)")
+    if not settings.local_configured:
+        logger.info("local model disabled (LOCAL_BASE_URL unset)")
 
     yield
 

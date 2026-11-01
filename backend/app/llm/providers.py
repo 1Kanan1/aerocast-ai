@@ -57,12 +57,12 @@ def _resolve(settings: Settings, name: str) -> ProviderStatus | None:
                 configured=settings.gemini_configured,
                 reachable=None,
             )
-        case "mlx" | "omlx":
+        case "local" | "mlx" | "omlx":
             return ProviderStatus(
-                name="mlx",
-                model=settings.mlx_model,
+                name="local",
+                model=settings.local_model,
                 kind="local",
-                configured=settings.mlx_configured,
+                configured=settings.local_configured,
                 reachable=None,
             )
     return None
@@ -100,8 +100,8 @@ async def statuses(settings: Settings) -> list[dict[str, object]]:
             continue
         seen.add(status.name)
 
-        if status.kind == "local" and status.configured and settings.mlx_base_url:
-            status = replace(status, reachable=await _probe(settings.mlx_base_url))
+        if status.kind == "local" and status.configured and settings.local_base_url:
+            status = replace(status, reachable=await _probe(settings.local_base_url))
 
         described.append(status.as_dict())
 

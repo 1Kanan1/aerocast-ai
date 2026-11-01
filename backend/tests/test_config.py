@@ -55,9 +55,9 @@ def test_provider_configuration_reflects_empty_keys() -> None:
 
 
 def test_local_provider_configuration() -> None:
-    assert make_settings(mlx_base_url="http://127.0.0.1:8080/v1").mlx_configured is True
-    assert make_settings(mlx_base_url="").mlx_configured is False
-    assert make_settings(mlx_base_url="").mlx_base_url is None
+    assert make_settings(local_base_url="http://127.0.0.1:8080/v1").local_configured is True
+    assert make_settings(local_base_url="").local_configured is False
+    assert make_settings(local_base_url="").local_base_url is None
 
 
 def test_secrets_do_not_render_in_repr() -> None:
