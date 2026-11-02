@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict, dataclass, replace
+from typing import Literal
 
 import httpx
 
@@ -22,7 +23,7 @@ _probe_cache: dict[str, tuple[float, bool]] = {}
 class ProviderStatus:
     name: str
     model: str
-    kind: str  # remote | local
+    kind: Literal["remote", "local"]
     configured: bool
     reachable: bool | None  # None: not probed
 

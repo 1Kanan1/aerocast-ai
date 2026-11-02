@@ -110,9 +110,9 @@ Four rules that make the split worth having:
 
 ### Code style
 
-Comments explain only what the code cannot: a deliberate oddity, a gotcha that looks like a
-bug, or an external constraint. Rationale, history and measurements belong in this file and
-in `CHANGELOG.md`. One line, declarative, no restating the signature.
+Comments explain only what the code cannot: a deliberate oddity, a trap that looks like a
+bug, or an external constraint. Never restate what the code says, and never restate the
+signature. Rationale, history and measurements belong in this file and in `CHANGELOG.md`.
 
 Python: ruff at line length 100, plus ty. TypeScript: strict, `tsc --noEmit`.
 

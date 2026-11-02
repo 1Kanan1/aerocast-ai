@@ -84,8 +84,7 @@ export function HomePage(handle: Handle<HomePageProps>) {
 }
 
 function pickProvider(providers: ProviderStatus[]): ProviderStatus | undefined {
-  // A remote provider with a key counts as usable. The local one also has to answer,
-  // because a base URL on a laptop proves nothing when the server is not running.
+  // A remote provider with a key counts as usable; the local one must also answer.
   return providers.find(
     (provider) => provider.configured && (provider.kind === 'remote' || provider.reachable === true),
   )

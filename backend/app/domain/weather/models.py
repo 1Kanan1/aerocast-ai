@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-#: Inches of mercury per hectopascal.
 HPA_PER_INHG = 33.8639
 
 CEILING_COVERS = frozenset({"BKN", "OVC", "VV"})

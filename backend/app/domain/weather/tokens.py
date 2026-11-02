@@ -125,7 +125,6 @@ def scan_conditions(tokens: Sequence[str]) -> Conditions:
             continue
 
         if set(token) == {"/"}:
-            # Placeholder for a group the station did not report.
             index += 1
             continue
 

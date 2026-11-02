@@ -7,7 +7,6 @@ from datetime import datetime
 
 from app.domain.weather.models import CloudLayer, Visibility, Wind, lowest_ceiling
 
-#: Labels for the first period and for each change group.
 INITIAL = "INITIAL"
 FM = "FM"
 BECMG = "BECMG"

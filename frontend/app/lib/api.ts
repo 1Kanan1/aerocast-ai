@@ -1,9 +1,4 @@
-/**
- * Server-side client for the FastAPI backend.
- *
- * Runs in the Remix process only. The browser never calls the API directly, which is
- * why the API needs no CORS configuration and why no credential can reach the page.
- */
+/** Server-side only: the browser never calls the API, so no credential can reach the page. */
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 const DEFAULT_TIMEOUT_MS = 3000
