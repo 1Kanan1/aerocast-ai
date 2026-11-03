@@ -22,9 +22,6 @@ MVFR = "MVFR"
 IFR = "IFR"
 LIFR = "LIFR"
 
-CATEGORY_ORDER = (VFR, MVFR, IFR, LIFR)
-
-#: Cover codes as words, since the basis string is quoted verbatim.
 COVER_WORDS = {
     "FEW": "few",
     "SCT": "scattered",

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -238,9 +238,3 @@ def _ref(*parts: str) -> str:
 def _hash(bundle: dict[str, Any]) -> str:
     canonical = json.dumps(bundle, sort_keys=True, separators=(",", ":"), default=str)
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def iter_station_briefs(bundle: dict[str, Any]) -> Iterable[dict[str, Any]]:
-    stations = bundle.get("stations")
-    if isinstance(stations, list):
-        yield from (station for station in stations if isinstance(station, dict))

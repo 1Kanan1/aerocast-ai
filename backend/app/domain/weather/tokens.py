@@ -97,7 +97,7 @@ def scan_conditions(tokens: Sequence[str]) -> Conditions:
                 continue
 
         if conditions.visibility is None:
-            parsed = parse_visibility(tokens, index)
+            parsed = take_visibility(tokens, index)
             if parsed is not None:
                 conditions.visibility, consumed = parsed
                 index += consumed
@@ -168,7 +168,8 @@ def with_variation(wind: Wind, start: int, end: int) -> Wind:
     )
 
 
-def parse_visibility(tokens: Sequence[str], index: int) -> tuple[Visibility, int] | None:
+def take_visibility(tokens: Sequence[str], index: int) -> tuple[Visibility, int] | None:
+    """Read a visibility group, returning it and how many tokens it consumed."""
     token = tokens[index]
 
     # "1 1/2SM" arrives as two tokens.

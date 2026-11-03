@@ -6,7 +6,6 @@ from app.domain.brief.builder import (
     BriefAdvisory,
     BriefStation,
     build_brief,
-    iter_station_briefs,
     refs_in,
 )
 
@@ -16,6 +15,5 @@ __all__ = [
     "BriefAdvisory",
     "BriefStation",
     "build_brief",
-    "iter_station_briefs",
     "refs_in",
 ]

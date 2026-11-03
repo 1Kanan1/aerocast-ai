@@ -10,8 +10,7 @@ from app.domain.taf.models import (
     Taf,
     TafPeriod,
 )
-from app.domain.taf.parser import PARSER_VERSION as TAF_PARSER_VERSION
-from app.domain.taf.parser import parse_taf
+from app.domain.taf.parser import PARSER_VERSION, parse_taf
 from app.domain.taf.windows import TafParseError
 
 __all__ = [
@@ -19,13 +18,11 @@ __all__ = [
     "FM",
     "INITIAL",
     "INTER",
-    "PROB",
     "PARSER_VERSION",
+    "PROB",
     "TEMPO",
     "Taf",
     "TafParseError",
     "TafPeriod",
     "parse_taf",
 ]
-
-PARSER_VERSION = TAF_PARSER_VERSION

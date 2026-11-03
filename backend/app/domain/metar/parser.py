@@ -30,6 +30,10 @@ _TEMPERATURE_GROUP = re.compile(
 MODIFIERS = frozenset({"AUTO", "COR", "CCA", "CCB", "RTD"})
 
 
+#: How far into the future an observation may be timestamped before the day rolls back.
+FUTURE_TOLERANCE = timedelta(hours=1)
+
+
 class MetarParseError(ValueError):
     """The report cannot be placed on a timeline."""
 
@@ -78,7 +82,6 @@ def parse_metar(raw: str, reference: datetime | None = None) -> Observation:
         conditions.unparsed
     )
 
-    # Remarks carry tenths; the body group is rounded. Dewpoint half is optional: T0178.
     precise_temperature, precise_dewpoint = _parse_precise_temperatures(remarks)
     if precise_temperature is not None:
         temperature_c = precise_temperature
@@ -160,7 +163,7 @@ def _resolve_time(
         year, month = _previous_month(year, month)
 
     candidate = _build_datetime(year, month, day, hour, minute)
-    if candidate - ref > timedelta(hours=1):
+    if candidate - ref > FUTURE_TOLERANCE:
         previous_year, previous_month = _previous_month(year, month)
         candidate = _build_datetime(previous_year, previous_month, day, hour, minute)
     return candidate

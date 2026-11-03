@@ -12,26 +12,21 @@ REFERENCE = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
 @pytest.mark.parametrize(
     ("ceiling_ft", "visibility_sm", "expected"),
     [
-        # VFR
         (None, 10, VFR),
         (5000, 10, VFR),
         (3001, 6, VFR),
-        # MVFR, inclusive at 3000 and 1000
         (3000, 10, MVFR),
         (2000, 10, MVFR),
         (1000, 10, MVFR),
         (None, 5, MVFR),
         (None, 3, MVFR),
-        # IFR
         (999, 10, IFR),
         (500, 10, IFR),
         (None, 2.9, IFR),
         (None, 1, IFR),
-        # LIFR
         (499, 10, LIFR),
         (None, 0.9, LIFR),
         (None, 0.25, LIFR),
-        # worst of the two wins
         (200, 10, LIFR),
         (2000, 0.5, LIFR),
         (800, 10, IFR),

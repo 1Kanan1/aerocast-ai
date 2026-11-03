@@ -30,7 +30,7 @@ USER_AGENT = "aerocast-crosscheck/0.1 (+https://github.com/)"
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORT = BACKEND_ROOT / "tests" / "golden" / "crosscheck.md"
 
-#: field -> minimum agreement rate required by --enforce
+#: Minimum agreement rate per field when --enforce is set.
 THRESHOLDS = {
     "temperature": 0.995,
     "dewpoint": 0.995,
@@ -389,6 +389,7 @@ def _normalize_cover(cover: str) -> str:
 
 
 def _is_us(station: str) -> bool:
+    """ICAO K and P prefixes cover the US and its territories."""
     return len(station) == 4 and station[0] in {"K", "P"}
 
 

@@ -120,7 +120,12 @@ of a single id, because the measured difference between them is latency. Default
 fast rungs. Chain de-duplication now keys on provider and model, so one provider can hold
 several rungs without collapsing to one.
 
-### Changed, comment style
+### Changed, readability
+
+The TAF period builder was split into prevailing-window computation and window selection,
+so each step can be read without holding the whole algorithm. `CATEGORY_ORDER` and
+`iter_station_briefs` were removed as unused, and the METAR future-timestamp tolerance is a
+named constant instead of a bare hour.
 
 Comments were cut back to gotchas only: a deliberate oddity, a trap that looks like a bug,
 or an external constraint. The rationale that had accumulated in docstrings moved into

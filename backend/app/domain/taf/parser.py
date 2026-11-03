@@ -37,7 +37,7 @@ _STATION = re.compile(r"^[A-Z][A-Z0-9]{2,3}$")
 _ISSUE_TIME = re.compile(r"^(?P<day>\d{2})(?P<hour>\d{2})(?P<minute>\d{2})Z$")
 _VALIDITY = re.compile(r"^(?P<from>\d{4})/(?P<to>\d{4})$")
 _FM = re.compile(r"^FM(?P<spec>\d{6}|\d{4})$")
-_WINDOW = re.compile(r"^(?P<start>\d{6}|\d{4})(?:/(?P<end>\d{6}|\d{4}))?$")
+_WINDOW_SPEC = re.compile(r"^(?P<start>\d{6}|\d{4})(?:/(?P<end>\d{6}|\d{4}))?$")
 _PROBABILITY = re.compile(r"^PROB(?P<value>\d{2})$")
 
 MODIFIERS = frozenset({"AMD", "COR"})
@@ -145,11 +145,12 @@ def _split_groups(tokens: list[str]) -> list[_Group]:
 
         probability = _PROBABILITY.match(token)
         if probability is not None:
-            group = _Group(change=PROB, probability=int(probability["value"]))
+            change = PROB
             index += 1
             if index < len(tokens) and tokens[index] == "TEMPO":
-                group.change = f"{PROB} {TEMPO}"
+                change = f"{PROB} {TEMPO}"
                 index += 1
+            group = _Group(change=change, probability=int(probability["value"]))
             group.start_spec, group.end_spec, consumed = _take_window(tokens, index)
             groups.append(group)
             index += consumed
@@ -171,7 +172,7 @@ def _split_groups(tokens: list[str]) -> list[_Group]:
 def _take_window(tokens: list[str], index: int) -> tuple[str | None, str | None, int]:
     if index >= len(tokens):
         return None, None, 0
-    window = _WINDOW.match(tokens[index])
+    window = _WINDOW_SPEC.match(tokens[index])
     if window is None:
         return None, None, 0
     return window["start"], window["end"], 1
@@ -182,12 +183,12 @@ def _resolve_groups(groups: list[_Group], valid_from: datetime) -> list[_Resolve
     previous_start = valid_from
 
     for group in groups:
-        resolver = resolve_spec if group.change == FM else resolve_window_spec
+        resolve_start = resolve_spec if group.change == FM else resolve_window_spec
 
         if group.start_spec is None:
             starts_at = valid_from
         else:
-            starts_at = resolver(group.start_spec, previous_start)
+            starts_at = resolve_start(group.start_spec, previous_start)
 
         ends_at = None
         if group.end_spec is not None:
@@ -204,7 +205,43 @@ def _resolve_groups(groups: list[_Group], valid_from: datetime) -> list[_Resolve
 def _build_periods(
     resolved: list[_Resolved], valid_from: datetime, valid_to: datetime
 ) -> tuple[list[TafPeriod], list[str]]:
-    baseline_windows: list[tuple[datetime, datetime]] = []
+    prevailing = _prevailing_windows(resolved, valid_to)
+    periods: list[TafPeriod] = []
+    unparsed: list[str] = []
+
+    for item in resolved:
+        starts_at, ends_at = _window_for(item, prevailing)
+        starts_at = max(starts_at, valid_from)
+        ends_at = min(ends_at, valid_to)
+        if ends_at <= starts_at:
+            ends_at = min(starts_at, valid_to)
+
+        conditions = scan_conditions(item.group.tokens)
+        unparsed.extend(conditions.unparsed)
+
+        periods.append(
+            TafPeriod(
+                change=item.group.change,
+                starts_at=starts_at,
+                ends_at=ends_at,
+                probability=item.group.probability,
+                is_temporary=item.group.change in TRANSIENT_CHANGES,
+                wind=conditions.wind,
+                visibility=conditions.visibility,
+                weather=tuple(conditions.weather),
+                clouds=tuple(conditions.clouds),
+                raw=" ".join(item.group.tokens),
+            )
+        )
+
+    return periods, unparsed
+
+
+def _prevailing_windows(
+    resolved: list[_Resolved], valid_to: datetime
+) -> list[tuple[datetime, datetime]]:
+    """Each prevailing group runs until the next one starts."""
+    windows: list[tuple[datetime, datetime]] = []
 
     for position, item in enumerate(resolved):
         if item.group.change in TRANSIENT_CHANGES:
@@ -217,48 +254,20 @@ def _build_periods(
             ),
             valid_to,
         )
-        baseline_windows.append((item.starts_at, max(item.starts_at, next_start)))
+        windows.append((item.starts_at, max(item.starts_at, next_start)))
 
-    periods: list[TafPeriod] = []
-    unparsed: list[str] = []
-
-    for item in resolved:
-        group = item.group
-        is_temporary = group.change in TRANSIENT_CHANGES
-
-        if is_temporary:
-            starts_at = item.starts_at
-            ends_at = item.ends_at or _enclosing_end(baseline_windows, starts_at)
-        else:
-            starts_at, ends_at = _prevailing_window(baseline_windows, item.starts_at)
-
-        starts_at = max(starts_at, valid_from)
-        ends_at = min(ends_at, valid_to)
-        if ends_at <= starts_at:
-            ends_at = min(starts_at, valid_to)
-
-        conditions = scan_conditions(group.tokens)
-        unparsed.extend(conditions.unparsed)
-
-        periods.append(
-            TafPeriod(
-                change=group.change,
-                starts_at=starts_at,
-                ends_at=ends_at,
-                probability=group.probability,
-                is_temporary=is_temporary,
-                wind=conditions.wind,
-                visibility=conditions.visibility,
-                weather=tuple(conditions.weather),
-                clouds=tuple(conditions.clouds),
-                raw=" ".join(group.tokens),
-            )
-        )
-
-    return periods, unparsed
+    return windows
 
 
-def _prevailing_window(
+def _window_for(
+    item: _Resolved, prevailing: list[tuple[datetime, datetime]]
+) -> tuple[datetime, datetime]:
+    if item.group.change in TRANSIENT_CHANGES:
+        return item.starts_at, item.ends_at or _enclosing_end(prevailing, item.starts_at)
+    return _window_starting_at(prevailing, item.starts_at)
+
+
+def _window_starting_at(
     windows: list[tuple[datetime, datetime]], starts_at: datetime
 ) -> tuple[datetime, datetime]:
     for start, end in windows:
