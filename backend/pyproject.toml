@@ -24,11 +24,11 @@ dev = [
 package = false
 
 [tool.ruff]
-line-length = 100
+line-length = 79
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "RET", "SIM"]
+select = ["E", "W", "F", "I", "N", "UP", "B", "RET", "SIM"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

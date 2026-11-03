@@ -7,8 +7,8 @@
 | IFR      | 500-<1,000 ft  | 1-<3 SM    |
 | LIFR     | < 500 ft       | < 1 SM     |
 
-Worst of the two wins. Visibility is required: without it only half the definition is
-known, so the category is null, as AWC also publishes.
+Worst of the two wins. Visibility is required: without it only half the
+definition is known, so the category is null, as AWC also publishes.
 """
 
 from __future__ import annotations
@@ -47,7 +47,9 @@ class FlightCategory:
         }
 
 
-def category_for(ceiling_ft: int | None, visibility_sm: float | None) -> str | None:
+def category_for(
+    ceiling_ft: int | None, visibility_sm: float | None
+) -> str | None:
     """Return the category, or None when visibility is unknown."""
     if visibility_sm is None:
         return None

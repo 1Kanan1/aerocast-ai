@@ -1,4 +1,4 @@
-"""System endpoints: liveness and, once the scheduler exists, ingest freshness."""
+"""System endpoints: liveness, and ingest freshness later."""
 
 from __future__ import annotations
 

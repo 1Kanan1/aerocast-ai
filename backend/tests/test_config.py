@@ -7,16 +7,25 @@ from app.config import Settings
 
 
 def make_settings(**overrides: Any) -> Settings:
-    """Build settings without reading the repo .env or the developer's environment."""
+    """Build settings without reading .env or the environment."""
     return Settings(_env_file=None, **overrides)
 
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("postgresql://u:p@localhost:5432/db", "postgresql+asyncpg://u:p@localhost:5432/db"),
-        ("postgresql+asyncpg://u:p@localhost/db", "postgresql+asyncpg://u:p@localhost/db"),
-        ("  postgresql://u:p@localhost/db  ", "postgresql+asyncpg://u:p@localhost/db"),
+        (
+            "postgresql://u:p@localhost:5432/db",
+            "postgresql+asyncpg://u:p@localhost:5432/db",
+        ),
+        (
+            "postgresql+asyncpg://u:p@localhost/db",
+            "postgresql+asyncpg://u:p@localhost/db",
+        ),
+        (
+            "  postgresql://u:p@localhost/db  ",
+            "postgresql+asyncpg://u:p@localhost/db",
+        ),
     ],
 )
 def test_database_url_gets_the_async_driver(raw: str, expected: str) -> None:
@@ -27,8 +36,8 @@ def test_database_url_gets_the_async_driver(raw: str, expected: str) -> None:
     "url",
     [
         "mysql://localhost/db",
-        # The pre-2009 alias. SQLAlchemy dropped it, so accepting it would only delay
-        # the failure to the first connection.
+        # The pre-2009 alias. SQLAlchemy dropped it, so accepting it only
+        # delays the failure to the first connection.
         "postgres://u:p@localhost/db",
         "sqlite+aiosqlite:///db.sqlite",
     ],
@@ -47,12 +56,16 @@ def test_database_url_rejects_anything_not_postgres(url: str) -> None:
         ("zai,,gemini", ("zai", "gemini")),
     ],
 )
-def test_llm_chain_is_parsed_in_order(chain: str, expected: tuple[str, ...]) -> None:
+def test_llm_chain_is_parsed_in_order(
+    chain: str, expected: tuple[str, ...]
+) -> None:
     assert make_settings(llm_chain=chain).llm_providers == expected
 
 
 def test_unknown_providers_are_dropped_from_the_chain() -> None:
-    assert make_settings(llm_chain="zai,openai,gpt4all").llm_providers == ("zai",)
+    assert make_settings(llm_chain="zai,openai,gpt4all").llm_providers == (
+        "zai",
+    )
 
 
 def test_provider_configuration_reflects_empty_keys() -> None:
@@ -66,7 +79,12 @@ def test_provider_configuration_reflects_empty_keys() -> None:
 
 
 def test_local_provider_configuration() -> None:
-    assert make_settings(local_base_url="http://127.0.0.1:8080/v1").local_configured is True
+    assert (
+        make_settings(
+            local_base_url="http://127.0.0.1:8080/v1"
+        ).local_configured
+        is True
+    )
     assert make_settings(local_base_url="").local_configured is False
     assert make_settings(local_base_url="").local_base_url is None
 
@@ -74,7 +92,11 @@ def test_local_provider_configuration() -> None:
 def test_no_provider_uses_a_moving_model_alias() -> None:
     """`-latest` aliases drift without a commit. Pinned ids only."""
     settings = make_settings()
-    for model in (settings.zai_model, *settings.gemini_model_list, settings.local_model):
+    for model in (
+        settings.zai_model,
+        *settings.gemini_model_list,
+        settings.local_model,
+    ):
         assert not model.endswith("-latest"), model
         assert model.count("/") <= 1, model
 

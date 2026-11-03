@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-from app.domain.weather.models import CloudLayer, Visibility, Wind, lowest_ceiling
+from app.domain.weather.models import (
+    CloudLayer,
+    Visibility,
+    Wind,
+    lowest_ceiling,
+)
 
 INITIAL = "INITIAL"
 FM = "FM"
@@ -37,7 +42,9 @@ class TafPeriod:
 
     @property
     def visibility_sm(self) -> float | None:
-        return None if self.visibility is None else self.visibility.statute_miles
+        return (
+            None if self.visibility is None else self.visibility.statute_miles
+        )
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -57,7 +64,9 @@ class Taf:
 
     @property
     def prevailing_periods(self) -> tuple[TafPeriod, ...]:
-        return tuple(period for period in self.periods if not period.is_temporary)
+        return tuple(
+            period for period in self.periods if not period.is_temporary
+        )
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)

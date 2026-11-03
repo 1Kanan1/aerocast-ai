@@ -5,7 +5,7 @@ from __future__ import annotations
 import calendar
 from datetime import UTC, datetime, timedelta
 
-#: A change group this far behind the validity start belongs to the previous month.
+#: A group this far behind the validity start is last month.
 BACKWARD_TOLERANCE = timedelta(hours=18)
 
 #: Longest TAF validity in practice; anything longer is a malformed window.
@@ -40,11 +40,15 @@ def resolve_spec(spec: str, anchor: datetime) -> datetime:
     """Resolve an `FM` time: `DDHHMM` when six digits, `HHMM` when four."""
     spec = spec.strip()
     if len(spec) == 6 and spec.isdigit():
-        return resolve_day(int(spec[0:2]), int(spec[2:4]), int(spec[4:6]), anchor)
+        return resolve_day(
+            int(spec[0:2]), int(spec[2:4]), int(spec[4:6]), anchor
+        )
 
     if len(spec) == 4 and spec.isdigit():
         base = anchor.astimezone(UTC)
-        candidate = _build(base.year, base.month, base.day, int(spec[0:2]), int(spec[2:4]))
+        candidate = _build(
+            base.year, base.month, base.day, int(spec[0:2]), int(spec[2:4])
+        )
         if candidate <= base:
             candidate += timedelta(days=1)
         return candidate
@@ -53,10 +57,12 @@ def resolve_spec(spec: str, anchor: datetime) -> datetime:
 
 
 def resolve_window_spec(spec: str, anchor: datetime) -> datetime:
-    """Resolve a change-group window: `DDHHMM` when six digits, `DDHH` when four."""
+    """Resolve a window spec: `DDHHMM` if six digits, `DDHH` if four."""
     spec = spec.strip()
     if len(spec) == 6 and spec.isdigit():
-        return resolve_day(int(spec[0:2]), int(spec[2:4]), int(spec[4:6]), anchor)
+        return resolve_day(
+            int(spec[0:2]), int(spec[2:4]), int(spec[4:6]), anchor
+        )
 
     if len(spec) == 4 and spec.isdigit():
         return resolve_day(int(spec[0:2]), int(spec[2:4]), 0, anchor)
@@ -70,7 +76,7 @@ def resolve_validity_end(
     minute: int,
     start: datetime,
 ) -> datetime:
-    """Resolve the end of a validity window, taking the next month if needed."""
+    """Resolve the end of a validity window, taking the next month."""
     start = start.astimezone(UTC)
     candidate = _build(start.year, start.month, day, hour, minute)
     if candidate <= start:
@@ -83,9 +89,13 @@ def _next_month(year: int, month: int) -> tuple[int, int]:
     return (year + 1, 1) if month == 12 else (year, month + 1)
 
 
-def _build(year: int, month: int, day: int, hour: int, minute: int) -> datetime:
+def _build(
+    year: int, month: int, day: int, hour: int, minute: int
+) -> datetime:
     day = min(day, calendar.monthrange(year, month)[1])
     try:
         return datetime(year, month, day, hour, minute, tzinfo=UTC)
     except ValueError as exc:
-        raise TafParseError(f"invalid time {day:02d}{hour:02d}{minute:02d}") from exc
+        raise TafParseError(
+            f"invalid time {day:02d}{hour:02d}{minute:02d}"
+        ) from exc

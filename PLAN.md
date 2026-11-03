@@ -114,7 +114,8 @@ Comments explain only what the code cannot: a deliberate oddity, a trap that loo
 bug, or an external constraint. Never restate what the code says, and never restate the
 signature. Rationale, history and measurements belong in this file and in `CHANGELOG.md`.
 
-Python: ruff at line length 100, plus ty. TypeScript: strict, `tsc --noEmit`.
+Python: PEP 8, enforced by ruff at 79 columns with pycodestyle warnings and naming checks,
+`ruff format` for layout, and ty for types. TypeScript: strict, `tsc --noEmit`.
 
 ## 4. Data source
 

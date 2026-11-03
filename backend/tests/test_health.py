@@ -6,7 +6,9 @@ from app.main import app
 
 async def _get_health() -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
         return await client.get("/api/health")
 
 
@@ -46,11 +48,16 @@ async def test_health_reports_ok_when_database_reachable(monkeypatch) -> None:
     assert body["status"] == "ok"
     assert body["database"] == {"ok": True, "error": None}
     assert "zai" in body["llm"]["chain"]
-    assert [provider["name"] for provider in body["llm"]["providers"]] == ["zai", "mlx"]
+    assert [provider["name"] for provider in body["llm"]["providers"]] == [
+        "zai",
+        "mlx",
+    ]
     assert body["llm"]["providers"][1]["reachable"] is False
 
 
-async def test_health_reports_degraded_when_database_unreachable(monkeypatch) -> None:
+async def test_health_reports_degraded_when_database_unreachable(
+    monkeypatch,
+) -> None:
     _fake_providers(monkeypatch, database_ok=False)
 
     response = await _get_health()
@@ -63,7 +70,9 @@ async def test_health_reports_degraded_when_database_unreachable(monkeypatch) ->
 
 async def test_openapi_schema_is_served() -> None:
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
         response = await client.get("/api/openapi.json")
 
     assert response.status_code == 200

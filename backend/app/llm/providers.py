@@ -1,4 +1,4 @@
-"""Provider inventory. Every provider speaks the OpenAI chat completions shape."""
+"""Provider inventory. Every provider speaks OpenAI chat completions."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class ProviderStatus:
 
 
 def _resolve(settings: Settings, name: str) -> list[ProviderStatus]:
-    """One chain entry can expand to several rungs. Gemini is a model ladder."""
+    """One chain entry can expand to several rungs, e.g. Gemini."""
     match name:
         case "zai":
             return [
@@ -102,8 +102,14 @@ async def statuses(settings: Settings) -> list[dict[str, object]]:
                 continue
             seen.add(key)
 
-            if status.kind == "local" and status.configured and settings.local_base_url:
-                status = replace(status, reachable=await _probe(settings.local_base_url))
+            if (
+                status.kind == "local"
+                and status.configured
+                and settings.local_base_url
+            ):
+                status = replace(
+                    status, reachable=await _probe(settings.local_base_url)
+                )
 
             described.append(status.as_dict())
 

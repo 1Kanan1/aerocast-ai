@@ -26,8 +26,12 @@ async def test_local_aliases_collapse_to_one_provider() -> None:
     assert described[0]["reachable"] is None
 
 
-async def test_remote_providers_report_configured_without_being_probed() -> None:
-    settings = make_settings(llm_chain="zai", zai_api_key="secret", local_base_url="")
+async def test_remote_providers_report_configured_without_being_probed() -> (
+    None
+):
+    settings = make_settings(
+        llm_chain="zai", zai_api_key="secret", local_base_url=""
+    )
 
     described = await statuses(settings)
 

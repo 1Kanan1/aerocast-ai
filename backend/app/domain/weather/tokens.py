@@ -12,36 +12,66 @@ METRES_PER_STATUTE_MILE = 1609.344
 KNOTS_PER_METRE_PER_SECOND = 1.943844
 KNOTS_PER_KM_PER_HOUR = 0.539957
 
-#: CAVOK: 10 km or more, no cloud below 5,000 ft, no CB/TCU, no significant weather.
+#: CAVOK: 10 km+, no cloud below 5,000 ft, no CB/TCU, no weather.
 CAVOK_STATUTE_MILES = round(10_000 / METRES_PER_STATUTE_MILE, 2)
 
 WIND = re.compile(
     r"^(?P<direction>\d{3}|VRB)(?P<speed>\d{2,3})(?:G(?P<gust>\d{2,3}))?(?P<unit>KT|MPS|KMH)$"
 )
 WIND_VARIATION = re.compile(r"^(?P<start>\d{3})V(?P<end>\d{3})$")
-CLOUD = re.compile(r"^(?P<cover>FEW|SCT|BKN|OVC)(?P<base>\d{3}|///)(?P<type>CB|TCU|///)?$")
+CLOUD = re.compile(
+    r"^(?P<cover>FEW|SCT|BKN|OVC)(?P<base>\d{3}|///)(?P<type>CB|TCU|///)?$"
+)
 VERTICAL_VISIBILITY = re.compile(r"^VV(?P<base>\d{3}|///)$")
 VISIBILITY_SM = re.compile(
     r"^(?P<lead>[MP])?(?P<whole>\d{1,2})?"
     r"(?:(?P<numerator>\d{1,2})/(?P<denominator>\d{1,2}))?SM$"
 )
-VISIBILITY_FRACTION = re.compile(r"^(?P<numerator>\d{1,2})/(?P<denominator>\d{1,2})SM$")
+VISIBILITY_FRACTION = re.compile(
+    r"^(?P<numerator>\d{1,2})/(?P<denominator>\d{1,2})SM$"
+)
 VISIBILITY_METRES = re.compile(r"^(?P<metres>\d{4})(?:NDV)?$")
 WHOLE_NUMBER = re.compile(r"^\d{1,2}$")
 
 SKY_CLEAR = frozenset({"SKC", "CLR", "NSC", "NCD"})
 
-#: Two-letter weather codes. A token is weather if it decomposes entirely into these.
+#: Two-letter codes; a token is weather if it decomposes into these.
 WEATHER_CODES = frozenset(
     {
         # qualifiers
-        "MI", "PR", "BC", "DR", "BL", "SH", "TS", "FZ",
+        "MI",
+        "PR",
+        "BC",
+        "DR",
+        "BL",
+        "SH",
+        "TS",
+        "FZ",
         # precipitation
-        "DZ", "RA", "SN", "SG", "IC", "PL", "GR", "GS", "UP",
+        "DZ",
+        "RA",
+        "SN",
+        "SG",
+        "IC",
+        "PL",
+        "GR",
+        "GS",
+        "UP",
         # obscuration
-        "BR", "FG", "FU", "VA", "DU", "SA", "HZ", "PY",
+        "BR",
+        "FG",
+        "FU",
+        "VA",
+        "DU",
+        "SA",
+        "HZ",
+        "PY",
         # other
-        "PO", "SQ", "FC", "SS", "DS",
+        "PO",
+        "SQ",
+        "FC",
+        "SS",
+        "DS",
     }
 )
 
@@ -59,11 +89,13 @@ class Conditions:
 
     @property
     def visibility_sm(self) -> float | None:
-        return None if self.visibility is None else self.visibility.statute_miles
+        return (
+            None if self.visibility is None else self.visibility.statute_miles
+        )
 
 
 def scan_conditions(tokens: Sequence[str]) -> Conditions:
-    """Consume wind, visibility, cloud and weather groups. Everything else is unparsed."""
+    """Consume wind, visibility, clouds and weather; rest is unparsed."""
     conditions = Conditions()
     index = 0
 
@@ -142,10 +174,16 @@ def build_wind(match: re.Match[str], token: str) -> Wind:
     unit = match["unit"]
     if unit == "MPS":
         speed = round(speed * KNOTS_PER_METRE_PER_SECOND)
-        gust = round(gust * KNOTS_PER_METRE_PER_SECOND) if gust is not None else None
+        gust = (
+            round(gust * KNOTS_PER_METRE_PER_SECOND)
+            if gust is not None
+            else None
+        )
     elif unit == "KMH":
         speed = round(speed * KNOTS_PER_KM_PER_HOUR)
-        gust = round(gust * KNOTS_PER_KM_PER_HOUR) if gust is not None else None
+        gust = (
+            round(gust * KNOTS_PER_KM_PER_HOUR) if gust is not None else None
+        )
 
     return Wind(
         direction_deg=None if direction_raw == "VRB" else int(direction_raw),
@@ -168,8 +206,10 @@ def with_variation(wind: Wind, start: int, end: int) -> Wind:
     )
 
 
-def take_visibility(tokens: Sequence[str], index: int) -> tuple[Visibility, int] | None:
-    """Read a visibility group, returning it and how many tokens it consumed."""
+def take_visibility(
+    tokens: Sequence[str], index: int
+) -> tuple[Visibility, int] | None:
+    """Read a visibility group and how many tokens it used."""
     token = tokens[index]
 
     # "1 1/2SM" arrives as two tokens.
@@ -181,7 +221,10 @@ def take_visibility(tokens: Sequence[str], index: int) -> tuple[Visibility, int]
                 return None
             value = int(token) + int(fraction["numerator"]) / denominator
             return (
-                Visibility(statute_miles=round(value, 2), raw=f"{token} {tokens[index + 1]}"),
+                Visibility(
+                    statute_miles=round(value, 2),
+                    raw=f"{token} {tokens[index + 1]}",
+                ),
                 2,
             )
 
@@ -233,7 +276,9 @@ def build_cloud(match: re.Match[str]) -> CloudLayer:
 
 def build_vertical_visibility(match: re.Match[str]) -> CloudLayer:
     base = match["base"]
-    return CloudLayer(cover="VV", base_ft=int(base) * 100 if base.isdigit() else None)
+    return CloudLayer(
+        cover="VV", base_ft=int(base) * 100 if base.isdigit() else None
+    )
 
 
 def is_weather(token: str) -> bool:
@@ -247,4 +292,6 @@ def is_weather(token: str) -> bool:
         return True
     if not body or len(body) % 2 != 0:
         return False
-    return all(body[i : i + 2] in WEATHER_CODES for i in range(0, len(body), 2))
+    return all(
+        body[i : i + 2] in WEATHER_CODES for i in range(0, len(body), 2)
+    )

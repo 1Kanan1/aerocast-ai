@@ -2,7 +2,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.domain.metar import IFR, LIFR, MVFR, VFR, category_for, classify, parse_metar
+from app.domain.metar import (
+    IFR,
+    LIFR,
+    MVFR,
+    VFR,
+    category_for,
+    classify,
+    parse_metar,
+)
 from app.domain.metar.flight_category import FlightCategory
 from app.domain.metar.flight_category import category_for as raw_category_for
 
@@ -33,7 +41,9 @@ REFERENCE = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
         (20000, 2, IFR),
     ],
 )
-def test_category_bands(ceiling_ft: int | None, visibility_sm: float | None, expected: str) -> None:
+def test_category_bands(
+    ceiling_ft: int | None, visibility_sm: float | None, expected: str
+) -> None:
     assert raw_category_for(ceiling_ft, visibility_sm) == expected
 
 
@@ -42,7 +52,8 @@ def test_unknown_inputs_produce_no_category() -> None:
 
 
 def test_missing_visibility_produces_no_category() -> None:
-    # AWC publishes no category either: without visibility only half the definition is known.
+    # AWC publishes no category either: without visibility only half the
+    # definition is known.
     assert category_for(800, None) is None
     assert category_for(None, None) is None
 
@@ -89,9 +100,10 @@ def test_classify_preserves_the_visibility_qualifier() -> None:
 
 
 def test_ceiling_is_the_lowest_layer_even_when_reported_out_of_order() -> None:
-    # KS24 reports BKN070 before OVC010. The FAA ceiling is the lowest broken or
-    # overcast layer, so 1,000 ft is correct. AWC's decoder uses document order and
-    # publishes VFR, which is the one flight-category disagreement in the cross-check.
+    # KS24 reports BKN070 before OVC010. The FAA ceiling is the lowest
+    # broken or overcast layer, so 1,000 ft is correct. AWC's decoder
+    # uses document order and publishes VFR, the one flight-category
+    # disagreement in the cross-check.
     observation = parse_metar(
         "KS24 011117Z AUTO 10003KT 10SM BKN070 OVC010 10/08 A3038 RMK AO2",
         reference=REFERENCE,
@@ -103,7 +115,10 @@ def test_ceiling_is_the_lowest_layer_even_when_reported_out_of_order() -> None:
 
 def test_category_serialises_for_storage() -> None:
     category = classify(
-        parse_metar("KXYZ 011200Z 00000KT 1/2SM FG OVC003 10/10 A3000", reference=REFERENCE)
+        parse_metar(
+            "KXYZ 011200Z 00000KT 1/2SM FG OVC003 10/10 A3000",
+            reference=REFERENCE,
+        )
     )
 
     assert category.as_dict() == {

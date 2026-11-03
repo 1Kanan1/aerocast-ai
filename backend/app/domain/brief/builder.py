@@ -1,7 +1,8 @@
 """The fact bundle the explanation layer is allowed to read.
 
-In `domain/` on purpose: deterministic, tested, and it still works with every provider off.
-Every citable value carries a `ref`, and the bundle hashes its own canonical JSON.
+In `domain/` on purpose: deterministic, tested, and it still works with
+every provider off. Every citable value carries a `ref`, and the bundle
+hashes its own canonical JSON.
 """
 
 from __future__ import annotations
@@ -22,16 +23,29 @@ DEFINITION_VERSION = "defs-1.0.0"
 DEFINITIONS: dict[str, str] = {
     "VFR": "Ceiling above 3,000 ft and visibility above 5 statute miles.",
     "MVFR": "Ceiling 1,000 to 3,000 ft or visibility 3 to 5 statute miles.",
-    "IFR": "Ceiling 500 to under 1,000 ft or visibility 1 to under 3 statute miles.",
+    "IFR": (
+        "Ceiling 500 to under 1,000 ft or visibility 1 to under 3 "
+        "statute miles."
+    ),
     "LIFR": "Ceiling under 500 ft or visibility under 1 statute mile.",
-    "ceiling": "The lowest broken, overcast, or vertical visibility layer above ground.",
-    "TEMPO": "Temporary fluctuations expected for less than an hour at a time.",
+    "ceiling": (
+        "The lowest broken, overcast, or vertical visibility layer above "
+        "ground."
+    ),
+    "TEMPO": (
+        "Temporary fluctuations expected for less than an hour at a time."
+    ),
     "BECMG": "Conditions becoming gradually within the stated window.",
     "PROB30": "A 30 percent probability of the stated conditions.",
     "PROB40": "A 40 percent probability of the stated conditions.",
-    "dewpoint_spread": "The difference between temperature and dewpoint. A small spread "
-    "means the air is close to saturation and fog or low cloud becomes likely.",
-    "P6SM": "Visibility greater than six statute miles. It is a floor, not a measurement.",
+    "dewpoint_spread": (
+        "The difference between temperature and dewpoint. A small spread "
+        "means the air is close to saturation and fog becomes likely."
+    ),
+    "P6SM": (
+        "Visibility greater than six statute miles. It is a floor, not a "
+        "measurement."
+    ),
 }
 
 
@@ -55,7 +69,9 @@ class BriefStation:
     advisories: tuple[BriefAdvisory, ...] = ()
 
 
-def build_brief(stations: Sequence[BriefStation], generated_at: datetime) -> dict[str, Any]:
+def build_brief(
+    stations: Sequence[BriefStation], generated_at: datetime
+) -> dict[str, Any]:
     """Assemble the bundle. Same inputs and time produce the same hash."""
     bundle: dict[str, Any] = {
         "generated_at": generated_at.isoformat(),
@@ -101,7 +117,9 @@ def _station(station: BriefStation, generated_at: datetime) -> dict[str, Any]:
     }
 
 
-def _metar(station: BriefStation, generated_at: datetime) -> dict[str, Any] | None:
+def _metar(
+    station: BriefStation, generated_at: datetime
+) -> dict[str, Any] | None:
     observation = station.observation
     if observation is None:
         return None
@@ -113,7 +131,9 @@ def _metar(station: BriefStation, generated_at: datetime) -> dict[str, Any] | No
         "ref": _ref(*root),
         "raw": observation.raw,
         "observed_at": observation.observed_at.isoformat(),
-        "age_seconds": max(0, int((generated_at - observation.observed_at).total_seconds())),
+        "age_seconds": max(
+            0, int((generated_at - observation.observed_at).total_seconds())
+        ),
         "station": observation.station,
         "is_automated": observation.is_automated,
         "flight_category": {
@@ -135,7 +155,9 @@ def _metar(station: BriefStation, generated_at: datetime) -> dict[str, Any] | No
     }
 
 
-def _wind(observation: Observation, root: tuple[str, ...]) -> dict[str, Any] | None:
+def _wind(
+    observation: Observation, root: tuple[str, ...]
+) -> dict[str, Any] | None:
     wind = observation.wind
     if wind is None:
         return None
@@ -149,7 +171,9 @@ def _wind(observation: Observation, root: tuple[str, ...]) -> dict[str, Any] | N
     }
 
 
-def _visibility(observation: Observation, root: tuple[str, ...]) -> dict[str, Any] | None:
+def _visibility(
+    observation: Observation, root: tuple[str, ...]
+) -> dict[str, Any] | None:
     visibility = observation.visibility
     if visibility is None:
         return None
@@ -161,7 +185,9 @@ def _visibility(observation: Observation, root: tuple[str, ...]) -> dict[str, An
     }
 
 
-def _temperature(observation: Observation, root: tuple[str, ...]) -> dict[str, Any] | None:
+def _temperature(
+    observation: Observation, root: tuple[str, ...]
+) -> dict[str, Any] | None:
     if observation.temperature_c is None:
         return None
     spread = None
@@ -176,7 +202,11 @@ def _temperature(observation: Observation, root: tuple[str, ...]) -> dict[str, A
 
 
 def _cloud(layer: CloudLayer) -> dict[str, Any]:
-    return {"cover": layer.cover, "base_ft": layer.base_ft, "cloud_type": layer.cloud_type}
+    return {
+        "cover": layer.cover,
+        "base_ft": layer.base_ft,
+        "cloud_type": layer.cloud_type,
+    }
 
 
 def _taf(station: BriefStation) -> dict[str, Any] | None:
@@ -193,12 +223,15 @@ def _taf(station: BriefStation) -> dict[str, Any] | None:
         "is_amended": taf.is_amended,
         "is_corrected": taf.is_corrected,
         "periods": [
-            _taf_period(period, root, index) for index, period in enumerate(taf.periods)
+            _taf_period(period, root, index)
+            for index, period in enumerate(taf.periods)
         ],
     }
 
 
-def _taf_period(period: TafPeriod, root: tuple[str, ...], index: int) -> dict[str, Any]:
+def _taf_period(
+    period: TafPeriod, root: tuple[str, ...], index: int
+) -> dict[str, Any]:
     return {
         "ref": _ref(*root, "period", str(index)),
         "change": period.change,
@@ -220,7 +253,9 @@ def _taf_period(period: TafPeriod, root: tuple[str, ...], index: int) -> dict[st
     }
 
 
-def _advisory(icao: str, index: int, advisory: BriefAdvisory) -> dict[str, Any]:
+def _advisory(
+    icao: str, index: int, advisory: BriefAdvisory
+) -> dict[str, Any]:
     return {
         "ref": _ref("adv", icao, str(index)),
         "kind": advisory.kind,
@@ -236,5 +271,7 @@ def _ref(*parts: str) -> str:
 
 
 def _hash(bundle: dict[str, Any]) -> str:
-    canonical = json.dumps(bundle, sort_keys=True, separators=(",", ":"), default=str)
+    canonical = json.dumps(
+        bundle, sort_keys=True, separators=(",", ":"), default=str
+    )
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()

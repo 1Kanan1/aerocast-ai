@@ -1,8 +1,9 @@
-"""The domain layer has to stay readable and testable without any infrastructure.
+"""The domain layer has to stay readable and testable without infrastructure.
 
-The plan claims `app/domain/` imports nothing from the web framework, the database, the
-network, or the model providers. That claim is worth a test, because it erodes quietly the
-first time someone wants "just one query" inside a parser.
+The plan claims `app/domain/` imports nothing from the web framework,
+the database, the network, or the model providers. That claim is worth
+a test, because it erodes quietly the first time someone wants "just one
+query" inside a parser.
 """
 
 from __future__ import annotations
@@ -28,7 +29,14 @@ FORBIDDEN_ROOTS = frozenset(
     }
 )
 
-FORBIDDEN_PREFIXES = ("app.api", "app.db", "app.llm", "app.sources", "app.ingest", "app.tools")
+FORBIDDEN_PREFIXES = (
+    "app.api",
+    "app.db",
+    "app.llm",
+    "app.sources",
+    "app.ingest",
+    "app.tools",
+)
 
 
 def _imported_modules(path: Path) -> list[str]:
@@ -47,7 +55,11 @@ def test_domain_imports_nothing_from_outside_itself() -> None:
 
     for path in sorted(DOMAIN_ROOT.rglob("*.py")):
         for module in _imported_modules(path):
-            if module.split(".")[0] in FORBIDDEN_ROOTS or module.startswith(FORBIDDEN_PREFIXES):
-                offenders.append(f"{path.relative_to(DOMAIN_ROOT)} imports {module}")
+            if module.split(".")[0] in FORBIDDEN_ROOTS or module.startswith(
+                FORBIDDEN_PREFIXES
+            ):
+                offenders.append(
+                    f"{path.relative_to(DOMAIN_ROOT)} imports {module}"
+                )
 
     assert offenders == [], "\n".join(offenders)

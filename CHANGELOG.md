@@ -122,6 +122,9 @@ several rungs without collapsing to one.
 
 ### Changed, readability
 
+The backend now conforms to PEP 8: 79 column limit, `ruff format` for layout, and the
+pycodestyle warning and naming rules enabled. `make lint` and CI fail on formatting.
+
 The TAF period builder was split into prevailing-window computation and window selection,
 so each step can be read without holding the whole algorithm. `CATEGORY_ORDER` and
 `iter_station_briefs` were removed as unused, and the METAR future-timestamp tolerance is a

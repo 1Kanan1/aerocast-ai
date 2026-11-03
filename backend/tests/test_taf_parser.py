@@ -15,14 +15,20 @@ def parse(raw: str, reference: datetime = REFERENCE):
 def test_parses_a_chain_of_fm_groups() -> None:
     taf = parse(
         "TAF KSFO 010859Z 0109/0212 30005KT 6SM -SHRA OVC035 "
-        "FM011300 32007KT P6SM BKN050 FM012200 29013KT P6SM SKC FM020500 26003KT P6SM SKC"
+        "FM011300 32007KT P6SM BKN050 FM012200 29013KT P6SM SKC "
+        "FM020500 26003KT P6SM SKC"
     )
 
     assert taf.station == "KSFO"
     assert taf.issued_at == datetime(2026, 11, 1, 8, 59, tzinfo=UTC)
     assert taf.valid_from == datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
     assert taf.valid_to == datetime(2026, 11, 2, 12, 0, tzinfo=UTC)
-    assert [period.change for period in taf.periods] == ["INITIAL", "FM", "FM", "FM"]
+    assert [period.change for period in taf.periods] == [
+        "INITIAL",
+        "FM",
+        "FM",
+        "FM",
+    ]
 
     initial, first, second, third = taf.periods
     assert initial.starts_at == datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
@@ -76,7 +82,8 @@ def test_probability_window() -> None:
 
 def test_becmg_starts_a_new_prevailing_period() -> None:
     taf = parse(
-        "TAF KXYZ 011130Z 0112/0212 20010KT P6SM SCT030 BECMG 0115/0118 25015KT BKN020"
+        "TAF KXYZ 011130Z 0112/0212 20010KT P6SM SCT030 "
+        "BECMG 0115/0118 25015KT BKN020"
     )
 
     initial, becoming = taf.periods
@@ -114,20 +121,26 @@ def test_issue_time_may_be_omitted() -> None:
 
 
 def test_four_digit_fm_spec_uses_the_previous_day() -> None:
-    taf = parse("TAF KXYZ 011130Z 0112/0212 20010KT P6SM SKC FM1800 25012KT P6SM SKC")
+    taf = parse(
+        "TAF KXYZ 011130Z 0112/0212 20010KT P6SM SKC FM1800 25012KT P6SM SKC"
+    )
 
     assert taf.periods[1].change == "FM"
     assert taf.periods[1].starts_at == datetime(2026, 11, 1, 18, 0, tzinfo=UTC)
 
 
 def test_four_digit_fm_spec_rolls_into_the_next_day() -> None:
-    taf = parse("TAF KXYZ 011130Z 0118/0206 20010KT P6SM SKC FM0200 25012KT P6SM SKC")
+    taf = parse(
+        "TAF KXYZ 011130Z 0118/0206 20010KT P6SM SKC FM0200 25012KT P6SM SKC"
+    )
 
     assert taf.periods[1].starts_at == datetime(2026, 11, 2, 2, 0, tzinfo=UTC)
 
 
 def test_forecast_groups_that_are_not_modelled_are_reported() -> None:
-    taf = parse("TAF KXYZ 011130Z 0112/0212 20010KT P6SM SKC TX20/0118Z TN10/0206Z")
+    taf = parse(
+        "TAF KXYZ 011130Z 0112/0212 20010KT P6SM SKC TX20/0118Z TN10/0206Z"
+    )
 
     assert taf.unparsed == ("TX20/0118Z", "TN10/0206Z")
 
@@ -135,7 +148,9 @@ def test_forecast_groups_that_are_not_modelled_are_reported() -> None:
 def test_spec_resolution_rolls_forward_a_month() -> None:
     anchor = datetime(2026, 10, 30, 22, 0, tzinfo=UTC)
 
-    assert resolve_spec("010600", anchor) == datetime(2026, 11, 1, 6, 0, tzinfo=UTC)
+    assert resolve_spec("010600", anchor) == datetime(
+        2026, 11, 1, 6, 0, tzinfo=UTC
+    )
 
 
 @pytest.mark.parametrize(
@@ -144,7 +159,10 @@ def test_spec_resolution_rolls_forward_a_month() -> None:
         ("", "empty report"),
         ("TAF 011130Z 0112/0212 20010KT P6SM SKC", "invalid station"),
         ("TAF KXYZ 011130Z 20010KT P6SM SKC", "missing validity window"),
-        ("TAF KXYZ 011130Z 0212/0112 20010KT P6SM SKC", "ends before it starts"),
+        (
+            "TAF KXYZ 011130Z 0212/0112 20010KT P6SM SKC",
+            "ends before it starts",
+        ),
     ],
 )
 def test_invalid_reports_are_rejected(raw: str, message: str) -> None:

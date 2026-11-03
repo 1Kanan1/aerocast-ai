@@ -47,7 +47,10 @@ def test_bundle_carries_the_observation_with_a_basis() -> None:
     metar = bundle["stations"][0]["metar"]
 
     assert metar["ref"] == "metar.KSFO"
-    assert metar["observed_at"] == datetime(2026, 11, 1, 8, 56, tzinfo=UTC).isoformat()
+    assert (
+        metar["observed_at"]
+        == datetime(2026, 11, 1, 8, 56, tzinfo=UTC).isoformat()
+    )
     assert metar["age_seconds"] == 34 * 60
     assert metar["flight_category"]["value"] == "MVFR"
     assert "2,400 ft" in metar["flight_category"]["basis"]
@@ -61,7 +64,11 @@ def test_bundle_carries_the_forecast_chain() -> None:
     taf = bundle["stations"][0]["taf"]
 
     assert taf["ref"] == "taf.KSFO"
-    assert [period["change"] for period in taf["periods"]] == ["INITIAL", "FM", "FM"]
+    assert [period["change"] for period in taf["periods"]] == [
+        "INITIAL",
+        "FM",
+        "FM",
+    ]
     assert taf["periods"][0]["ref"] == "taf.KSFO.period.0"
     assert taf["periods"][0]["ceiling_ft"] == 3500
 
@@ -103,7 +110,10 @@ def test_bundle_hash_changes_when_a_fact_changes() -> None:
         ),
     )
 
-    assert build_brief([changed], GENERATED_AT)["brief_hash"] != brief_for()["brief_hash"]
+    assert (
+        build_brief([changed], GENERATED_AT)["brief_hash"]
+        != brief_for()["brief_hash"]
+    )
 
 
 def test_age_never_goes_negative() -> None:

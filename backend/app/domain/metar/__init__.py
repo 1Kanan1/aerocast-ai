@@ -10,7 +10,11 @@ from app.domain.metar.flight_category import (
     classify,
 )
 from app.domain.metar.models import CloudLayer, Observation, Visibility, Wind
-from app.domain.metar.parser import PARSER_VERSION, MetarParseError, parse_metar
+from app.domain.metar.parser import (
+    PARSER_VERSION,
+    MetarParseError,
+    parse_metar,
+)
 
 __all__ = [
     "CloudLayer",

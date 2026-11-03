@@ -1,7 +1,8 @@
 """Deterministic TAF parser.
 
-`FM` truncates the prevailing period, `BECMG` starts a new one, and `TEMPO`, `PROB30/40`
-and `INTER` are windows inside it that never truncate. Report order is preserved.
+`FM` truncates the prevailing period, `BECMG` starts a new one, and
+`TEMPO`, `PROB30/40` and `INTER` are windows inside it that never
+truncate. Report order is preserved.
 """
 
 from __future__ import annotations
@@ -37,7 +38,9 @@ _STATION = re.compile(r"^[A-Z][A-Z0-9]{2,3}$")
 _ISSUE_TIME = re.compile(r"^(?P<day>\d{2})(?P<hour>\d{2})(?P<minute>\d{2})Z$")
 _VALIDITY = re.compile(r"^(?P<from>\d{4})/(?P<to>\d{4})$")
 _FM = re.compile(r"^FM(?P<spec>\d{6}|\d{4})$")
-_WINDOW_SPEC = re.compile(r"^(?P<start>\d{6}|\d{4})(?:/(?P<end>\d{6}|\d{4}))?$")
+_WINDOW_SPEC = re.compile(
+    r"^(?P<start>\d{6}|\d{4})(?:/(?P<end>\d{6}|\d{4}))?$"
+)
 _PROBABILITY = re.compile(r"^PROB(?P<value>\d{2})$")
 
 MODIFIERS = frozenset({"AMD", "COR"})
@@ -150,15 +153,21 @@ def _split_groups(tokens: list[str]) -> list[_Group]:
             if index < len(tokens) and tokens[index] == "TEMPO":
                 change = f"{PROB} {TEMPO}"
                 index += 1
-            group = _Group(change=change, probability=int(probability["value"]))
-            group.start_spec, group.end_spec, consumed = _take_window(tokens, index)
+            group = _Group(
+                change=change, probability=int(probability["value"])
+            )
+            group.start_spec, group.end_spec, consumed = _take_window(
+                tokens, index
+            )
             groups.append(group)
             index += consumed
             continue
 
         if token in {TEMPO, BECMG, INTER}:
             group = _Group(change=token)
-            group.start_spec, group.end_spec, consumed = _take_window(tokens, index + 1)
+            group.start_spec, group.end_spec, consumed = _take_window(
+                tokens, index + 1
+            )
             groups.append(group)
             index += 1 + consumed
             continue
@@ -169,7 +178,9 @@ def _split_groups(tokens: list[str]) -> list[_Group]:
     return groups
 
 
-def _take_window(tokens: list[str], index: int) -> tuple[str | None, str | None, int]:
+def _take_window(
+    tokens: list[str], index: int
+) -> tuple[str | None, str | None, int]:
     if index >= len(tokens):
         return None, None, 0
     window = _WINDOW_SPEC.match(tokens[index])
@@ -178,12 +189,16 @@ def _take_window(tokens: list[str], index: int) -> tuple[str | None, str | None,
     return window["start"], window["end"], 1
 
 
-def _resolve_groups(groups: list[_Group], valid_from: datetime) -> list[_Resolved]:
+def _resolve_groups(
+    groups: list[_Group], valid_from: datetime
+) -> list[_Resolved]:
     resolved: list[_Resolved] = []
     previous_start = valid_from
 
     for group in groups:
-        resolve_start = resolve_spec if group.change == FM else resolve_window_spec
+        resolve_start = (
+            resolve_spec if group.change == FM else resolve_window_spec
+        )
 
         if group.start_spec is None:
             starts_at = valid_from
@@ -197,7 +212,9 @@ def _resolve_groups(groups: list[_Group], valid_from: datetime) -> list[_Resolve
         if group.change not in TRANSIENT_CHANGES:
             previous_start = max(previous_start, starts_at)
 
-        resolved.append(_Resolved(group=group, starts_at=starts_at, ends_at=ends_at))
+        resolved.append(
+            _Resolved(group=group, starts_at=starts_at, ends_at=ends_at)
+        )
 
     return resolved
 
@@ -263,7 +280,9 @@ def _window_for(
     item: _Resolved, prevailing: list[tuple[datetime, datetime]]
 ) -> tuple[datetime, datetime]:
     if item.group.change in TRANSIENT_CHANGES:
-        return item.starts_at, item.ends_at or _enclosing_end(prevailing, item.starts_at)
+        return item.starts_at, item.ends_at or _enclosing_end(
+            prevailing, item.starts_at
+        )
     return _window_starting_at(prevailing, item.starts_at)
 
 
@@ -277,7 +296,9 @@ def _window_starting_at(
     return (max(starts_at, fallback[0]), fallback[1])
 
 
-def _enclosing_end(windows: list[tuple[datetime, datetime]], starts_at: datetime) -> datetime:
+def _enclosing_end(
+    windows: list[tuple[datetime, datetime]], starts_at: datetime
+) -> datetime:
     for start, end in windows:
         if start <= starts_at < end:
             return end

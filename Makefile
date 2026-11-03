@@ -30,8 +30,9 @@ test: ## run backend and frontend tests
 	cd backend && uv run pytest -q
 	cd frontend && bun run test
 
-lint: ## ruff, ty, and typecheck
+lint: ## lint, format check, types
 	cd backend && uv run ruff check .
+	cd backend && uv run ruff format --check .
 	cd backend && uv run ty check
 	cd frontend && bun run typecheck
 

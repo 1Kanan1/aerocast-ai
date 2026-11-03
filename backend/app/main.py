@@ -1,4 +1,4 @@
-"""AeroCast AI API. FastAPI owns the database, parsers, ingestion and model calls."""
+"""AeroCast AI API. Owns the database, parsers and model calls."""
 
 from __future__ import annotations
 
@@ -23,7 +23,9 @@ logger = logging.getLogger("aerocast")
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
-    logger.info("starting AeroCast API %s (env=%s)", __version__, settings.aerocast_env)
+    logger.info(
+        "starting AeroCast API %s (env=%s)", __version__, settings.aerocast_env
+    )
 
     database_ok, database_error = await ping()
     if database_ok:
@@ -32,7 +34,9 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         logger.error("database connection failed: %s", database_error)
 
     if not settings.zai_configured and not settings.gemini_configured:
-        logger.warning("no remote model configured; /ask will rely on the local provider")
+        logger.warning(
+            "no remote model configured; /ask will rely on the local provider"
+        )
     if not settings.local_configured:
         logger.info("local model disabled (LOCAL_BASE_URL unset)")
 

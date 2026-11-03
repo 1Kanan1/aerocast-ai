@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     )
 
     aerocast_env: str = "local"
-    database_url: str = "postgresql+asyncpg://aerocast:aerocast@localhost:5432/aerocast"
+    database_url: str = (
+        "postgresql+asyncpg://aerocast:aerocast@localhost:5432/aerocast"
+    )
 
     llm_chain: str = "zai,gemini,local"
     llm_timeout_seconds: float = 20.0
@@ -34,9 +36,13 @@ class Settings(BaseSettings):
     zai_model: str = "glm-4.7-flash"
 
     gemini_api_key: SecretStr | None = None
-    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    gemini_base_url: str = (
+        "https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
     #: Ladder, tried left to right. Quality first, then the two fast models.
-    gemini_models: str = "gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
+    gemini_models: str = (
+        "gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
+    )
     gemini_reasoning_effort: str = "low"
 
     #: oMLX defaults to port 8000, which this API already uses.
@@ -66,12 +72,20 @@ class Settings(BaseSettings):
 
     @property
     def llm_providers(self) -> tuple[str, ...]:
-        names = tuple(part.strip().lower() for part in self.llm_chain.split(",") if part.strip())
+        names = tuple(
+            part.strip().lower()
+            for part in self.llm_chain.split(",")
+            if part.strip()
+        )
         return tuple(name for name in names if name in KNOWN_PROVIDERS)
 
     @property
     def gemini_model_list(self) -> tuple[str, ...]:
-        return tuple(model.strip() for model in self.gemini_models.split(",") if model.strip())
+        return tuple(
+            model.strip()
+            for model in self.gemini_models.split(",")
+            if model.strip()
+        )
 
     @property
     def zai_configured(self) -> bool:
@@ -79,7 +93,9 @@ class Settings(BaseSettings):
 
     @property
     def gemini_configured(self) -> bool:
-        return bool(self.gemini_api_key and self.gemini_api_key.get_secret_value())
+        return bool(
+            self.gemini_api_key and self.gemini_api_key.get_secret_value()
+        )
 
     @property
     def local_configured(self) -> bool:

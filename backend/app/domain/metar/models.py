@@ -58,7 +58,9 @@ class Observation:
 
     @property
     def visibility_sm(self) -> float | None:
-        return None if self.visibility is None else self.visibility.statute_miles
+        return (
+            None if self.visibility is None else self.visibility.statute_miles
+        )
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)

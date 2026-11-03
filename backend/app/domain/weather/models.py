@@ -27,7 +27,7 @@ class Wind:
 
 @dataclass(frozen=True, slots=True)
 class Visibility:
-    """Statute miles with the qualifier preserved: a value may be a floor, not a reading."""
+    """Statute miles, keeping whether the value is a floor or a reading."""
 
     statute_miles: float | None
     is_greater_than: bool = False
@@ -43,11 +43,17 @@ class CloudLayer:
 
 
 def lowest_ceiling_layer(layers: Sequence[CloudLayer]) -> CloudLayer | None:
-    """Lowest broken, overcast or VV layer. Report order is not trusted (see KS24)."""
+    """Lowest broken, overcast or VV layer; report order is not trusted."""
     candidates = [
-        layer for layer in layers if layer.cover in CEILING_COVERS and layer.base_ft is not None
+        layer
+        for layer in layers
+        if layer.cover in CEILING_COVERS and layer.base_ft is not None
     ]
-    return min(candidates, key=lambda layer: layer.base_ft or 0) if candidates else None
+    return (
+        min(candidates, key=lambda layer: layer.base_ft or 0)
+        if candidates
+        else None
+    )
 
 
 def lowest_ceiling(layers: Sequence[CloudLayer]) -> int | None:

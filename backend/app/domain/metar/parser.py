@@ -18,10 +18,13 @@ PARSER_VERSION = "metar-1.1.0"
 
 _REPORT_TIME = re.compile(r"^(?P<day>\d{2})(?P<hour>\d{2})(?P<minute>\d{2})Z$")
 _STATION = re.compile(r"^[A-Z][A-Z0-9]{2,3}$")
-_TEMPERATURE = re.compile(r"^(?P<temperature>M?\d{2})/(?P<dewpoint>M?\d{2}|//)?$")
+_TEMPERATURE = re.compile(
+    r"^(?P<temperature>M?\d{2})/(?P<dewpoint>M?\d{2}|//)?$"
+)
 _ALTIMETER_INHG = re.compile(r"^A(?P<value>\d{4})$")
 _ALTIMETER_HPA = re.compile(r"^Q(?P<value>\d{4})$")
-#: Remarks carry tenths: T00221017 is +2.2 / -1.7. Dewpoint half optional: T0178.
+#: Remarks carry tenths: T00221017 is +2.2 / -1.7. Dewpoint half is
+#: optional in the wild: T0178.
 _TEMPERATURE_GROUP = re.compile(
     r"\bT(?P<temp_sign>[01])(?P<temperature>\d{3})"
     r"(?:(?P<dew_sign>[01])(?P<dewpoint>\d{3}))?\b"
@@ -30,7 +33,7 @@ _TEMPERATURE_GROUP = re.compile(
 MODIFIERS = frozenset({"AUTO", "COR", "CCA", "CCB", "RTD"})
 
 
-#: How far into the future an observation may be timestamped before the day rolls back.
+#: How far ahead an observation may be stamped before the day rolls back.
 FUTURE_TOLERANCE = timedelta(hours=1)
 
 
@@ -39,7 +42,7 @@ class MetarParseError(ValueError):
 
 
 def parse_metar(raw: str, reference: datetime | None = None) -> Observation:
-    """Parse one report. `reference` anchors the day-of-month; defaults to now."""
+    """Parse one report. `reference` anchors the day; defaults to now."""
     text = " ".join(raw.split()).rstrip("=").strip()
     if not text:
         raise MetarParseError("empty report")
@@ -78,11 +81,13 @@ def parse_metar(raw: str, reference: datetime | None = None) -> Observation:
     body, remarks = _split_remarks(tokens)
     conditions = scan_conditions(body)
 
-    temperature_c, dewpoint_c, altimeter_in_hg, unparsed = _scan_observation_groups(
-        conditions.unparsed
+    temperature_c, dewpoint_c, altimeter_in_hg, unparsed = (
+        _scan_observation_groups(conditions.unparsed)
     )
 
-    precise_temperature, precise_dewpoint = _parse_precise_temperatures(remarks)
+    precise_temperature, precise_dewpoint = _parse_precise_temperatures(
+        remarks
+    )
     if precise_temperature is not None:
         temperature_c = precise_temperature
     if precise_dewpoint is not None:
@@ -154,7 +159,7 @@ def _resolve_time(
     minute: int,
     reference: datetime | None,
 ) -> datetime:
-    """Roll back a month when the timestamp would otherwise be in the future."""
+    """Roll back a month when the timestamp is in the future."""
     ref = reference or datetime.now(UTC)
     ref = ref.astimezone(UTC)
 
@@ -165,7 +170,9 @@ def _resolve_time(
     candidate = _build_datetime(year, month, day, hour, minute)
     if candidate - ref > FUTURE_TOLERANCE:
         previous_year, previous_month = _previous_month(year, month)
-        candidate = _build_datetime(previous_year, previous_month, day, hour, minute)
+        candidate = _build_datetime(
+            previous_year, previous_month, day, hour, minute
+        )
     return candidate
 
 
@@ -173,7 +180,9 @@ def _previous_month(year: int, month: int) -> tuple[int, int]:
     return (year - 1, 12) if month == 1 else (year, month - 1)
 
 
-def _build_datetime(year: int, month: int, day: int, hour: int, minute: int) -> datetime:
+def _build_datetime(
+    year: int, month: int, day: int, hour: int, minute: int
+) -> datetime:
     day = min(day, calendar.monthrange(year, month)[1])
     try:
         return datetime(year, month, day, hour, minute, tzinfo=UTC)
@@ -187,7 +196,9 @@ def _signed(value: str) -> float:
     return -float(value[1:]) if value.startswith("M") else float(value)
 
 
-def _parse_precise_temperatures(remarks: str | None) -> tuple[float | None, float | None]:
+def _parse_precise_temperatures(
+    remarks: str | None,
+) -> tuple[float | None, float | None]:
     if not remarks:
         return None, None
     match = _TEMPERATURE_GROUP.search(remarks)
@@ -200,5 +211,7 @@ def _parse_precise_temperatures(remarks: str | None) -> tuple[float | None, floa
 
     return (
         tenths(match["temp_sign"], match["temperature"]),
-        tenths(match["dew_sign"], match["dewpoint"]) if match["dew_sign"] else None,
+        tenths(match["dew_sign"], match["dewpoint"])
+        if match["dew_sign"]
+        else None,
     )
