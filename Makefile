@@ -23,8 +23,8 @@ db-down: ## stop the Docker Postgres
 api: ## run the API on :8000 with reload
 	cd backend && uv run uvicorn app.main:app --reload --port 8000
 
-migrate: ## apply pending SQL migrations
-	cd backend && uv run python -m app.db.migrate
+migrate: ## apply pending migrations
+	cd backend && uv run alembic upgrade head
 
 ingest: ## run one ingestion cycle now
 	cd backend && uv run python -m app.ingest

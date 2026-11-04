@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from app import __version__
 from app.api.health import router as health_router
 from app.config import get_settings
-from app.db.migrate import migrate
+from app.db.migrate import upgrade_async
 from app.db.session import dispose_engine, get_engine, ping
 from app.ingest import scheduler
 
@@ -32,9 +32,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     database_ok, database_error = await ping()
     if database_ok:
         logger.info("database connection ok")
-        applied = await migrate(get_engine())
-        for name in applied:
-            logger.info("applied migration %s", name)
+        await upgrade_async()
     else:
         logger.error("database connection failed: %s", database_error)
 

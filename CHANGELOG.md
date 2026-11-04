@@ -22,7 +22,8 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 - `app/ingest/`: station, METAR and TAF jobs writing to Postgres, each under a
   `pg_try_advisory_lock` and recorded in `ingest_runs`. `make ingest` runs one cycle; the
   API lifespan runs them on a loop (stations daily, METAR every minute, TAF every ten).
-- `backend/migrations/001_initial.sql` and `make migrate`.
+- `backend/migrations/`: Alembic revision `0001`, applied on startup by
+  `app/db/migrate.py` so a fresh volume provisions itself. `make migrate` runs it by hand.
 
 **Backend**
 

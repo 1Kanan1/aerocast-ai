@@ -425,17 +425,19 @@ literal string `null` for a missing category, which read as a disagreement inste
 
 ### Phase 2, as built
 
-Three deviations from the sketch above, all to keep dependencies down:
+Two small deviations from the sketch above:
 
-- **No Alembic.** Migrations are plain SQL files applied by a 40 line runner that records
-  what ran in `schema_migrations`.
 - **No APScheduler.** The scheduler is a fifteen second asyncio tick inside the lifespan,
   which is enough granularity for a one minute minimum interval.
 - **No `awc_decoded` column.** The cross-check compares against the live cache rather than
   storing a second decoding of every observation. `parse_status` and `upstream_category`
   keep the per-row verdict, which is what the UI needs.
 
-First cycle: 3,513 stations, 2,474 observations and 801 TAFs, all recorded in
+Migrations are Alembic, driven from `app/db/migrate.py` so the API self-provisions on boot.
+`migrations/env.py` reads the URL from settings rather than `alembic.ini`, so there is one
+source of truth for the database.
+
+First cycle: 3,513 stations, 2,478 observations and 801 TAFs, all recorded in
 `ingest_runs`.
 
 ### Fact bundle (`domain/brief/builder.py`)
