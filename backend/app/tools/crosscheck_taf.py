@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -20,16 +19,14 @@ from pathlib import Path
 from app.domain.taf import PARSER_VERSION, Taf, TafParseError, parse_taf
 from app.domain.taf.models import TafPeriod
 from app.domain.weather.models import CloudLayer
-from app.tools.cache import (
-    as_integer,
-    as_number,
-    as_timestamp,
-    decompress,
-    download,
-    is_us,
+from app.sources.awc.cache import decompress, download, is_us
+from app.sources.awc.tafs import (
+    CACHE_URL,
+    UpstreamForecast,
+    UpstreamTaf,
+    read_tafs,
 )
 
-CACHE_URL = "https://aviationweather.gov/data/cache/tafs.cache.xml.gz"
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORT = BACKEND_ROOT / "tests" / "golden" / "crosscheck_taf.md"
 
@@ -47,25 +44,6 @@ MAX_EXAMPLES = 4
 
 #: AWC emits clear-sky as a layer with no base, and vertical visibility as OVX.
 CLEAR_SKY = frozenset({"SKC", "CLR", "NSC", "NCD"})
-
-
-@dataclass(frozen=True)
-class UpstreamForecast:
-    starts_at: datetime | None
-    ends_at: datetime | None
-    change: str
-    wind_direction: int | None
-    wind_speed: int | None
-    visibility: float | None
-    clouds: tuple[tuple[str, int | None], ...]
-
-
-@dataclass(frozen=True)
-class UpstreamTaf:
-    raw: str
-    station: str
-    issued_at: datetime | None
-    forecasts: tuple[UpstreamForecast, ...]
 
 
 @dataclass
@@ -114,7 +92,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     payload = args.xml.read_bytes() if args.xml else download(CACHE_URL)
-    rows = list(_read_tafs(decompress(payload)))
+    rows = list(read_tafs(decompress(payload)))
 
     parsed = 0
     skipped = 0
@@ -160,37 +138,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
 
     return 0
-
-
-def _read_tafs(text: str) -> Iterable[UpstreamTaf]:
-    root = ET.fromstring(text)
-    for element in root.iter("TAF"):
-        yield UpstreamTaf(
-            raw=element.findtext("raw_text", default=""),
-            station=element.findtext("station_id", default=""),
-            issued_at=as_timestamp(element.findtext("issue_time")),
-            forecasts=tuple(
-                _forecast(child) for child in element.findall("forecast")
-            ),
-        )
-
-
-def _forecast(element: ET.Element) -> UpstreamForecast:
-    return UpstreamForecast(
-        starts_at=as_timestamp(element.findtext("fcst_time_from")),
-        ends_at=as_timestamp(element.findtext("fcst_time_to")),
-        change=element.findtext("change_indicator") or "INITIAL",
-        wind_direction=as_integer(element.findtext("wind_dir_degrees")),
-        wind_speed=as_integer(element.findtext("wind_speed_kt")),
-        visibility=as_number(element.findtext("visibility_statute_mi")),
-        clouds=tuple(
-            (
-                condition.get("sky_cover", ""),
-                as_integer(condition.get("cloud_base_ft_agl")),
-            )
-            for condition in element.findall("sky_condition")
-        ),
-    )
 
 
 def _compare(

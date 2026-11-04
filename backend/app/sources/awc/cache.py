@@ -1,4 +1,4 @@
-"""Shared helpers for the AWC cache cross-check harnesses."""
+"""Fetching and decoding AWC cache files."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import datetime
 
 import httpx
 
-USER_AGENT = "aerocast-crosscheck/0.1 (+https://github.com/)"
+USER_AGENT = "aerocast/0.1 (+https://github.com/)"
 
 
 def download(url: str) -> bytes:

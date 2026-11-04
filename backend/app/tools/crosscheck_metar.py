@@ -9,8 +9,6 @@ exits 1 when a per-field threshold regresses.
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import sys
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
@@ -25,16 +23,12 @@ from app.domain.metar import (
     parse_metar,
 )
 from app.domain.metar.models import CloudLayer, Observation
-from app.tools.cache import (
-    as_integer,
-    as_number,
-    as_timestamp,
+from app.sources.awc.cache import (
     decompress,
     download,
     is_us,
 )
-
-CACHE_URL = "https://aviationweather.gov/data/cache/metars.cache.csv.gz"
+from app.sources.awc.metars import CACHE_URL, UpstreamMetar, read_metars
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORT = BACKEND_ROOT / "tests" / "golden" / "crosscheck.md"
@@ -53,22 +47,6 @@ THRESHOLDS = {
 }
 
 MAX_EXAMPLES = 4
-
-
-@dataclass(frozen=True)
-class UpstreamRow:
-    raw: str
-    station: str
-    observed_at: datetime
-    temperature: float | None
-    dewpoint: float | None
-    wind_direction: int | None
-    wind_speed: int | None
-    wind_gust: int | None
-    visibility: float | None
-    altimeter: float | None
-    clouds: tuple[tuple[str, int | None], ...]
-    category: str | None
 
 
 @dataclass
@@ -119,7 +97,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     payload = args.csv.read_bytes() if args.csv else download(CACHE_URL)
     text = decompress(payload)
 
-    rows = list(_read_rows(text))
+    rows = list(read_metars(text))
     parsed = 0
     skipped = 0
     tallies: dict[str, Tally] = defaultdict(Tally)
@@ -172,77 +150,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _read_rows(text: str) -> Iterable[UpstreamRow]:
-    reader = csv.reader(io.StringIO(text))
-    header = next(reader)
-    index = _column_index(header)
-
-    cloud_slots = [
-        (cover_position, index["cloud_base_ft_agl"][slot])
-        for slot, cover_position in enumerate(index["sky_cover"])
-    ]
-
-    for values in reader:
-        if not values or not values[index["raw_text"][0]].startswith(
-            ("METAR", "SPECI")
-        ):
-            continue
-
-        observed_at = as_timestamp(values[index["observation_time"][0]])
-        if observed_at is None:
-            continue
-
-        clouds: list[tuple[str, int | None]] = []
-        for cover_position, base_position in cloud_slots:
-            cover = _text(values, cover_position)
-            if not cover:
-                continue
-            clouds.append(
-                (
-                    _normalize_cover(cover),
-                    as_integer(_text(values, base_position)),
-                )
-            )
-
-        yield UpstreamRow(
-            raw=values[index["raw_text"][0]],
-            station=_text(values, index["station_id"][0]) or "",
-            observed_at=observed_at,
-            temperature=as_number(_text(values, index["temp_c"][0])),
-            dewpoint=as_number(_text(values, index["dewpoint_c"][0])),
-            wind_direction=as_integer(
-                _text(values, index["wind_dir_degrees"][0])
-            ),
-            wind_speed=as_integer(_text(values, index["wind_speed_kt"][0])),
-            wind_gust=as_integer(_text(values, index["wind_gust_kt"][0])),
-            visibility=as_number(
-                _text(values, index["visibility_statute_mi"][0])
-            ),
-            altimeter=as_number(_text(values, index["altim_in_hg"][0])),
-            clouds=tuple(clouds),
-            category=_text(values, index["flight_category"][0]) or None,
-        )
-
-
-def _column_index(header: list[str]) -> dict[str, list[int]]:
-    index: dict[str, list[int]] = defaultdict(list)
-    for position, name in enumerate(header):
-        index[name].append(position)
-    for required in (
-        "raw_text",
-        "station_id",
-        "observation_time",
-        "flight_category",
-    ):
-        if required not in index:
-            raise SystemExit(
-                f"unexpected cache format: missing column {required!r}"
-            )
-    return index
-
-
 def _compare(
-    row: UpstreamRow, observation: Observation
+    row: UpstreamMetar, observation: Observation
 ) -> Iterable[tuple[str, bool | None, str]]:
     yield (
         "temperature",
@@ -370,7 +279,7 @@ def _close(
     return abs(float(left) - float(right)) <= tolerance
 
 
-def _detail(row: UpstreamRow, message: str) -> str:
+def _detail(row: UpstreamMetar, message: str) -> str:
     return f"{row.station} {row.raw} | {message}"
 
 
@@ -431,20 +340,6 @@ def _render_markdown(
         lines.append("")
 
     return "\n".join(lines)
-
-
-def _text(values: Sequence[str], position: int) -> str | None:
-    if position >= len(values):
-        return None
-    value = values[position].strip()
-    if not value or value.lower() in {"null", "none", "n/a"}:
-        return None
-    return value
-
-
-def _normalize_cover(cover: str) -> str:
-    """The cache writes vertical visibility as `OVX`; the report says `VV`."""
-    return "VV" if cover == "OVX" else cover
 
 
 if __name__ == "__main__":
