@@ -438,7 +438,8 @@ Migrations are Alembic, driven from `app/db/migrate.py` so the API self-provisio
 source of truth for the database.
 
 First cycle: 3,513 stations, 2,478 observations and 801 TAFs, all recorded in
-`ingest_runs`.
+`ingest_runs`. Phase 2 closes with 167 advisories, 398 PIREPs, and 48 hours of history for
+20 stations (1,176 observations), which is what `GET /api/meta` reports.
 
 ### Fact bundle (`domain/brief/builder.py`)
 

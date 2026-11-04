@@ -29,6 +29,9 @@ migrate: ## apply pending migrations
 ingest: ## run one ingestion cycle now
 	cd backend && uv run python -m app.ingest
 
+backfill: ## load recent history: make backfill STATIONS="KSFO KSEA"
+	cd backend && uv run python -m app.ingest.backfill $(STATIONS)
+
 web: ## run the Remix app on :44100 with hot reload
 	cd frontend && bun run hmr
 

@@ -15,7 +15,7 @@ from app.domain.metar import PARSER_VERSION as METAR_VERSION
 from app.domain.metar import MetarParseError, classify, parse_metar
 from app.domain.taf import PARSER_VERSION as TAF_VERSION
 from app.domain.taf import TafParseError, parse_taf
-from app.sources.awc import metars, stations, tafs
+from app.sources.awc import advisories, metars, pireps, stations, tafs
 from app.sources.awc.cache import decompress, download, is_us
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,37 @@ insert into ingest_runs (
 ) values (
     :job, :started_at, :finished_at, :status, :rows_upserted, :error
 )
+"""
+
+ADVISORY_SQL = """
+insert into advisories (
+    kind, source_id, hazard, severity, base_ft, top_ft, due_to, raw,
+    valid_from, valid_to, geom, fetched_at
+) values (
+    :kind, :source_id, :hazard, :severity, :base_ft, :top_ft, :due_to, :raw,
+    :valid_from, :valid_to, cast(:geom as jsonb), :fetched_at
+)
+on conflict (kind, source_id, valid_from) do update set
+    hazard = excluded.hazard,
+    severity = excluded.severity,
+    base_ft = excluded.base_ft,
+    top_ft = excluded.top_ft,
+    due_to = excluded.due_to,
+    raw = excluded.raw,
+    valid_to = excluded.valid_to,
+    geom = excluded.geom,
+    fetched_at = excluded.fetched_at
+"""
+
+PIREP_SQL = """
+insert into pireps (
+    report_time, station_icao, lat, lon, altitude_ft, kind,
+    turbulence, icing, clouds, raw
+) values (
+    :report_time, :station_icao, :lat, :lon, :altitude_ft, :kind,
+    :turbulence, :icing, :clouds, :raw
+)
+on conflict (report_time, lat, lon) do nothing
 """
 
 Job = Callable[[AsyncConnection, datetime], Awaitable[int]]
@@ -212,6 +243,56 @@ async def run_job(engine: AsyncEngine, name: str, job: Job) -> int:
     return rows
 
 
+async def ingest_advisories(connection: AsyncConnection, now: datetime) -> int:
+    records = [
+        {
+            "kind": advisory.kind,
+            "source_id": advisory.source_id,
+            "hazard": advisory.hazard,
+            "severity": advisory.severity,
+            "base_ft": advisory.base_ft,
+            "top_ft": advisory.top_ft,
+            "due_to": advisory.due_to,
+            "raw": advisory.raw,
+            "valid_from": advisory.valid_from,
+            "valid_to": advisory.valid_to,
+            "geom": json.dumps(advisory.geometry),
+            "fetched_at": now,
+        }
+        for advisory in (
+            *advisories.read_gairmets(_get(advisories.GAIRMET_URL)),
+            *advisories.read_sigmets(_get(advisories.SIGMET_URL)),
+        )
+    ]
+    await connection.execute(text(ADVISORY_SQL), records)
+    return len(records)
+
+
+async def ingest_pireps(connection: AsyncConnection, _: datetime) -> int:
+    records = [
+        {
+            "report_time": report.observed_at,
+            "station_icao": report.station,
+            "lat": report.lat,
+            "lon": report.lon,
+            "altitude_ft": report.altitude_ft,
+            "kind": report.kind,
+            "turbulence": report.turbulence,
+            "icing": report.icing,
+            "clouds": report.clouds,
+            "raw": report.raw,
+        }
+        for report in pireps.read_pireps(_get(pireps.PIREP_URL))
+    ]
+    await connection.execute(text(PIREP_SQL), records)
+    return len(records)
+
+
+def _get(url: str) -> list[dict[str, object]]:
+    payload = decompress(download(url))
+    return [row for row in json.loads(payload) if isinstance(row, dict)]
+
+
 async def _known_stations(connection: AsyncConnection) -> set[str]:
     result = await connection.execute(text("select icao from stations"))
     return {row[0] for row in result}
@@ -221,4 +302,6 @@ JOBS: tuple[tuple[str, int, Job], ...] = (
     ("stations", 24 * 60 * 60, ingest_stations),
     ("metars", 60, ingest_metars),
     ("tafs", 600, ingest_tafs),
+    ("advisories", 300, ingest_advisories),
+    ("pireps", 300, ingest_pireps),
 )

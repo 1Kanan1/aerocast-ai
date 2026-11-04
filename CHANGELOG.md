@@ -22,6 +22,12 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 - `app/ingest/`: station, METAR and TAF jobs writing to Postgres, each under a
   `pg_try_advisory_lock` and recorded in `ingest_runs`. `make ingest` runs one cycle; the
   API lifespan runs them on a loop (stations daily, METAR every minute, TAF every ten).
+- `advisories` and `pireps` tables (revision `0002`), loaded from the G-AIRMET, SIGMET and
+  PIREP endpoints every five minutes. Polygon and line geometry is stored as GeoJSON.
+- `GET /api/meta`: row counts, the last run per job with its timing and error, and the URL
+  every product came from.
+- `make backfill STATIONS="KSFO KSEA"` loads up to 30 days of observations for a station,
+  in batches of five because the endpoint caps a response at 400 rows.
 - `backend/migrations/`: Alembic revision `0001`, applied on startup by
   `app/db/migrate.py` so a fresh volume provisions itself. `make migrate` runs it by hand.
 

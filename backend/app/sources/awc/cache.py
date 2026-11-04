@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import time
 from datetime import datetime
 
 import httpx
@@ -10,15 +11,23 @@ import httpx
 USER_AGENT = "aerocast/0.1 (+https://github.com/)"
 
 
-def download(url: str) -> bytes:
-    response = httpx.get(
-        url,
-        headers={"User-Agent": USER_AGENT},
-        timeout=60.0,
-        follow_redirects=True,
-    )
-    response.raise_for_status()
-    return response.content
+def download(url: str, attempts: int = 3) -> bytes:
+    """Retry: upstream returns the occasional 5xx mid-cycle."""
+    last: httpx.HTTPError | None = None
+    for attempt in range(attempts):
+        try:
+            response = httpx.get(
+                url,
+                headers={"User-Agent": USER_AGENT},
+                timeout=60.0,
+                follow_redirects=True,
+            )
+            response.raise_for_status()
+            return response.content
+        except httpx.HTTPError as error:
+            last = error
+            time.sleep(1 + attempt)
+    raise last or RuntimeError(f"download failed: {url}")
 
 
 def decompress(payload: bytes) -> str:
