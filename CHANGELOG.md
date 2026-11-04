@@ -14,6 +14,16 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 
 ### Added
 
+**Ingestion**
+
+- `app/sources/awc/`: cache fetching plus readers for the METAR CSV, the TAF XML and the
+  station list. `app/tools/crosscheck_*` now use them, so the cross-check and the loader
+  parse the same bytes with one implementation.
+- `app/ingest/`: station, METAR and TAF jobs writing to Postgres, each under a
+  `pg_try_advisory_lock` and recorded in `ingest_runs`. `make ingest` runs one cycle; the
+  API lifespan runs them on a loop (stations daily, METAR every minute, TAF every ten).
+- `backend/migrations/001_initial.sql` and `make migrate`.
+
 **Backend**
 
 - FastAPI app with `/api/health`, `/api/docs`, `/api/openapi.json`, and a lifespan that

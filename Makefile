@@ -26,6 +26,9 @@ api: ## run the API on :8000 with reload
 migrate: ## apply pending SQL migrations
 	cd backend && uv run python -m app.db.migrate
 
+ingest: ## run one ingestion cycle now
+	cd backend && uv run python -m app.ingest
+
 web: ## run the Remix app on :44100 with hot reload
 	cd frontend && bun run hmr
 

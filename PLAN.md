@@ -423,6 +423,21 @@ Two harness bugs the first run found in itself: the cache writes `10+` for ten m
 more, which silently dropped 1,460 visibility comparisons under `float()`, and it writes the
 literal string `null` for a missing category, which read as a disagreement instead of a gap.
 
+### Phase 2, as built
+
+Three deviations from the sketch above, all to keep dependencies down:
+
+- **No Alembic.** Migrations are plain SQL files applied by a 40 line runner that records
+  what ran in `schema_migrations`.
+- **No APScheduler.** The scheduler is a fifteen second asyncio tick inside the lifespan,
+  which is enough granularity for a one minute minimum interval.
+- **No `awc_decoded` column.** The cross-check compares against the live cache rather than
+  storing a second decoding of every observation. `parse_status` and `upstream_category`
+  keep the per-row verdict, which is what the UI needs.
+
+First cycle: 3,513 stations, 2,474 observations and 801 TAFs, all recorded in
+`ingest_runs`.
+
 ### Fact bundle (`domain/brief/builder.py`)
 
 The only thing the model ever sees. Every leaf carries a stable ref path built from

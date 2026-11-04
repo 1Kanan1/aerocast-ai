@@ -11,7 +11,8 @@ from fastapi import FastAPI
 from app import __version__
 from app.api.health import router as health_router
 from app.config import get_settings
-from app.db.session import dispose_engine, ping
+from app.db.session import dispose_engine, get_engine, ping
+from app.ingest import scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,7 +41,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     if not settings.local_configured:
         logger.info("local model disabled (LOCAL_BASE_URL unset)")
 
-    yield
+    async with scheduler.running(get_engine()):
+        yield
 
     await dispose_engine()
 
