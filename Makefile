@@ -23,6 +23,9 @@ db-down: ## stop the Docker Postgres
 api: ## run the API on :8000 with reload
 	cd backend && uv run uvicorn app.main:app --reload --port 8000
 
+migrate: ## apply pending SQL migrations
+	cd backend && uv run python -m app.db.migrate
+
 web: ## run the Remix app on :44100 with hot reload
 	cd frontend && bun run hmr
 
