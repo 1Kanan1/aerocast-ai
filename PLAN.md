@@ -40,7 +40,7 @@ accounts, no go/no-go anything.
 | API | FastAPI, Python 3.13, Pydantic v2 | async ingestion, and the parser is the interesting code, so it should be easy to test |
 | DB | PostgreSQL 16 | advisory geometry as GeoJSON in `jsonb`, with shapely for point-in-polygon and bbox work |
 | Frontend | Remix 3 (v3.1.x) | requested. Non-React, own component model, no build step |
-| Frontend runtime | Node 26, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running |
+| Frontend runtime | Node 26.13.0 LTS, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running. Pinned in the Docker base image, CI and `.node-version` |
 | Map | MapLibre GL JS v6 | ESM only, WebGL2, no Mapbox account |
 | Basemap | OpenFreeMap `positron`, restyled monochrome | no key, no rate limit, MIT-ish terms, good enough to desaturate |
 | AI | Z.ai GLM-4.7-Flash, Gemini Flash, local Gemma 4 E2B via oMLX, template floor | free tiers plus an offline rung; one OpenAI-compatible client for all of them |

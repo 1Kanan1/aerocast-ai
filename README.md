@@ -22,7 +22,7 @@ landed so far.
 | | |
 |---|---|
 | API | FastAPI, Python 3.13, SQLAlchemy + asyncpg, PostgreSQL 16 |
-| Web | Remix 3.1 on Node 26, Bun for packages and scripts |
+| Web | Remix 3.1 on Node 26.13.0 LTS, Bun for packages and scripts |
 | Map | MapLibre GL JS (Phase 4) |
 | Weather data | aviationweather.gov (AWC Data API and bulk cache files) |
 | Explanations | GLM-4.7-Flash, Gemini Flash, or a local model via any OpenAI-compatible server, behind a citation validator |

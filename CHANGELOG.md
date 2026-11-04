@@ -46,7 +46,8 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 
 **Frontend**
 
-- Remix 3.1 app on Node 26, with Bun for package management and script running.
+- Remix 3.1 app on Node 26.13.0 LTS, with Bun for package management and script
+  running.
 - Server-rendered status page in monochrome tokens, showing API, database and explanation
   status, plus the flight-planning disclaimer.
 - Same-origin API client with a 3 s timeout, `AbortSignal` combining, and explicit handling
@@ -67,6 +68,9 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 - **`DATABASE_URL` no longer accepts `postgres://`.** The pre-2009 alias is rejected instead
   of rewritten, since SQLAlchemy dropped it. Plain `postgresql://` still gains the
   `postgresql+asyncpg://` driver, which the async engine needs.
+- **Node is pinned to 26.13.0**, the current LTS, in the Docker base image, CI, the
+  `engines` field and `frontend/.node-version`. `node:26-slim` resolves to the same digest
+  today and will move; the pinned tag will not.
 - **The local rung is off by default.** `LLM_CHAIN` is `zai,gemini` and `LOCAL_BASE_URL` is
   empty, so a fresh clone never probes a local server. Set both to re-enable it.
 - **`httpx` is a runtime dependency**, not a dev one. `providers.py` probes with it, so the

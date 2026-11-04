@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
-FROM node:26-slim
+FROM node:26.13.0-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=44100
