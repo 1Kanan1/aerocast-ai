@@ -226,8 +226,8 @@ def _build_periods(
     periods: list[TafPeriod] = []
     unparsed: list[str] = []
 
-    for item in resolved:
-        starts_at, ends_at = _window_for(item, prevailing)
+    for position, item in enumerate(resolved):
+        starts_at, ends_at = _window_for(position, item, prevailing)
         starts_at = max(starts_at, valid_from)
         ends_at = min(ends_at, valid_to)
         if ends_at <= starts_at:
@@ -256,9 +256,13 @@ def _build_periods(
 
 def _prevailing_windows(
     resolved: list[_Resolved], valid_to: datetime
-) -> list[tuple[datetime, datetime]]:
-    """Each prevailing group runs until the next one starts."""
-    windows: list[tuple[datetime, datetime]] = []
+) -> dict[int, tuple[datetime, datetime]]:
+    """Each prevailing group runs until the next one starts.
+
+    Keyed by position, not start time: a BECMG at the validity start shares its
+    start with the initial period.
+    """
+    windows: dict[int, tuple[datetime, datetime]] = {}
 
     for position, item in enumerate(resolved):
         if item.group.change in TRANSIENT_CHANGES:
@@ -271,35 +275,27 @@ def _prevailing_windows(
             ),
             valid_to,
         )
-        windows.append((item.starts_at, max(item.starts_at, next_start)))
+        windows[position] = (item.starts_at, max(item.starts_at, next_start))
 
     return windows
 
 
 def _window_for(
-    item: _Resolved, prevailing: list[tuple[datetime, datetime]]
+    position: int,
+    item: _Resolved,
+    prevailing: dict[int, tuple[datetime, datetime]],
 ) -> tuple[datetime, datetime]:
     if item.group.change in TRANSIENT_CHANGES:
         return item.starts_at, item.ends_at or _enclosing_end(
             prevailing, item.starts_at
         )
-    return _window_starting_at(prevailing, item.starts_at)
-
-
-def _window_starting_at(
-    windows: list[tuple[datetime, datetime]], starts_at: datetime
-) -> tuple[datetime, datetime]:
-    for start, end in windows:
-        if start == starts_at:
-            return (start, end)
-    fallback = windows[-1] if windows else (starts_at, starts_at)
-    return (max(starts_at, fallback[0]), fallback[1])
+    return prevailing[position]
 
 
 def _enclosing_end(
-    windows: list[tuple[datetime, datetime]], starts_at: datetime
+    windows: dict[int, tuple[datetime, datetime]], starts_at: datetime
 ) -> datetime:
-    for start, end in windows:
+    for start, end in windows.values():
         if start <= starts_at < end:
             return end
-    return windows[-1][1] if windows else starts_at
+    return max((end for _, end in windows.values()), default=starts_at)

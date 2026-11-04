@@ -6,14 +6,15 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "asyncpg>=0.30",
     "fastapi>=0.118",
+    "httpx>=0.28",
     "pydantic-settings>=2.8",
+    "shapely>=2.2.0",
     "sqlalchemy[asyncio]>=2.0.38",
     "uvicorn[standard]>=0.34",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28",
     "pytest>=8.3",
     "pytest-asyncio>=1.0",
     "ruff>=0.9",

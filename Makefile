@@ -36,8 +36,9 @@ lint: ## lint, format check, types
 	cd backend && uv run ty check
 	cd frontend && bun run typecheck
 
-crosscheck: ## compare the METAR parser against AWC's decoder (needs network)
+crosscheck: ## compare parsers against AWC's decoder (needs network)
 	cd backend && uv run python -m app.tools.crosscheck_metar
+	cd backend && uv run python -m app.tools.crosscheck_taf
 
 fmt: ## format the backend
 	cd backend && uv run ruff format .

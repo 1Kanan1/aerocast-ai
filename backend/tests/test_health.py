@@ -68,6 +68,19 @@ async def test_health_reports_degraded_when_database_unreachable(
     assert body["database"] == {"ok": False, "error": "OSError"}
 
 
+async def test_health_is_also_served_at_the_bare_path(monkeypatch) -> None:
+    """Probes commonly use /health; the API path stays the documented one."""
+    _fake_providers(monkeypatch, database_ok=True)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+
+
 async def test_openapi_schema_is_served() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

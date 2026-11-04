@@ -27,7 +27,7 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://aerocast:aerocast@localhost:5432/aerocast"
     )
 
-    llm_chain: str = "zai,gemini,local"
+    llm_chain: str = "zai,gemini"
     llm_timeout_seconds: float = 20.0
     llm_thinking_timeout_seconds: float = 120.0
 
@@ -45,8 +45,8 @@ class Settings(BaseSettings):
     )
     gemini_reasoning_effort: str = "low"
 
-    #: oMLX defaults to port 8000, which this API already uses.
-    local_base_url: str | None = "http://127.0.0.1:8080/v1"
+    #: Set to any OpenAI-compatible server to enable the local rung.
+    local_base_url: str | None = None
     local_model: str = "mlx-community/gemma-4-e2b-it-4bit"
 
     @field_validator("local_base_url", mode="before")

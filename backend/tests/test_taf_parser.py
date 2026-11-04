@@ -153,6 +153,14 @@ def test_spec_resolution_rolls_forward_a_month() -> None:
     )
 
 
+def test_hour_24_means_midnight_at_the_end_of_the_day() -> None:
+    taf = parse(
+        "TAF KXYZ 011130Z 0112/0224 20010KT P6SM SKC",
+    )
+
+    assert taf.valid_to == datetime(2026, 11, 3, 0, 0, tzinfo=UTC)
+
+
 @pytest.mark.parametrize(
     ("raw", "message"),
     [

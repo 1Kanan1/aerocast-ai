@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import gzip
 import io
 import sys
 from collections import defaultdict
@@ -19,8 +18,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-import httpx
-
 from app.domain.metar import (
     PARSER_VERSION,
     MetarParseError,
@@ -28,9 +25,16 @@ from app.domain.metar import (
     parse_metar,
 )
 from app.domain.metar.models import CloudLayer, Observation
+from app.tools.cache import (
+    as_integer,
+    as_number,
+    as_timestamp,
+    decompress,
+    download,
+    is_us,
+)
 
 CACHE_URL = "https://aviationweather.gov/data/cache/metars.cache.csv.gz"
-USER_AGENT = "aerocast-crosscheck/0.1 (+https://github.com/)"
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORT = BACKEND_ROOT / "tests" / "golden" / "crosscheck.md"
@@ -112,8 +116,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    payload = args.csv.read_bytes() if args.csv else _download()
-    text = _decompress(payload)
+    payload = args.csv.read_bytes() if args.csv else download(CACHE_URL)
+    text = decompress(payload)
 
     rows = list(_read_rows(text))
     parsed = 0
@@ -122,7 +126,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     stations = 0
 
     for row in rows:
-        if not args.all and not _is_us(row.station):
+        if not args.all and not is_us(row.station):
             continue
         stations += 1
         if args.limit is not None and stations > args.limit:
@@ -168,23 +172,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _download() -> bytes:
-    response = httpx.get(
-        CACHE_URL,
-        headers={"User-Agent": USER_AGENT},
-        timeout=60.0,
-        follow_redirects=True,
-    )
-    response.raise_for_status()
-    return response.content
-
-
-def _decompress(payload: bytes) -> str:
-    if payload[:2] == b"\x1f\x8b":
-        payload = gzip.decompress(payload)
-    return payload.decode("utf-8", errors="replace")
-
-
 def _read_rows(text: str) -> Iterable[UpstreamRow]:
     reader = csv.reader(io.StringIO(text))
     header = next(reader)
@@ -201,7 +188,7 @@ def _read_rows(text: str) -> Iterable[UpstreamRow]:
         ):
             continue
 
-        observed_at = _timestamp(values[index["observation_time"][0]])
+        observed_at = as_timestamp(values[index["observation_time"][0]])
         if observed_at is None:
             continue
 
@@ -213,7 +200,7 @@ def _read_rows(text: str) -> Iterable[UpstreamRow]:
             clouds.append(
                 (
                     _normalize_cover(cover),
-                    _integer(_text(values, base_position)),
+                    as_integer(_text(values, base_position)),
                 )
             )
 
@@ -221,17 +208,17 @@ def _read_rows(text: str) -> Iterable[UpstreamRow]:
             raw=values[index["raw_text"][0]],
             station=_text(values, index["station_id"][0]) or "",
             observed_at=observed_at,
-            temperature=_number(_text(values, index["temp_c"][0])),
-            dewpoint=_number(_text(values, index["dewpoint_c"][0])),
-            wind_direction=_integer(
+            temperature=as_number(_text(values, index["temp_c"][0])),
+            dewpoint=as_number(_text(values, index["dewpoint_c"][0])),
+            wind_direction=as_integer(
                 _text(values, index["wind_dir_degrees"][0])
             ),
-            wind_speed=_integer(_text(values, index["wind_speed_kt"][0])),
-            wind_gust=_integer(_text(values, index["wind_gust_kt"][0])),
-            visibility=_number(
+            wind_speed=as_integer(_text(values, index["wind_speed_kt"][0])),
+            wind_gust=as_integer(_text(values, index["wind_gust_kt"][0])),
+            visibility=as_number(
                 _text(values, index["visibility_statute_mi"][0])
             ),
-            altimeter=_number(_text(values, index["altim_in_hg"][0])),
+            altimeter=as_number(_text(values, index["altim_in_hg"][0])),
             clouds=tuple(clouds),
             category=_text(values, index["flight_category"][0]) or None,
         )
@@ -455,39 +442,9 @@ def _text(values: Sequence[str], position: int) -> str | None:
     return value
 
 
-def _number(value: str | None) -> float | None:
-    """AWC writes "10+" for ten or more miles; float() drops those."""
-    if value is None:
-        return None
-    cleaned = value.strip().lstrip("<>").rstrip("+")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
-
-
-def _integer(value: str | None) -> int | None:
-    number = _number(value)
-    return None if number is None else int(number)
-
-
-def _timestamp(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
 def _normalize_cover(cover: str) -> str:
     """The cache writes vertical visibility as `OVX`; the report says `VV`."""
     return "VV" if cover == "OVX" else cover
-
-
-def _is_us(station: str) -> bool:
-    """ICAO K and P prefixes cover the US and its territories."""
-    return len(station) == 4 and station[0] in {"K", "P"}
 
 
 if __name__ == "__main__":

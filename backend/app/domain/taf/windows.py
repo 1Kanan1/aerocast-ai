@@ -93,8 +93,12 @@ def _build(
     year: int, month: int, day: int, hour: int, minute: int
 ) -> datetime:
     day = min(day, calendar.monthrange(year, month)[1])
+    # Military products write 2400 for midnight at the end of the day.
+    carry = timedelta(0)
+    if hour == 24:
+        hour, carry = 0, timedelta(days=1)
     try:
-        return datetime(year, month, day, hour, minute, tzinfo=UTC)
+        return datetime(year, month, day, hour, minute, tzinfo=UTC) + carry
     except ValueError as exc:
         raise TafParseError(
             f"invalid time {day:02d}{hour:02d}{minute:02d}"

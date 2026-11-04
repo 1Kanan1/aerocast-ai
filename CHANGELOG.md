@@ -38,6 +38,11 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
   value, a glossary of definitions, and a hash over its own canonical JSON.
 - `app/tools/crosscheck_metar.py` and `make crosscheck`: parses AWC's live cache with our
   parser and compares field by field against AWC's own decoder.
+- `app/tools/crosscheck_taf.py`: the same check for TAF, matching periods on their time
+  window because the cache does not preserve report order. Shared cache parsing lives in
+  `app/tools/cache.py`.
+- `shapely`, for the spatial work in Phase 2.
+- `/health` as an alias for `/api/health`, since probes commonly use the bare path.
 
 **Frontend**
 
@@ -62,6 +67,10 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 - **`DATABASE_URL` no longer accepts `postgres://`.** The pre-2009 alias is rejected instead
   of rewritten, since SQLAlchemy dropped it. Plain `postgresql://` still gains the
   `postgresql+asyncpg://` driver, which the async engine needs.
+- **The local rung is off by default.** `LLM_CHAIN` is `zai,gemini` and `LOCAL_BASE_URL` is
+  empty, so a fresh clone never probes a local server. Set both to re-enable it.
+- **`httpx` is a runtime dependency**, not a dev one. `providers.py` probes with it, so the
+  production image could not import the app without it. Caught by `make up`.
 - **Provider chain** is now an ordered list (`LLM_CHAIN`) instead of two fixed slots, so a
   third rung and offline ordering are configuration rather than code.
 - **Local provider renamed** from `mlx` to `local`, configured by `LOCAL_BASE_URL` and
@@ -144,6 +153,11 @@ PLAN.md and this file, where it is actually readable. Recorded as a rule in PLAN
   as a value and counted as a disagreement.
 - AWC encodes vertical visibility as `OVX` in the cache and caps "10 km or more" at 6.0 SM.
   Both normalized in the harness rather than in the domain layer.
+- **TAF `2400` is accepted.** 35 US reports write `2400` for midnight at the end of the
+  day; the parser rejected them outright. Found by the TAF cross-check.
+- **TAF windows are keyed by position, not start time.** A `BECMG` at the validity start
+  shares its timestamp with the initial period, so windows collided and one period came out
+  zero length.
 - `ty` reported 82 diagnostics from three causes: a deprecated `AsyncIterator` annotation on
   `lifespan`, an untyped `**overrides` in the test settings factory, and a `dict[str, object]`
   return type on the fact bundle that callers could not subscript.
@@ -162,16 +176,8 @@ Two disagreements remain out of 2,383 observations, both adjudicated:
 
 ### Commits
 
-| Commit | Subject |
-| --- | --- |
-| `fddb0f2` | feat: scaffold FastAPI API and Remix web app with health wiring |
-| `7531c85` | feat(llm): add a local provider as the third rung in the chain |
-| `b44eee0` | refactor(llm): make the local provider runtime-agnostic |
-| `915e0dc` | chore: enforce conventional commit messages |
-| `3b7b695` | fix(llm): pin the Gemini model id instead of the -latest alias |
-| `5caf26b` | feat(metar): add deterministic parser, flight category, and AWC cross-check |
-| `d5f67f0` | feat(domain): add TAF parser, fact bundle, and a purity guard |
-| `36c59cf` | chore(backend): add ty and fix the diagnostics it found |
+The commit log is the detailed record: `git log --oneline`. Every subject follows
+Conventional Commits, so it reads as a summary on its own.
 
 ## Conventions
 

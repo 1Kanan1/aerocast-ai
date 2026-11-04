@@ -14,6 +14,7 @@ router = APIRouter(tags=["system"])
 
 
 @router.get("/api/health")
+@router.get("/health", include_in_schema=False)
 async def health() -> JSONResponse:
     """503 when the database is unreachable, so a healthcheck fails loudly."""
     settings = get_settings()

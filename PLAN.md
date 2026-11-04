@@ -356,41 +356,60 @@ followed by `TEMPO`, plus `INTER`. Known sharp edges, each gets a golden fixture
 - `TEMPO` is a sub-window inside the containing period, not a sibling.
 - Groups issued near midnight local versus Zulu.
 
-### Cross-check harness (the headline artifact)
+### Cross-check harnesses (the headline artifact)
 
-A script that pulls `metars.cache.csv.gz` (every current US observation), parses each
-`raw_text` with our parser, and compares field by field against the values AWC decoded
-from the same report.
+Two scripts, one per report type, that pull AWC's bulk cache, parse every report with our
+parser, and compare field by field against the values AWC decoded from the same text.
+`make crosscheck` runs both and rewrites the committed reports.
 
-First measured run, 2,383 US observations:
+**METAR**, 2,545 US observations on 2026-11-04:
 
 | Field | Compared | Disagree | Agreement |
 | --- | ---: | ---: | ---: |
-| temperature | 2,358 | 1 | 99.96% |
-| dewpoint | 2,346 | 0 | 100.00% |
-| wind direction | 2,351 | 0 | 100.00% |
-| wind speed | 2,351 | 0 | 100.00% |
-| wind gust | 88 | 0 | 100.00% |
-| visibility | 2,314 | 0 | 100.00% |
-| altimeter | 2,376 | 0 | 100.00% |
-| cloud layers | 1,808 | 0 | 100.00% |
-| flight category | 2,314 | 1 | 99.96% |
+| temperature | 2,519 | 0 | 100.00% |
+| dewpoint | 2,500 | 0 | 100.00% |
+| wind direction | 2,511 | 0 | 100.00% |
+| wind speed | 2,511 | 0 | 100.00% |
+| wind gust | 276 | 0 | 100.00% |
+| visibility | 2,464 | 0 | 100.00% |
+| altimeter | 2,537 | 0 | 100.00% |
+| cloud layers | 1,397 | 1 | 99.93% |
+| flight category | 2,466 | 0 | 100.00% |
 
-Two divergences remain, both adjudicated:
+**TAF**, 817 US reports on 2026-11-04:
 
-- **KS24 temperature.** The report carries `08/06` in the body and `T00910066` (+9.1) in
-  the remarks, and AWC publishes the body value. The station's own report disagrees with
-  itself; we prefer the sensor group.
-- **KS24 flight category.** It lists `BKN070 OVC010`, out of altitude order. AWC takes the
-  first layer, 7,000 ft, and publishes VFR. The FAA definition is the lowest broken or
-  overcast layer, which is 1,000 ft and MVFR. We are right and AWC is wrong, and a test
-  pins the behaviour so a future "simplification" cannot quietly adopt the bug.
+| Field | Compared | Disagree | Agreement |
+| --- | ---: | ---: | ---: |
+| period count | 817 | 1 | 99.88% |
+| period window | 3,150 | 3 | 99.90% |
+| wind direction | 2,268 | 0 | 100.00% |
+| wind speed | 2,733 | 0 | 100.00% |
+| visibility | 2,731 | 0 | 100.00% |
+| cloud layers | 2,369 | 0 | 100.00% |
 
-Committed at `backend/tests/golden/crosscheck.md`, rerun with `make crosscheck`, gated in
-CI by `--enforce` at per-field thresholds. Every disagreement is triaged into a fixture if
-it is representable, or documented as an upstream quirk if it is not.
+Explained divergences, all upstream rather than ours:
 
-Things the first run changed, which is the point of building it before the UI:
+- **KBKT `FEW000`.** A layer at zero feet is real (shallow fog), and the cache drops it.
+- **KPOE and KBAN.** One report writes a five digit window (`0407/04012`), the other puts
+  `FM040600` after `FM041800`. Both are malformed, and the two decoders salvage different
+  period lists.
+- **KCBM.** A `BECMG` starts at the validity start, so our initial period has zero length
+  while AWC stretches it over the whole window.
+
+Where the TAF feed disagrees structurally, it is because AWC folds inherited conditions into
+`TEMPO` and `PROB` entries while we keep each group exactly as written. Comparing those
+would measure the difference in models rather than a parse error, so only prevailing periods
+are compared field by field. Windows are compared for every group.
+
+The TAF harness also found a real bug: 35 reports use `2400` for midnight at the end of the
+day, which we rejected outright. And it exposed a collision in our own code, where two
+prevailing periods starting at the same instant were matched by timestamp; windows are now
+keyed by position.
+
+Committed at `backend/tests/golden/crosscheck.md` and `crosscheck_taf.md`, gated in CI by
+`--enforce` at per-field thresholds.
+
+Things the METAR run changed, which is the point of building it before the UI:
 
 - The remarks T-group carries tenths of a degree and AWC publishes it, so the parser now
   prefers it. Agreement went from 42% to 99.96%, including the half-written forms
@@ -401,9 +420,8 @@ Things the first run changed, which is the point of building it before the UI:
   cache conventions, normalized in the harness rather than in the domain layer.
 
 Two harness bugs the first run found in itself: the cache writes `10+` for ten miles or
-more, which silently dropped 1,460 of 2,383 visibility comparisons under `float()`, and it
-writes the literal string `null` for a missing category, which read as a disagreement
-instead of a gap.
+more, which silently dropped 1,460 visibility comparisons under `float()`, and it writes the
+literal string `null` for a missing category, which read as a disagreement instead of a gap.
 
 ### Fact bundle (`domain/brief/builder.py`)
 
