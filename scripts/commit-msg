@@ -4,7 +4,10 @@
 #   feat(scope)!: summary
 #
 # Allowed types: feat fix chore docs refactor test build ci perf style
+# Subject limit: 72 characters, hard.
 # Install with: make hooks
+
+MAX_SUBJECT=72
 
 subject=$(head -n 1 "$1")
 
@@ -20,5 +23,14 @@ if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
   printf '  got:      %s\n' "$subject" >&2
   printf '  expected: type(scope)!: summary\n' >&2
   printf '  types:    feat fix chore docs refactor test build ci perf style\n' >&2
+  exit 1
+fi
+
+length=${#subject}
+
+if [ "$length" -gt "$MAX_SUBJECT" ]; then
+  printf 'commit-msg: subject is too long (%s > %s)\n\n' "$length" "$MAX_SUBJECT" >&2
+  printf '  got: %s\n' "$subject" >&2
+  printf '  put the rest in the body\n' >&2
   exit 1
 fi
