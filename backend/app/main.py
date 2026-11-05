@@ -11,6 +11,8 @@ from fastapi import FastAPI
 from app import __version__
 from app.api.health import router as health_router
 from app.api.meta import router as meta_router
+from app.api.stations import router as stations_router
+from app.api.weather import router as weather_router
 from app.config import get_settings
 from app.db.migrate import upgrade_async
 from app.db.session import dispose_engine, get_engine, ping
@@ -60,6 +62,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(meta_router)
+    app.include_router(stations_router)
+    app.include_router(weather_router)
     return app
 
 

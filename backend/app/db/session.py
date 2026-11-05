@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -45,6 +46,23 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 async def get_session() -> AsyncIterator[AsyncSession]:
     async with get_session_factory()() as session:
         yield session
+
+
+async def fetch_all(
+    sql: str, params: dict[str, object] | None = None
+) -> list[dict[str, Any]]:
+    async with get_session_factory()() as session:
+        result = await session.execute(text(sql), params or {})
+        return [dict(row) for row in result.mappings().all()]
+
+
+async def fetch_one(
+    sql: str, params: dict[str, object] | None = None
+) -> dict[str, Any] | None:
+    async with get_session_factory()() as session:
+        result = await session.execute(text(sql), params or {})
+        row = result.mappings().first()
+        return dict(row) if row else None
 
 
 async def ping() -> tuple[bool, str | None]:
