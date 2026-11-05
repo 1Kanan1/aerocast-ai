@@ -1,0 +1,5 @@
+#!/bin/sh
+# Fast gates. No network, no database, no Docker.
+# Install with: make hooks
+
+exec make lint test

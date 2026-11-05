@@ -10,9 +10,11 @@ install: ## install backend and frontend dependencies
 	cd backend && uv sync
 	cd frontend && bun install
 
-hooks: ## install git hooks (conventional commits)
+hooks: ## install git hooks (commit-msg, pre-commit)
 	cp scripts/commit-msg .git/hooks/commit-msg
 	chmod +x .git/hooks/commit-msg
+	cp scripts/pre-commit .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
 
 db: ## start Postgres in Docker on localhost:5433
 	docker compose up -d db

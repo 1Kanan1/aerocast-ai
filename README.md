@@ -89,8 +89,12 @@ make crosscheck   # writes backend/tests/golden/crosscheck*.md
 Conventional Commits, enforced by a hook:
 
 ```sh
-make hooks   # installs scripts/commit-msg as .git/hooks/commit-msg
+make hooks   # installs commit-msg and pre-commit
 ```
+
+`commit-msg` rejects a subject that is not `type(scope): summary` or a subject or
+body line longer than 72 characters. `pre-commit` runs `make lint test`, which is
+under a second here and needs no network or database.
 
 ```
 feat(map): add advisory polygons
