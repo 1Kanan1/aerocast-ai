@@ -1,15 +1,16 @@
 #!/bin/sh
-# Conventional Commits gate for subject lines.
+# Conventional Commits gate.
 #
 #   feat(scope)!: summary
 #
 # Allowed types: feat fix chore docs refactor test build ci perf style
-# Subject limit: 72 characters, hard.
+# Subject and every body line: 72 characters, hard.
 # Install with: make hooks
 
-MAX_SUBJECT=72
+MAX_LINE=72
 
-subject=$(head -n 1 "$1")
+message_file=$1
+subject=$(head -n 1 "$message_file")
 
 # Commits git generates itself are exempt.
 case "$subject" in
@@ -28,9 +29,29 @@ fi
 
 length=${#subject}
 
-if [ "$length" -gt "$MAX_SUBJECT" ]; then
-  printf 'commit-msg: subject is too long (%s > %s)\n\n' "$length" "$MAX_SUBJECT" >&2
+if [ "$length" -gt "$MAX_LINE" ]; then
+  printf 'commit-msg: subject is too long (%s > %s)\n\n' "$length" "$MAX_LINE" >&2
   printf '  got: %s\n' "$subject" >&2
   printf '  put the rest in the body\n' >&2
   exit 1
 fi
+
+number=0
+while IFS= read -r line; do
+  number=$((number + 1))
+
+  # The subject is already checked, and git strips comment lines itself.
+  [ "$number" -eq 1 ] && continue
+  case "$line" in
+    '#'*) continue ;;
+  esac
+
+  length=${#line}
+  if [ "$length" -gt "$MAX_LINE" ]; then
+    printf 'commit-msg: body line %s is too long (%s > %s)\n\n' \
+      "$number" "$length" "$MAX_LINE" >&2
+    printf '  %s\n' "$line" >&2
+    printf '  wrap it\n' >&2
+    exit 1
+  fi
+done < "$message_file"
