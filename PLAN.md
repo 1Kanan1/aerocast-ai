@@ -121,22 +121,33 @@ Python: PEP 8, enforced by ruff at 79 columns with pycodestyle warnings and nami
 type, an optional scope, and a subject inside 72 characters. Body lines get the same 72,
 so a commit reads the same in a terminal, in `git log --oneline`, and in a forge.
 
-The body says why the change was needed, the context a reader cannot recover from the
-code, and what it changes for everything downstream. It does not list files, summarize
-what each module now does, or repeat a diff. The reviewer reads the diff; the commit is
-the only place the reasoning survives, so spending the body on a file list throws away
-the one thing that could not be generated from the patch. The hook enforces the shape
-and cannot judge the content, so that part is on the author.
+The body answers three questions, in this order and only as far as they apply:
+
+1. **Motivation.** What was wrong or missing. A diff shows the change, never the reason
+   it had to happen.
+2. **Design rationale.** What was chosen and why, including the option that lost and
+   what made it worse. This is the part nothing else in the repo records.
+3. **Consequences.** Trade-offs, wire or schema changes, and what now depends on this.
+
+One paragraph can carry all three when the change is small; do not pad to fill slots.
+What the body never does is list files, summarize what each module now does, or repeat a
+diff. The reviewer reads the diff; the commit is the only place the reasoning survives,
+so spending the body on a file list throws away the one thing that could not be
+generated from the patch. The hook enforces the shape and cannot judge the content, so
+that part is on the author.
 
 Good, a fix whose failure mode is invisible in the patch:
 
 ```
 fix(api): cast nullable filters before asyncpg binds them
 
-asyncpg cannot infer a type for a bare None parameter, so an unfiltered
-/api/advisories request failed with a type error while every filtered
-request worked. Casting :kind in the query keeps one statement for both
-cases instead of branching on whether the filter was supplied.
+An unfiltered /api/advisories request failed with a type error while
+every filtered request worked, because asyncpg cannot infer a type for
+a bare None parameter.
+
+Casting :kind in the query keeps one statement for both cases. Building
+the WHERE clause conditionally would give the unfiltered path a second
+statement that nothing else exercises.
 ```
 
 Bad, the same change restated as an inventory:
