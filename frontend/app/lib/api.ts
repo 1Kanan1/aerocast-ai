@@ -1,5 +1,7 @@
 /** Server-side only: the browser never calls the API, so no credential can reach the page. */
 
+import type { Health } from './api-types.ts'
+
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 const DEFAULT_TIMEOUT_MS = 3000
 
@@ -8,25 +10,6 @@ export interface ApiResult<T> {
   status: number
   data?: T
   error?: string
-}
-
-export interface ProviderStatus {
-  name: string
-  model: string
-  kind: 'remote' | 'local'
-  configured: boolean
-  reachable: boolean | null
-}
-
-export interface HealthResponse {
-  status: 'ok' | 'degraded'
-  version: string
-  env: string
-  database: { ok: boolean; error: string | null }
-  llm: {
-    chain: string[]
-    providers: ProviderStatus[]
-  }
 }
 
 type StatusPredicate = (status: number) => boolean
@@ -75,6 +58,6 @@ export function apiGet<T>(path: string, signal?: AbortSignal): Promise<ApiResult
 }
 
 /** Health answers 503 when the database is down, and that body is worth rendering. */
-export function apiGetHealth(signal?: AbortSignal): Promise<ApiResult<HealthResponse>> {
-  return request<HealthResponse>('/api/health', signal, (status) => status === 200 || status === 503)
+export function apiGetHealth(signal?: AbortSignal): Promise<ApiResult<Health>> {
+  return request<Health>('/api/health', signal, (status) => status === 200 || status === 503)
 }

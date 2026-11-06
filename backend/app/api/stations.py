@@ -27,7 +27,7 @@ STATION_COLUMNS = "icao, name, state, lat, lon, elev_m"
 NM_PER_DEGREE = 60.0
 
 
-@router.get("/stations", response_model=models.Envelope[list[models.Station]])
+@router.get("/stations", response_model=models.StationList)
 async def search(
     q: str = Query(default=""),
     limit: int = Query(default=20, ge=1, le=100),
@@ -41,9 +41,7 @@ async def search(
     return wrap(rows, source="awc stations")
 
 
-@router.get(
-    "/stations/{icao}", response_model=models.Envelope[models.StationDetail]
-)
+@router.get("/stations/{icao}", response_model=models.StationDetailResponse)
 async def detail(icao: str) -> dict[str, Any]:
     station = await fetch_one(
         f"select {STATION_COLUMNS} from stations where icao = :icao",
@@ -70,7 +68,7 @@ async def detail(icao: str) -> dict[str, Any]:
 
 @router.get(
     "/stations/{icao}/observations",
-    response_model=models.Envelope[list[models.HistoryPoint]],
+    response_model=models.StationHistory,
 )
 async def observations(
     icao: str,
@@ -92,9 +90,7 @@ async def observations(
     )
 
 
-@router.get(
-    "/stations/{icao}/brief", response_model=models.Envelope[models.Bundle]
-)
+@router.get("/stations/{icao}/brief", response_model=models.StationBrief)
 async def brief(icao: str) -> dict[str, Any]:
     """The fact bundle, and nothing the model inferred.
 
@@ -146,7 +142,7 @@ async def brief(icao: str) -> dict[str, Any]:
     )
 
 
-@router.get("/map/layers", response_model=models.Envelope[models.MapLayers])
+@router.get("/map/layers", response_model=models.MapLayersResponse)
 async def map_layers(
     bbox: str | None = Query(default=None),
 ) -> dict[str, Any]:

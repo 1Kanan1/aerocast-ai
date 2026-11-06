@@ -1,11 +1,12 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import type { ApiResult, HealthResponse, ProviderStatus } from '../lib/api.ts'
+import type { Health, ProviderStatus } from '../lib/api-types.ts'
+import type { ApiResult } from '../lib/api.ts'
 import { Document } from './document.tsx'
 
 interface HomePageProps {
-  health: ApiResult<HealthResponse>
+  health: ApiResult<Health>
 }
 
 export function HomePage(handle: Handle<HomePageProps>) {

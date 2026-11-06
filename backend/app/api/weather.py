@@ -13,9 +13,7 @@ from app.db.session import fetch_all
 router = APIRouter(prefix="/api", tags=["weather"])
 
 
-@router.get(
-    "/advisories", response_model=models.Envelope[list[models.Advisory]]
-)
+@router.get("/advisories", response_model=models.AdvisoryList)
 async def advisories(
     kind: str | None = Query(default=None),
     hazard: str | None = Query(default=None),
@@ -33,7 +31,7 @@ async def advisories(
     return wrap(rows, source="gairmet and sigmet")
 
 
-@router.get("/pireps", response_model=models.Envelope[list[models.Pirep]])
+@router.get("/pireps", response_model=models.PirepList)
 async def pireps(hours: int = Query(default=3, ge=1, le=24)) -> dict[str, Any]:
     rows = await fetch_all(
         "select report_time, station_icao, lat, lon, altitude_ft, "

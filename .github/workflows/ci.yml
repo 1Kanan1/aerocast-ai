@@ -18,6 +18,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run ty check
       - run: uv run pytest -q
+      - run: uv run python -m app.tools.openapi_types ../frontend/app/lib/api-types.ts
+      - run: git diff --exit-code -- ../frontend/app/lib/api-types.ts
 
   frontend:
     runs-on: ubuntu-latest

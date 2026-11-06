@@ -280,3 +280,25 @@ class Bundle(BaseModel):
     stations: list[BundleStation]
     definitions: dict[str, str]
     brief_hash: str
+
+
+class StationList(Envelope[list[Station]]):
+    """Concrete envelopes, named so the generated types read as endpoints."""
+
+
+class StationDetailResponse(Envelope[StationDetail]): ...
+
+
+class StationHistory(Envelope[list[HistoryPoint]]): ...
+
+
+class StationBrief(Envelope[Bundle]): ...
+
+
+class MapLayersResponse(Envelope[MapLayers]): ...
+
+
+class AdvisoryList(Envelope[list[Advisory]]): ...
+
+
+class PirepList(Envelope[list[Pirep]]): ...

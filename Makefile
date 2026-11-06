@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install hooks db db-down api web test lint fmt crosscheck up down
+.PHONY: help install hooks db db-down api web test lint fmt types crosscheck up down
 
 help: ## show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -53,6 +53,10 @@ crosscheck: ## compare parsers against AWC's decoder (needs network)
 
 fmt: ## format the backend
 	cd backend && uv run ruff format .
+
+types: ## regenerate frontend/app/lib/api-types.ts from the schema
+	cd backend && uv run python -m app.tools.openapi_types \
+		../frontend/app/lib/api-types.ts
 
 up: ## run the whole stack in containers
 	docker compose up --build
