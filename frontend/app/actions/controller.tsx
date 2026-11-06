@@ -6,7 +6,9 @@ import { assets } from '../assets.ts'
 import type { Answer } from '../lib/answer.ts'
 import {
   apiAsk,
+  apiGetAdvisories,
   apiGetBrief,
+  apiGetHealth,
   apiGetHistory,
   apiGetMapLayers,
   apiGetStation,
@@ -15,6 +17,8 @@ import {
 import { routes } from '../routes.ts'
 import { AnswerView } from '../ui/answer.tsx'
 import { cardStyle, headingStyle, mutedStyle, Page } from '../ui/layout.tsx'
+import { AboutPage } from './about-page.tsx'
+import { AdvisoriesPage } from './advisories-page.tsx'
 import { HomePage } from './home-page.tsx'
 import { StationPage } from './station-page.tsx'
 
@@ -77,6 +81,16 @@ export default createController(routes, {
           history={history}
         />,
       )
+    },
+
+    async advisories(context) {
+      let advisories = await apiGetAdvisories(context.request.signal)
+      return context.render(<AdvisoriesPage advisories={advisories} />)
+    },
+
+    async about(context) {
+      let health = await apiGetHealth(context.request.signal)
+      return context.render(<AboutPage health={health} />)
     },
 
     async layers(context) {

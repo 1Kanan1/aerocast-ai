@@ -5,6 +5,8 @@ export const routes = route({
   home: '/',
   station: get('/stations/:icao'),
   ask: post('/stations/:icao/ask'),
+  advisories: '/advisories',
+  about: '/about',
   /** Same-origin JSON proxy for the map island. */
   layers: get('/api/map/layers'),
 })

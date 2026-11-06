@@ -5,7 +5,7 @@ import { Document } from '../actions/document.tsx'
 import { routes } from '../routes.ts'
 
 export interface PageProps {
-  active: 'map'
+  active: 'map' | 'advisories' | 'about'
   children?: RemixNode
   title?: string
 }
@@ -29,6 +29,18 @@ export function Page(handle: Handle<PageProps>) {
                   href={routes.home.href()}
                 >
                   Map
+                </a>
+                <a
+                  aria-current={active === 'advisories' ? 'page' : undefined}
+                  href={routes.advisories.href()}
+                >
+                  Advisories
+                </a>
+                <a
+                  aria-current={active === 'about' ? 'page' : undefined}
+                  href={routes.about.href()}
+                >
+                  About
                 </a>
               </nav>
             </header>

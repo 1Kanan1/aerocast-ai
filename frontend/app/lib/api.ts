@@ -1,6 +1,7 @@
 /** Server-side only: the browser never calls the API, so no credential can reach the page. */
 
 import type {
+  AdvisoryList,
   Health,
   MapLayersResponse,
   StationBrief,
@@ -74,13 +75,6 @@ export function apiGetHealth(signal?: AbortSignal): Promise<ApiResult<Health>> {
   return request<Health>('/api/health', signal, (status) => status === 200 || status === 503)
 }
 
-export function apiGetStation(
-  icao: string,
-  signal?: AbortSignal,
-): Promise<ApiResult<StationDetailResponse>> {
-  return apiGet<StationDetailResponse>(`/api/stations/${encodeURIComponent(icao)}`, signal)
-}
-
 export function apiGetStations(
   query: string,
   signal?: AbortSignal,
@@ -88,12 +82,11 @@ export function apiGetStations(
   return apiGet<StationList>(`/api/stations?q=${encodeURIComponent(query)}`, signal)
 }
 
-export function apiGetMapLayers(
-  bbox: string | null,
+export function apiGetStation(
+  icao: string,
   signal?: AbortSignal,
-): Promise<ApiResult<MapLayersResponse>> {
-  let query = bbox === null ? '' : `?bbox=${encodeURIComponent(bbox)}`
-  return apiGet<MapLayersResponse>(`/api/map/layers${query}`, signal)
+): Promise<ApiResult<StationDetailResponse>> {
+  return apiGet<StationDetailResponse>(`/api/stations/${encodeURIComponent(icao)}`, signal)
 }
 
 export function apiGetHistory(
@@ -112,6 +105,18 @@ export function apiGetBrief(
   signal?: AbortSignal,
 ): Promise<ApiResult<StationBrief>> {
   return apiGet<StationBrief>(`/api/stations/${encodeURIComponent(icao)}/brief`, signal)
+}
+
+export function apiGetMapLayers(
+  bbox: string | null,
+  signal?: AbortSignal,
+): Promise<ApiResult<MapLayersResponse>> {
+  let query = bbox === null ? '' : `?bbox=${encodeURIComponent(bbox)}`
+  return apiGet<MapLayersResponse>(`/api/map/layers${query}`, signal)
+}
+
+export function apiGetAdvisories(signal?: AbortSignal): Promise<ApiResult<AdvisoryList>> {
+  return apiGet<AdvisoryList>('/api/advisories', signal)
 }
 
 /** The explanation layer answers questions about one station's facts. */
