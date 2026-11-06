@@ -12,10 +12,10 @@ cannot assess your aircraft, currency, or ratings.
 
 ## Status
 
-Phases 0 and 1 are complete. Both services run, the web app renders live API health, and the
-deterministic METAR and TAF layer is measured against AWC's own decoder. See
-[PLAN.md](PLAN.md) for the full build order and [CHANGELOG.md](CHANGELOG.md) for what has
-landed so far.
+Phases 0 to 3 are complete. Both services run, the web app renders live API health, the
+deterministic METAR and TAF layer is measured against AWC's own decoder, and every read
+endpoint is served, typed and tested. See [PLAN.md](PLAN.md) for the full build order and
+[CHANGELOG.md](CHANGELOG.md) for what has landed so far.
 
 ## Stack
 
@@ -76,6 +76,7 @@ the part that has to be right and the part that is worth reading.
 ```sh
 make test    # pytest, then Remix's test runner
 make lint    # ruff, ty, then tsc
+make types   # regenerate frontend/app/lib/api-types.ts from the schema
 ```
 
 Both parsers are checked against AWC's own decoder, which needs network:

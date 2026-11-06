@@ -10,9 +10,30 @@ measured. Dates are the day the change landed.
 
 ## [Unreleased] 0.1.0, 2026-11-01
 
-Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
+Phase 0 (scaffolding), Phase 1 (deterministic domain layer), Phase 2 (ingestion) and
+Phase 3 (read API) are complete.
 
 ### Added
+
+**API**
+
+- `GET /api/stations?q=`: search by ICAO or name.
+- `GET /api/stations/{icao}`: the station, its latest METAR and TAF, and every active
+  advisory within 50 nm with a distance.
+- `GET /api/stations/{icao}/observations?hours=48`: the history feed, up to 30 days.
+- `GET /api/stations/{icao}/brief`: the deterministic fact bundle, public and
+  unauthenticated. Rebuilt from stored raw text per request, so values and refs always
+  belong to the parser that answered.
+- `GET /api/map/layers?bbox=`: station dots and advisory polygons for the viewport. A
+  bay-area request went from 327 KB unbounded to 3.6 KB with the filter, which is why the
+  parameter exists.
+- `GET /api/advisories?kind=&hazard=` and `GET /api/pireps?hours=`.
+- `app/api/envelope.py`: one `{data, meta}` shape carrying source, fetch and observation
+  times, age, and a `stale` flag.
+- `app/api/models.py`: a response model for every endpoint, so `/api/openapi.json` is a
+  contract rather than a list of empty objects.
+- `make types` writes `frontend/app/lib/api-types.ts`; CI fails when the committed file
+  drifts from the schema. The status page reads its health type from the generated file.
 
 **Ingestion**
 
@@ -75,6 +96,9 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 - `compose.yaml` (Postgres, API, web), `Makefile`, `.env.example`, backend and frontend
   Dockerfiles, and a GitHub Actions workflow.
 - ruff, pytest, pytest-asyncio, and ty, wired into `make lint` and CI.
+- `app/tools/openapi_types.py` behind `make types`. `openapi-typescript` cannot run under
+  TypeScript 7, which dropped the compiler API it builds output with, so the schema walk
+  is about a hundred lines of backend code covering the shapes this API emits.
 - `scripts/commit-msg` plus `make hooks`: rejects non-Conventional-Commit subject lines and
   exempts git-generated `Merge` and `Revert`.
 - 100 backend tests, including a guard that fails if anything under `domain/` imports a web
@@ -82,6 +106,12 @@ Phase 0 (scaffolding) and Phase 1 (deterministic domain layer) are complete.
 
 ### Changed
 
+- **Timestamps serialize as `...Z`** instead of `+00:00`, because Pydantic writes UTC
+  datetimes that way. The envelope used `isoformat()`; one format across the API is worth
+  the one-time churn, and both parse as ISO 8601.
+- **TAF periods keep `from` and `to`** in the bundle. The response model aliases them back,
+  since the field names would otherwise have become `starts_at` and `ends_at` and quietly
+  changed the documented shape.
 - **`DATABASE_URL` no longer accepts `postgres://`.** The pre-2009 alias is rejected instead
   of rewritten, since SQLAlchemy dropped it. Plain `postgresql://` still gains the
   `postgresql+asyncpg://` driver, which the async engine needs.

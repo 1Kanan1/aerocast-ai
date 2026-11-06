@@ -560,7 +560,40 @@ map asks for what it renders and nothing else.
 `/api/stations/{icao}/brief` is public and unauthenticated on purpose. A reviewer can see
 that the facts exist independently of the AI, and so can the tests.
 
-`make types` generates `frontend/app/lib/api-types.ts` from the OpenAPI schema.
+### Phase 3, as built
+
+Every response is described by a Pydantic model in `app/api/models.py`. Without one,
+FastAPI infers `{}` for a `dict` return, so `/api/openapi.json` says nothing and a
+generated client is a column of `unknown`. The models describe payloads the routers
+already build rather than moving assembly into Pydantic, and a test fails when a new
+endpoint has no schema.
+
+`make types` writes `frontend/app/lib/api-types.ts` from that schema, and CI fails when
+the committed file no longer matches. `openapi-typescript` was the first choice and
+cannot run here: it assembles its output through the TypeScript compiler API, and
+TypeScript 7 ships a native `tsc` without that API. The replacement is
+`app/tools/openapi_types.py`, which walks the handful of shapes this API emits. Hand-rolling
+a generator is normally the wrong call; the reason it happened is written down here
+rather than left to look like a preference.
+
+The brief is rebuilt from the stored `raw` text on every request, not from the cached
+`decoded` column, so its values and refs always belong to the parser that answered. A row
+that no longer parses is dropped from the bundle instead of failing the request: a stale
+parse is a missing fact, not an outage.
+
+Two wire changes came with the models:
+
+- **Timestamps serialize as `...Z`.** Pydantic writes UTC datetimes that way, where the
+  envelope used to produce `+00:00` through `isoformat()`. One format across the API is
+  worth the one-time churn, and both parse as ISO 8601.
+- **TAF periods keep `from` and `to`** through field aliases. Letting them surface as
+  `starts_at` and `ends_at` would quietly invalidate every claim written against the
+  documented bundle shape.
+
+Endpoint tests run against a faked database, so they pin the contract (envelope, status
+codes, bbox filtering, the bundle's refs) without needing Postgres. Querying a real one
+is still the check that the SQL runs: 3,513 stations, 9,985 observations and 2,361 TAFs
+answered every endpoint on 2026-11-06.
 
 ## 9. AI layer
 
