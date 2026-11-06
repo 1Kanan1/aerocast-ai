@@ -307,3 +307,22 @@ async def test_brief_answers_404_for_an_unknown_station(monkeypatch) -> None:
     response = await get("/api/stations/KZZZ/brief")
 
     assert response.status_code == 404
+
+
+async def test_every_endpoint_publishes_a_response_schema() -> None:
+    """An untyped endpoint would generate `unknown` in the frontend."""
+    schema = (await get("/api/openapi.json")).json()
+
+    for path, operations in schema["paths"].items():
+        for operation in operations.values():
+            content = operation["responses"]["200"]["content"]
+            assert content["application/json"]["schema"], path
+
+
+async def test_openapi_points_the_brief_at_the_bundle_schema() -> None:
+    schema = (await get("/api/openapi.json")).json()
+    operation = schema["paths"]["/api/stations/{icao}/brief"]["get"]
+    reference = operation["responses"]["200"]["content"]["application/json"]
+    name = reference["schema"]["$ref"].rsplit("/", 1)[-1]
+
+    assert name in schema["components"]["schemas"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from sqlalchemy import text
 
+from app.api import models
 from app.db.session import get_session_factory
 from app.sources.awc import advisories, metars, stations, tafs
 
@@ -19,7 +20,7 @@ TABLES = (
 )
 
 
-@router.get("/api/meta")
+@router.get("/api/meta", response_model=models.MetaResponse)
 async def meta() -> dict[str, object]:
     async with get_session_factory()() as session:
         counts = {

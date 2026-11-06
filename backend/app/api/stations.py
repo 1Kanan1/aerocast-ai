@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from shapely.geometry import Point, shape
 
+from app.api import models
 from app.api.envelope import METAR_STALE_SECONDS, wrap
 from app.db.session import fetch_all, fetch_one
 from app.domain.brief import BriefAdvisory, BriefStation, build_brief
@@ -26,7 +27,7 @@ STATION_COLUMNS = "icao, name, state, lat, lon, elev_m"
 NM_PER_DEGREE = 60.0
 
 
-@router.get("/stations")
+@router.get("/stations", response_model=models.Envelope[list[models.Station]])
 async def search(
     q: str = Query(default=""),
     limit: int = Query(default=20, ge=1, le=100),
@@ -40,7 +41,9 @@ async def search(
     return wrap(rows, source="awc stations")
 
 
-@router.get("/stations/{icao}")
+@router.get(
+    "/stations/{icao}", response_model=models.Envelope[models.StationDetail]
+)
 async def detail(icao: str) -> dict[str, Any]:
     station = await fetch_one(
         f"select {STATION_COLUMNS} from stations where icao = :icao",
@@ -65,7 +68,10 @@ async def detail(icao: str) -> dict[str, Any]:
     )
 
 
-@router.get("/stations/{icao}/observations")
+@router.get(
+    "/stations/{icao}/observations",
+    response_model=models.Envelope[list[models.HistoryPoint]],
+)
 async def observations(
     icao: str,
     hours: int = Query(default=48, ge=1, le=720),
@@ -86,7 +92,9 @@ async def observations(
     )
 
 
-@router.get("/stations/{icao}/brief")
+@router.get(
+    "/stations/{icao}/brief", response_model=models.Envelope[models.Bundle]
+)
 async def brief(icao: str) -> dict[str, Any]:
     """The fact bundle, and nothing the model inferred.
 
@@ -138,7 +146,7 @@ async def brief(icao: str) -> dict[str, Any]:
     )
 
 
-@router.get("/map/layers")
+@router.get("/map/layers", response_model=models.Envelope[models.MapLayers])
 async def map_layers(
     bbox: str | None = Query(default=None),
 ) -> dict[str, Any]:
