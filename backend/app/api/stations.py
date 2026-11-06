@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -9,6 +10,13 @@ from shapely.geometry import Point, shape
 
 from app.api.envelope import METAR_STALE_SECONDS, wrap
 from app.db.session import fetch_all, fetch_one
+from app.domain.brief import BriefAdvisory, BriefStation, build_brief
+from app.domain.metar import (
+    MetarParseError,
+    Observation,
+    parse_metar,
+)
+from app.domain.taf import Taf, TafParseError, parse_taf
 
 router = APIRouter(prefix="/api", tags=["stations"])
 
@@ -78,6 +86,58 @@ async def observations(
     )
 
 
+@router.get("/stations/{icao}/brief")
+async def brief(icao: str) -> dict[str, Any]:
+    """The fact bundle, and nothing the model inferred.
+
+    Rebuilt from the stored raw text rather than the cached `decoded`
+    column, so a bundle can never describe a newer or older parser than
+    the one serving it.
+    """
+    station = await fetch_one(
+        f"select {STATION_COLUMNS} from stations where icao = :icao",
+        {"icao": icao.upper()},
+    )
+    if station is None:
+        raise HTTPException(status_code=404, detail="unknown station")
+
+    observation = await _latest("metar_observations", "obs_time", icao)
+    forecast = await _latest("taf_forecasts", "issue_time", icao)
+    nearby = await _nearby(station["lat"], station["lon"])
+
+    bundle = build_brief(
+        [
+            BriefStation(
+                icao=station["icao"],
+                name=station["name"],
+                lat=station["lat"],
+                lon=station["lon"],
+                observation=_observation(observation),
+                taf=_taf(forecast),
+                advisories=tuple(
+                    BriefAdvisory(
+                        kind=row["kind"],
+                        hazard=row["hazard"],
+                        valid_to=row["valid_to"],
+                        distance_nm=row["distance_nm"],
+                        due_to=row["due_to"],
+                    )
+                    for row in nearby
+                ),
+            )
+        ],
+        datetime.now(UTC),
+    )
+
+    return wrap(
+        bundle,
+        source="aviationweather.gov",
+        observed_at=observation["obs_time"] if observation else None,
+        fetched_at=observation["fetched_at"] if observation else None,
+        max_age_seconds=METAR_STALE_SECONDS,
+    )
+
+
 @router.get("/map/layers")
 async def map_layers(
     bbox: str | None = Query(default=None),
@@ -143,6 +203,25 @@ async def _latest(table: str, order: str, icao: str) -> Any:
         f"order by {order} desc limit 1",
         {"icao": icao.upper()},
     )
+
+
+def _observation(row: dict[str, Any] | None) -> Observation | None:
+    """A row that no longer parses is a missing fact, not a 500."""
+    if row is None:
+        return None
+    try:
+        return parse_metar(row["raw"], reference=row["obs_time"])
+    except MetarParseError:
+        return None
+
+
+def _taf(row: dict[str, Any] | None) -> Taf | None:
+    if row is None:
+        return None
+    try:
+        return parse_taf(row["raw"], reference=row["issue_time"])
+    except TafParseError:
+        return None
 
 
 def _bounds(value: str | None) -> tuple[float, float, float, float]:
