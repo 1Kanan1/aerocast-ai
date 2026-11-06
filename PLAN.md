@@ -841,6 +841,45 @@ green/blue/red for pilots who expect it, but the default is monochrome as asked.
 Advisory polygons get hatched fills and thin accent outlines, never a fill color as the
 only signal.
 
+### Phase 4, as built
+
+One island, `app/actions/public/map-island.tsx`. Every other part of every page is
+server-rendered HTML, and the facts stay readable with JavaScript off.
+
+- **MapLibre is vendored, not imported.** `public/vendor/maplibre/` holds the ESM
+  build, its worker and the stylesheet, copied from the pinned dependency. v6
+  resolves its worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`,
+  so those two files have to sit together and the asset server cannot bundle the
+  relationship. The island loads the module through a runtime `import()` of that
+  path; the specifier is marked external in `assets.ts` so the compiler leaves it
+  alone instead of failing to resolve it.
+- **The basemap is monochrome by rewriting the style, not with a CSS filter.** A
+  filter over the canvas would desaturate the hazard outlines too, and those are the
+  one colour the design keeps. `lib/monochrome.ts` walks the style JSON and replaces
+  every colour with its grey equivalent; the data layers are added afterwards, so
+  they keep their ink and accent.
+- **The map never calls FastAPI directly.** `GET /api/map/layers` on the web origin
+  proxies the hop server-side and returns the envelope as JSON, so the browser stays
+  same-origin and no API base URL reaches the page. Moving the viewport refetches
+  with a 250 ms debounce.
+- **Badges wait for zoom.** Dots carry the category as a grey ramp at every zoom;
+  the letter is a symbol layer that appears at zoom 5, because 3,500 letters over the
+  national view is noise rather than information.
+- **The timeline is two server-rendered SVG panels**: ceiling and visibility across
+  the history feed, with the MVFR and IFR thresholds dashed in. No chart library, no
+  client code.
+- **The ask panel is a real form.** With JavaScript it intercepts the submit and
+  expects JSON; without it, the same POST returns an HTML page carrying the answer.
+  FastAPI's `/api/ask` arrives in Phase 5, so today the panel says the explanation
+  layer is not available while the facts above it are unaffected. That degraded state
+  is one the design has to be able to show.
+
+Tests stay at the router boundary with `fetch` mocked, plus unit tests for the grey
+transform, the window labels and the decoded-fact readers. Browser tests are not
+wired yet: `remix test` needs Playwright and its browser binaries for those, and the
+island was verified by hand in Chrome instead. A reviewer should be able to tell
+"tested" from "looked at", so the difference is recorded here rather than implied.
+
 ## 11. Safety requirements
 
 These are requirements, not copy suggestions. Each one gets a test or a lint rule where

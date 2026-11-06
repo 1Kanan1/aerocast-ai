@@ -12,10 +12,12 @@ cannot assess your aircraft, currency, or ratings.
 
 ## Status
 
-Phases 0 to 3 are complete. Both services run, the web app renders live API health, the
-deterministic METAR and TAF layer is measured against AWC's own decoder, and every read
-endpoint is served, typed and tested. See [PLAN.md](PLAN.md) for the full build order and
-[CHANGELOG.md](CHANGELOG.md) for what has landed so far.
+Phases 0 to 4 are complete. The API serves stations, observations, advisories, PIREPs and
+the fact bundle; the web app renders a monochrome map, station pages with decoded facts and
+a 48 hour timeline, the advisory list, and an about page. The explanation layer is Phase 5,
+so the ask panel currently reports that it is unavailable while the facts above it keep
+working. See [PLAN.md](PLAN.md) for the build order and [CHANGELOG.md](CHANGELOG.md) for
+what has landed so far.
 
 ## Stack
 
@@ -65,11 +67,17 @@ make up
 backend/    FastAPI. Owns the database, parsers, ingestion, and the model keys.
   app/domain/   pure logic, no IO: METAR, TAF, flight category, fact bundle
 frontend/   Remix 3. Presentation plus a same-origin proxy to the API.
+  app/actions/public/  the two browser islands: the map and the ask panel
+  public/vendor/maplibre/  pinned MapLibre build, worker and stylesheet
 PLAN.md     Scope, schema, API surface, safety requirements, build order.
 ```
 
 The split is deliberate: `app/domain/` has no framework imports, because the parsing is
 the part that has to be right and the part that is worth reading.
+
+The map needs network access for basemap tiles from OpenFreeMap. Everything else,
+including the station list and every decoded fact, is server-rendered and works offline
+against whatever is already in Postgres.
 
 ## Tests
 

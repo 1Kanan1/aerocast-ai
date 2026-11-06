@@ -10,8 +10,8 @@ measured. Dates are the day the change landed.
 
 ## [Unreleased] 0.1.0, 2026-11-01
 
-Phase 0 (scaffolding), Phase 1 (deterministic domain layer), Phase 2 (ingestion) and
-Phase 3 (read API) are complete.
+Phase 0 (scaffolding), Phase 1 (deterministic domain layer), Phase 2 (ingestion),
+Phase 3 (read API) and Phase 4 (frontend) are complete.
 
 ### Added
 
@@ -90,6 +90,20 @@ Phase 3 (read API) are complete.
   status, plus the flight-planning disclaimer.
 - Same-origin API client with a 3 s timeout, `AbortSignal` combining, and explicit handling
   of the 503 health response.
+- Map island: MapLibre GL JS 6 vendored under `public/vendor/maplibre/` (ESM build, worker
+  and stylesheet), station dots on a grey category ramp, hatched advisory polygons with an
+  accent outline, station click-through, and a debounced viewport refetch through
+  `GET /api/map/layers` on the same origin.
+- Monochrome basemap: the OpenFreeMap style JSON is rewritten to grey at load time instead
+  of filtering the canvas, so the hazard outlines keep the one accent colour.
+- Station page: raw METAR, decoded facts with the category basis, TAF period table, a 48
+  hour ceiling and visibility timeline as server-rendered SVG, nearby advisories, a stale
+  badge, and a visible warning when our parser disagrees with AWC.
+- Advisories page grouped by hazard, and an about page with provenance, the cross-check
+  numbers, the limits, and live API, database and provider status.
+- Ask panel as a real form: the enhanced path posts JSON, the no-JavaScript path receives
+  an HTML answer page, and the panel says the explanation layer is unavailable until
+  Phase 5 exists.
 
 **Tooling and infrastructure**
 
@@ -106,6 +120,11 @@ Phase 3 (read API) are complete.
 
 ### Changed
 
+- **The status page became the about page.** Live API, database and provider state moved to
+  `/about` now that `/` is the map.
+- **Browser modules are an explicit allowlist.** `assets.ts` names the four modules the
+  islands may import, so `app/lib/api.ts`, which holds `API_BASE_URL`, cannot become
+  browser-reachable by accident.
 - **Timestamps serialize as `...Z`** instead of `+00:00`, because Pydantic writes UTC
   datetimes that way. The envelope used `isoformat()`; one format across the API is worth
   the one-time churn, and both parse as ISO 8601.
