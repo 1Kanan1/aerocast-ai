@@ -118,18 +118,24 @@ Python: PEP 8, enforced by ruff at 79 columns with pycodestyle warnings and nami
 `ruff format` for layout, and ty for types. TypeScript: strict, `tsc --noEmit`.
 
 **Commit messages.** Conventional Commits, checked by `scripts/commit-msg`: an allowed
-type, an optional scope, and a subject inside 72 characters. Body lines get the same 72,
-so a commit reads the same in a terminal, in `git log --oneline`, and in a forge.
+type, an optional scope, an imperative subject inside 72 characters, and body lines at
+the same width, so a commit reads the same in a terminal, in `git log --oneline`, and in
+a forge.
 
-The body answers three questions, in this order and only as far as they apply:
+```
+<type>(<scope>): <imperative summary>
 
-1. **Motivation.** What was wrong or missing. A diff shows the change, never the reason
-   it had to happen.
-2. **Design rationale.** What was chosen and why, including the option that lost and
-   what made it worse. This is the part nothing else in the repo records.
-3. **Consequences.** Trade-offs, wire or schema changes, and what now depends on this.
+<Why the change was needed: the failure, the gap, the constraint.>
 
-One paragraph can carry all three when the change is small; do not pad to fill slots.
+<The design decision, why it won, and what it commits the code to.>
+
+<Trade-offs, wire or schema changes, compatibility, what now depends on it.>
+```
+
+Those three paragraphs are the shape when the change has all three. A small change may
+need only the first, or the first and second; padding to three is worse than a short
+body, because a slot filled with "this is cleaner" costs attention and says nothing.
+
 What the body never does is list files, summarize what each module now does, or repeat a
 diff. The reviewer reads the diff; the commit is the only place the reasoning survives,
 so spending the body on a file list throws away the one thing that could not be
@@ -149,6 +155,8 @@ Casting :kind in the query keeps one statement for both cases. Building
 the WHERE clause conditionally would give the unfiltered path a second
 statement that nothing else exercises.
 ```
+
+Two paragraphs: the rationale is the whole point, and no downstream contract moved.
 
 Bad, the same change restated as an inventory:
 
