@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "latest",
+    "maplibre-gl": "^6.16.0",
     "typescript": "latest"
   }
 }

@@ -10,7 +10,15 @@ export const assets = createAssetServer({
   basePath: '/assets',
   rootDir,
 
-  allowFiles: ['app/routes.ts', 'app/**/public/**'],
+  allowFiles: [
+    'app/routes.ts',
+    'app/**/public/**',
+    // Shared with the islands; each one is browser-safe by construction.
+    'app/lib/answer.ts',
+    'app/lib/map-data.ts',
+    'app/lib/monochrome.ts',
+    'app/ui/answer.tsx',
+  ],
   allowPackages: ['remix'],
   denyFiles: ['app/**/*.test.*'],
   sourceMaps: isDevelopment ? 'external' : undefined,
@@ -22,7 +30,11 @@ export const assets = createAssetServer({
         moduleImporter: 'remix/multiple-import-maps-polyfill',
       }
     : undefined,
-  scripts: { loaders: isHmr ? [componentHmr()] : undefined },
+  scripts: {
+    loaders: isHmr ? [componentHmr()] : undefined,
+    // Vendored MapLibre build, fetched as a static file at runtime.
+    external: ['/vendor/maplibre/maplibre-gl.mjs'],
+  },
 })
 
 const entry = 'app/actions/public/entry.ts'
