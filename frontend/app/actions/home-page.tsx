@@ -1,233 +1,164 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import type { Health, ProviderStatus } from '../lib/api-types.ts'
+import type {
+  MapLayersResponse,
+  StationList as StationListResponse,
+} from '../lib/api-types.ts'
 import type { ApiResult } from '../lib/api.ts'
-import { Document } from './document.tsx'
+import { EMPTY_LAYERS, islandLayers } from '../lib/map-data.ts'
+import { routes } from '../routes.ts'
+import {
+  cardStyle,
+  headingStyle,
+  mutedStyle,
+  Page,
+  subheadingStyle,
+} from '../ui/layout.tsx'
+import { MapIsland } from './public/map-island.tsx'
 
 interface HomePageProps {
-  health: ApiResult<Health>
+  layers: ApiResult<MapLayersResponse>
+  query: string
+  stations: ApiResult<StationListResponse>
 }
 
 export function HomePage(handle: Handle<HomePageProps>) {
   return () => {
-    let { health } = handle.props
-    let body = health.data
-    let reachable = health.ok && body !== undefined
-    let databaseOk = body?.database.ok ?? false
-    let providers = body?.llm.providers ?? []
-    let activeProvider = pickProvider(providers)
+    let { layers, query, stations } = handle.props
+    let rows = stations.data?.data ?? []
+    let island = layers.data ? islandLayers(layers.data.data) : EMPTY_LAYERS
 
     return (
-      <Document
-        head={
-          <meta
-            name="description"
-            content="AeroCast AI: aviation weather, explained and cited. Educational tool, not for flight planning."
-          />
-        }
-      >
-        <main mix={pageStyle}>
-          <div mix={columnStyle}>
-            <header mix={mastheadStyle}>
-              <span mix={wordmarkStyle}>AEROCAST</span>
-              <span mix={buildStyle}>{body ? `v${body.version} · ${body.env}` : 'offline'}</span>
-            </header>
+      <Page active="map">
+        <section>
+          <h1 mix={headingStyle}>Aviation weather, explained and cited.</h1>
+          <p mix={ledeStyle}>
+            METAR, TAF, advisories and a 48 hour history for US airports. Every
+            sentence the explanation layer produces points back at the
+            observation it came from. Nothing here decides whether you should
+            fly.
+          </p>
+        </section>
 
-            <section>
-              <h1 mix={headlineStyle}>Aviation weather, explained and cited.</h1>
-              <p mix={ledeStyle}>
-                METAR, TAF, advisories and a 48 hour history for US airports. Every AI
-                sentence points back at the observation it came from. Nothing here decides
-                whether you should fly.
-              </p>
-            </section>
+        <section aria-labelledby="map-heading" mix={cardStyle}>
+          <h2 id="map-heading" mix={subheadingStyle}>
+            Map
+          </h2>
+          <MapIsland initial={island} />
+          <p mix={mapNoteStyle}>
+            Flight category is a grey ramp; letters appear as you zoom in.
+            Hatched outlines are active advisories. Not for navigation.
+          </p>
+        </section>
 
-            <section mix={panelStyle} aria-labelledby="status-heading">
-              <h2 id="status-heading" mix={panelHeadingStyle}>
-                System status
-              </h2>
-              <StatusRow
-                detail={reachable ? 'responding' : (health.error ?? 'unreachable')}
-                label="API"
-                ok={reachable}
+        <section aria-labelledby="stations-heading">
+          <h2 id="stations-heading" mix={subheadingStyle}>
+            Stations
+          </h2>
+          <form action={routes.home.href()} method="get" mix={searchStyle}>
+            <label mix={labelStyle}>
+              <span>Search by ICAO, name or state</span>
+              <input
+                defaultValue={query}
+                name="q"
+                placeholder="KSFO"
+                type="search"
               />
-              <StatusRow
-                detail={databaseOk ? 'connected' : (body?.database.error ?? 'not configured')}
-                label="Database"
-                ok={databaseOk}
-              />
-              <StatusRow
-                detail={
-                  activeProvider
-                    ? `${activeProvider.name} · ${activeProvider.model}`
-                    : providers.length > 0
-                      ? 'no provider reachable'
-                      : 'deterministic summaries only'
-                }
-                label="Explanation"
-                ok={activeProvider !== undefined}
-              />
-            </section>
+            </label>
+            <button mix={buttonStyle} type="submit">
+              Search
+            </button>
+          </form>
 
-            <footer mix={footerStyle}>
-              <p>
-                Educational tool. Not for flight planning. Obtain an official briefing from
-                Flight Service (1-800-WX-BRIEF) before you fly.
-              </p>
-              <p>Weather data: aviationweather.gov, US Government public domain.</p>
-            </footer>
-          </div>
-        </main>
-      </Document>
+          {!stations.ok ? (
+            <p mix={mutedStyle}>
+              The API is unavailable right now, so the station list cannot be
+              loaded.
+            </p>
+          ) : rows.length === 0 ? (
+            <p mix={mutedStyle}>No stations match this search.</p>
+          ) : (
+            <ul mix={listStyle}>
+              {rows.map((station) => (
+                <li key={station.icao}>
+                  <a href={routes.station.href({ icao: station.icao })}>
+                    <span mix={icaoStyle}>{station.icao}</span>
+                    <span>{station.name}</span>
+                    <span mix={mutedStyle}>{station.state ?? ''}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </Page>
     )
   }
 }
-
-function pickProvider(providers: ProviderStatus[]): ProviderStatus | undefined {
-  // A remote provider with a key counts as usable; the local one must also answer.
-  return providers.find(
-    (provider) => provider.configured && (provider.kind === 'remote' || provider.reachable === true),
-  )
-}
-
-function StatusRow(handle: Handle<{ detail: string; label: string; ok: boolean }>) {
-  return () => {
-    let { detail, label, ok } = handle.props
-
-    return (
-      <div mix={rowStyle}>
-        <span
-          aria-hidden="true"
-          mix={dotStyle}
-          style={{ background: ok ? 'var(--ink-0)' : 'transparent' }}
-        />
-        <span mix={rowLabelStyle}>{label}</span>
-        <span mix={rowDetailStyle}>{detail}</span>
-        <span style={{ color: ok ? 'var(--ink-2)' : 'var(--ink-3)' }}>{ok ? 'ok' : 'degraded'}</span>
-      </div>
-    )
-  }
-}
-
-const pageStyle = css({
-  '--ink-0': '#0a0a0a',
-  '--ink-1': '#1a1a1a',
-  '--ink-2': '#3d3d3d',
-  '--ink-3': '#6b6b6b',
-  '--line': '#d4d4d4',
-  '--paper': '#fafafa',
-  '--paper-2': '#f0efed',
-  '& *, & *::before, & *::after': { boxSizing: 'border-box' },
-  minHeight: '100vh',
-  margin: 0,
-  padding: 'clamp(28px, 6vw, 72px) 24px',
-  background: 'var(--paper)',
-  color: 'var(--ink-0)',
-  fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
-  fontSize: '14px',
-  lineHeight: 1.6,
-  WebkitFontSmoothing: 'antialiased',
-  display: 'flex',
-  justifyContent: 'center',
-})
-
-const columnStyle = css({
-  width: '100%',
-  maxWidth: '720px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '40px',
-})
-
-const mastheadStyle = css({
-  display: 'flex',
-  alignItems: 'baseline',
-  justifyContent: 'space-between',
-  gap: '16px',
-  paddingBlockEnd: '12px',
-  borderBlockEnd: '1px solid var(--line)',
-})
-
-const wordmarkStyle = css({
-  fontSize: '13px',
-  fontWeight: 700,
-  letterSpacing: '0.22em',
-})
-
-const buildStyle = css({
-  fontSize: '12px',
-  color: 'var(--ink-3)',
-})
-
-const headlineStyle = css({
-  margin: '0 0 16px',
-  fontSize: 'clamp(28px, 5vw, 40px)',
-  lineHeight: 1.15,
-  letterSpacing: '-0.02em',
-  fontWeight: 700,
-})
 
 const ledeStyle = css({
   margin: 0,
-  maxWidth: '58ch',
+  maxWidth: '62ch',
   color: 'var(--ink-2)',
 })
 
-const panelStyle = css({
-  border: '1px solid var(--line)',
-  borderRadius: '10px',
-  padding: '16px 20px 4px',
-  background: 'var(--paper-2)',
-})
-
-const panelHeadingStyle = css({
-  margin: '0 0 12px',
-  fontSize: '12px',
-  fontWeight: 700,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-2)',
-})
-
-const rowStyle = css({
-  display: 'grid',
-  gridTemplateColumns: 'auto 8.5rem 1fr auto',
-  alignItems: 'center',
-  gap: '12px',
-  paddingBlock: '10px',
-  borderBlockStart: '1px solid var(--line)',
-  '@media (max-width: 34rem)': {
-    gridTemplateColumns: 'auto 1fr auto',
+const labelStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  flex: '1 1 14rem',
+  color: 'var(--ink-3)',
+  '& input': {
+    padding: '8px 10px',
+    border: '1px solid var(--line)',
+    borderRadius: '6px',
+    background: 'var(--paper)',
+    color: 'var(--ink-0)',
+    font: 'inherit',
   },
 })
 
-const dotStyle = css({
-  width: '7px',
-  height: '7px',
-  borderRadius: '50%',
+const buttonStyle = css({
+  alignSelf: 'flex-end',
+  padding: '8px 14px',
   border: '1px solid var(--ink-0)',
+  borderRadius: '6px',
+  background: 'var(--ink-0)',
+  color: 'var(--paper)',
+  font: 'inherit',
+  cursor: 'pointer',
 })
 
-const rowLabelStyle = css({
-  fontWeight: 700,
+const searchStyle = css({
+  display: 'flex',
+  alignItems: 'flex-end',
+  gap: '10px',
+  flexWrap: 'wrap',
+  marginBlockEnd: '14px',
 })
 
-const rowDetailStyle = css({
-  color: 'var(--ink-3)',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  '@media (max-width: 34rem)': {
-    display: 'none',
-  },
-})
-
-const footerStyle = css({
-  marginBlockStart: '8px',
-  paddingBlockStart: '16px',
+const listStyle = css({
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
   borderBlockStart: '1px solid var(--line)',
+  '& li': { borderBlockEnd: '1px solid var(--line)' },
+  '& a': {
+    display: 'grid',
+    gridTemplateColumns: '4.5rem 1fr auto',
+    gap: '12px',
+    padding: '9px 2px',
+    color: 'var(--ink-1)',
+    textDecoration: 'none',
+  },
+  '& a:hover': { background: 'var(--paper-2)' },
+})
+
+const icaoStyle = css({ fontWeight: 700, letterSpacing: '0.04em' })
+
+const mapNoteStyle = css({
+  margin: '10px 0 0',
   fontSize: '12px',
   color: 'var(--ink-3)',
-  '& p': { margin: '0 0 6px' },
 })

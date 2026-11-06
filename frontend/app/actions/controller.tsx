@@ -7,15 +7,19 @@ import type { Answer } from '../lib/answer.ts'
 import {
   apiAsk,
   apiGetBrief,
-  apiGetHealth,
   apiGetHistory,
+  apiGetMapLayers,
   apiGetStation,
+  apiGetStations,
 } from '../lib/api.ts'
 import { routes } from '../routes.ts'
 import { AnswerView } from '../ui/answer.tsx'
 import { cardStyle, headingStyle, mutedStyle, Page } from '../ui/layout.tsx'
 import { HomePage } from './home-page.tsx'
 import { StationPage } from './station-page.tsx'
+
+/** Roughly the continental US, which is the default map view. */
+const CONUS_BBOX = '-125,24,-66,50'
 
 export default createController(routes, {
   actions: {
@@ -24,8 +28,16 @@ export default createController(routes, {
     },
 
     async home(context) {
-      let health = await apiGetHealth(context.request.signal)
-      return context.render(<HomePage health={health} />)
+      let query = context.url.searchParams.get('q') ?? ''
+      let signal = context.request.signal
+      let [stations, layers] = await Promise.all([
+        apiGetStations(query, signal),
+        apiGetMapLayers(CONUS_BBOX, signal),
+      ])
+
+      return context.render(
+        <HomePage layers={layers} query={query} stations={stations} />,
+      )
     },
 
     async station(context) {
@@ -65,6 +77,24 @@ export default createController(routes, {
           history={history}
         />,
       )
+    },
+
+    async layers(context) {
+      let result = await apiGetMapLayers(
+        context.url.searchParams.get('bbox'),
+        context.request.signal,
+      )
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'layer data is unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
     },
 
     async ask(context) {

@@ -2,9 +2,11 @@
 
 import type {
   Health,
+  MapLayersResponse,
   StationBrief,
   StationDetailResponse,
   StationHistory,
+  StationList,
 } from './api-types.ts'
 import type { Answer } from './answer.ts'
 
@@ -77,6 +79,21 @@ export function apiGetStation(
   signal?: AbortSignal,
 ): Promise<ApiResult<StationDetailResponse>> {
   return apiGet<StationDetailResponse>(`/api/stations/${encodeURIComponent(icao)}`, signal)
+}
+
+export function apiGetStations(
+  query: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<StationList>> {
+  return apiGet<StationList>(`/api/stations?q=${encodeURIComponent(query)}`, signal)
+}
+
+export function apiGetMapLayers(
+  bbox: string | null,
+  signal?: AbortSignal,
+): Promise<ApiResult<MapLayersResponse>> {
+  let query = bbox === null ? '' : `?bbox=${encodeURIComponent(bbox)}`
+  return apiGet<MapLayersResponse>(`/api/map/layers${query}`, signal)
 }
 
 export function apiGetHistory(
