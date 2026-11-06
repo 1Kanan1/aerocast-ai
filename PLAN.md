@@ -117,6 +117,40 @@ signature. Rationale, history and measurements belong in this file and in `CHANG
 Python: PEP 8, enforced by ruff at 79 columns with pycodestyle warnings and naming checks,
 `ruff format` for layout, and ty for types. TypeScript: strict, `tsc --noEmit`.
 
+**Commit messages.** Conventional Commits, checked by `scripts/commit-msg`: an allowed
+type, an optional scope, and a subject inside 72 characters. Body lines get the same 72,
+so a commit reads the same in a terminal, in `git log --oneline`, and in a forge.
+
+The body says why the change was needed, the context a reader cannot recover from the
+code, and what it changes for everything downstream. It does not list files, summarize
+what each module now does, or repeat a diff. The reviewer reads the diff; the commit is
+the only place the reasoning survives, so spending the body on a file list throws away
+the one thing that could not be generated from the patch. The hook enforces the shape
+and cannot judge the content, so that part is on the author.
+
+Good, a fix whose failure mode is invisible in the patch:
+
+```
+fix(api): cast nullable filters before asyncpg binds them
+
+asyncpg cannot infer a type for a bare None parameter, so an unfiltered
+/api/advisories request failed with a type error while every filtered
+request worked. Casting :kind in the query keeps one statement for both
+cases instead of branching on whether the filter was supplied.
+```
+
+Bad, the same change restated as an inventory:
+
+```
+update files
+
+- app/api/weather.py: added cast(:kind as text)
+- tests: updated
+```
+
+The second version is recoverable from `git show` in ten seconds and loses the reason the
+line exists at all.
+
 ## 4. Data source
 
 **AWC only. Open-Meteo is out of scope.** Recorded as a decision because it will come
