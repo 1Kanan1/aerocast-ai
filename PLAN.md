@@ -136,6 +136,11 @@ Those three paragraphs are the shape when the change has all three. A small chan
 need only the first, or the first and second; padding to three is worse than a short
 body, because a slot filled with "this is cleaner" costs attention and says nothing.
 
+Nothing in the subject or body points at the build plan. No phase numbers, no task
+names, no "see PLAN.md": the plan is a working document that can be rewritten or dropped
+while the log stays, so a commit that borrows its vocabulary starts decaying as soon as
+the plan moves. Describe the work in the project's own terms instead.
+
 What the body never does is list files, summarize what each module now does, or repeat a
 diff. The reviewer reads the diff; the commit is the only place the reasoning survives,
 so spending the body on a file list throws away the one thing that could not be
