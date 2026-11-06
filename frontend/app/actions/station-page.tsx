@@ -47,12 +47,6 @@ export function StationPage(handle: Handle<StationPageProps>) {
             </h1>
             <CategoryBadge category={category} />
           </div>
-          <p mix={metaStyle}>
-            METAR from {detail.meta.source} · observed{' '}
-            {timeLabel(detail.meta.observed_at)} ·{' '}
-            {ageLabel(detail.meta.age_seconds)}
-            {detail.meta.stale ? <span mix={staleStyle}>stale</span> : null}
-          </p>
         </section>
 
         <section aria-labelledby="metar-heading" mix={cardStyle}>
@@ -81,6 +75,14 @@ export function StationPage(handle: Handle<StationPageProps>) {
               ) : (
                 <Facts facts={facts} />
               )}
+              <p mix={provenanceStyle}>
+                METAR from {detail.meta.source} · observed{' '}
+                {timeLabel(detail.meta.observed_at)} ·{' '}
+                {ageLabel(detail.meta.age_seconds)}
+                {detail.meta.stale ? (
+                  <span mix={staleStyle}>stale</span>
+                ) : null}
+              </p>
             </>
           )}
         </section>
@@ -90,7 +92,7 @@ export function StationPage(handle: Handle<StationPageProps>) {
             Forecast
           </h2>
           {forecast ? (
-            <TafTable taf={forecast} />
+            <TafTable source={detail.meta.source} taf={forecast} />
           ) : taf === null ? (
             <p mix={mutedStyle}>No TAF on file for this station.</p>
           ) : (
@@ -103,7 +105,14 @@ export function StationPage(handle: Handle<StationPageProps>) {
             Last 48 hours
           </h2>
           {history.ok && history.data ? (
-            <Timeline points={timelinePoints(history.data.data)} />
+            <>
+              <p mix={provenanceStyle}>
+                METAR history from {history.data.meta.source} · latest{' '}
+                {timeLabel(history.data.meta.observed_at)} ·{' '}
+                {ageLabel(history.data.meta.age_seconds)}
+              </p>
+              <Timeline points={timelinePoints(history.data.data)} />
+            </>
           ) : (
             <p mix={mutedStyle}>The history feed is unavailable right now.</p>
           )}
@@ -114,27 +123,35 @@ export function StationPage(handle: Handle<StationPageProps>) {
             Advisories within 50 nm
           </h2>
           {detail.data.advisories.length === 0 ? (
-            <p mix={mutedStyle}>No active advisories nearby.</p>
+            <p mix={mutedStyle}>
+              No active advisories nearby. Source aviationweather.gov, as of
+              this request.
+            </p>
           ) : (
-            <ul mix={advisoryListStyle}>
-              {detail.data.advisories.map((advisory) => (
-                <li key={`${advisory.kind}-${advisory.source_id}`}>
-                  <span mix={hazardStyle}>{advisory.hazard}</span>
-                  <span>
-                    {advisory.kind.toUpperCase()} {advisory.source_id}
-                  </span>
-                  <span mix={mutedStyle}>
-                    {advisory.distance_nm.toFixed(0)} nm
-                    {advisory.top_ft
-                      ? ` · to ${advisory.top_ft.toLocaleString()} ft`
-                      : ''}
-                  </span>
-                  <span mix={mutedStyle}>
-                    until {timeLabel(advisory.valid_to)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul mix={advisoryListStyle}>
+                {detail.data.advisories.map((advisory) => (
+                  <li key={`${advisory.kind}-${advisory.source_id}`}>
+                    <span mix={hazardStyle}>{advisory.hazard}</span>
+                    <span>
+                      {advisory.kind.toUpperCase()} {advisory.source_id}
+                    </span>
+                    <span mix={mutedStyle}>
+                      {advisory.distance_nm.toFixed(0)} nm
+                      {advisory.top_ft
+                        ? ` · to ${advisory.top_ft.toLocaleString()} ft`
+                        : ''}
+                    </span>
+                    <span mix={mutedStyle}>
+                      until {timeLabel(advisory.valid_to)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p mix={provenanceStyle}>
+                Source aviationweather.gov, active as of this request.
+              </p>
+            </>
           )}
         </section>
 
@@ -234,14 +251,19 @@ function Fact(handle: Handle<{ label: string; value: string }>) {
   )
 }
 
-function TafTable(handle: Handle<{ taf: NonNullable<Bundle['stations'][0]['taf']> }>) {
+function TafTable(
+  handle: Handle<{
+    source: string
+    taf: NonNullable<Bundle['stations'][0]['taf']>
+  }>,
+) {
   return () => {
-    let { taf } = handle.props
+    let { source, taf } = handle.props
 
     return (
       <>
-        <p mix={validityStyle}>
-          Issued {timeLabel(taf.issued_at)} · valid{' '}
+        <p mix={provenanceStyle}>
+          TAF from {source} · issued {timeLabel(taf.issued_at)} · valid{' '}
           {windowLabel(taf.valid_from, taf.valid_to)}
         </p>
         <table mix={tableStyle}>
@@ -332,8 +354,8 @@ const badgeStyle = css({
   letterSpacing: '0.08em',
 })
 
-const metaStyle = css({
-  margin: '8px 0 0',
+const provenanceStyle = css({
+  margin: '12px 0 0',
   fontSize: '12px',
   color: 'var(--ink-3)',
 })
@@ -388,12 +410,6 @@ const basisStyle = css({
   margin: '12px 0 0',
   fontSize: '12px',
   color: 'var(--ink-2)',
-})
-
-const validityStyle = css({
-  margin: '0 0 10px',
-  fontSize: '12px',
-  color: 'var(--ink-3)',
 })
 
 const tableStyle = css({
