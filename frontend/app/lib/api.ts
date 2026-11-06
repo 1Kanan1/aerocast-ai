@@ -1,6 +1,12 @@
 /** Server-side only: the browser never calls the API, so no credential can reach the page. */
 
-import type { Health } from './api-types.ts'
+import type {
+  Health,
+  StationBrief,
+  StationDetailResponse,
+  StationHistory,
+} from './api-types.ts'
+import type { Answer } from './answer.ts'
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 const DEFAULT_TIMEOUT_MS = 3000
@@ -18,6 +24,7 @@ async function request<T>(
   path: string,
   signal: AbortSignal | undefined,
   acceptStatus: StatusPredicate,
+  init: RequestInit = {},
 ): Promise<ApiResult<T>> {
   let url: string
   try {
@@ -29,11 +36,14 @@ async function request<T>(
   let combined = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_TIMEOUT_MS)])
     : AbortSignal.timeout(DEFAULT_TIMEOUT_MS)
+  let headers = new Headers(init.headers)
+  headers.set('accept', 'application/json')
 
   try {
     let response = await fetch(url, {
+      ...init,
       signal: combined,
-      headers: { accept: 'application/json' },
+      headers,
     })
 
     if (!acceptStatus(response.status)) {
@@ -60,4 +70,47 @@ export function apiGet<T>(path: string, signal?: AbortSignal): Promise<ApiResult
 /** Health answers 503 when the database is down, and that body is worth rendering. */
 export function apiGetHealth(signal?: AbortSignal): Promise<ApiResult<Health>> {
   return request<Health>('/api/health', signal, (status) => status === 200 || status === 503)
+}
+
+export function apiGetStation(
+  icao: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<StationDetailResponse>> {
+  return apiGet<StationDetailResponse>(`/api/stations/${encodeURIComponent(icao)}`, signal)
+}
+
+export function apiGetHistory(
+  icao: string,
+  hours: number,
+  signal?: AbortSignal,
+): Promise<ApiResult<StationHistory>> {
+  return apiGet<StationHistory>(
+    `/api/stations/${encodeURIComponent(icao)}/observations?hours=${hours}`,
+    signal,
+  )
+}
+
+export function apiGetBrief(
+  icao: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<StationBrief>> {
+  return apiGet<StationBrief>(`/api/stations/${encodeURIComponent(icao)}/brief`, signal)
+}
+
+/** The explanation layer answers questions about one station's facts. */
+export function apiAsk(
+  icao: string,
+  question: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<Answer>> {
+  return request<Answer>(
+    '/api/ask',
+    signal,
+    (status) => status >= 200 && status < 300,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ icao, question }),
+    },
+  )
 }
