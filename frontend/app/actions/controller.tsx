@@ -19,8 +19,8 @@ import { AnswerView } from '../ui/answer.tsx'
 import { cardStyle, headingStyle, mutedStyle, Page } from '../ui/layout.tsx'
 import { AboutPage } from './about-page.tsx'
 import { AdvisoriesPage } from './advisories-page.tsx'
-import { HomePage } from './home-page.tsx'
 import { StationPage } from './station-page.tsx'
+import { MapShell } from '../ui/map-shell.tsx'
 
 /** Roughly the continental US, which is the default map view. */
 const CONUS_BBOX = '-125,24,-66,50'
@@ -40,7 +40,7 @@ export default createController(routes, {
       ])
 
       return context.render(
-        <HomePage layers={layers} query={query} stations={stations} />,
+        <MapShell layers={layers} query={query} stations={stations} />,
       )
     },
 

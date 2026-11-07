@@ -306,14 +306,11 @@ function hatchPattern(): ImageData {
   return context.getImageData(0, 0, size, size)
 }
 
-const frameStyle = css({ position: 'relative' })
+const frameStyle = css({ position: 'absolute', inset: 0 })
 
 const mapStyle = css({
-  height: 'clamp(320px, 55vh, 560px)',
+  height: '100%',
   width: '100%',
-  border: '1px solid var(--line)',
-  borderRadius: '8px',
-  overflow: 'hidden',
   background: 'var(--paper)',
 })
 

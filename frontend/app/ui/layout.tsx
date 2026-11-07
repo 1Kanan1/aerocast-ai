@@ -17,7 +17,7 @@ export function Page(handle: Handle<PageProps>) {
 
     return (
       <Document title={title}>
-        <main mix={pageStyle}>
+        <main mix={[tokensStyle, pageStyle]}>
           <div mix={columnStyle}>
             <header mix={mastheadStyle}>
               <a href={routes.home.href()} mix={wordmarkStyle}>
@@ -61,7 +61,7 @@ export function Page(handle: Handle<PageProps>) {
   }
 }
 
-export const pageStyle = css({
+export const tokensStyle = css({
   '--ink-0': '#0a0a0a',
   '--ink-1': '#1a1a1a',
   '--ink-2': '#3d3d3d',
@@ -70,6 +70,9 @@ export const pageStyle = css({
   '--paper': '#fafafa',
   '--paper-2': '#f0efed',
   '--accent': '#b23a1f',
+})
+
+export const pageStyle = css({
   '& *, & *::before, & *::after': { boxSizing: 'border-box' },
   minHeight: '100vh',
   margin: 0,
@@ -102,7 +105,7 @@ const mastheadStyle = css({
   borderBlockEnd: '1px solid var(--line)',
 })
 
-const wordmarkStyle = css({
+export const wordmarkStyle = css({
   fontSize: '13px',
   fontWeight: 700,
   letterSpacing: '0.22em',
@@ -110,7 +113,7 @@ const wordmarkStyle = css({
   textDecoration: 'none',
 })
 
-const navStyle = css({
+export const navStyle = css({
   display: 'flex',
   gap: '18px',
   '& a': { color: 'var(--ink-3)', textDecoration: 'none' },
