@@ -677,6 +677,17 @@ where it matters. There are three reasons, all stored in `ai_answers.reason`:
 - `not_in_bundle`: weather data the bundle does not carry, such as a NOTAM or a report
   older than the history window.
 
+The gate is not a jargon ban. Two synthetic refs widen what an explanation may cite:
+
+- `defs.<KEY>` points at a bundled definition. A claim that explains VFR or MVFR can
+  cite it and pass the number check, because the definition text carries those numbers.
+- `station.<ICAO>` points at the selected station's identifier and name only. It is
+  deliberately not the whole station node, otherwise a weather claim could borrow the
+  observation's numbers through the station ref.
+
+This keeps the rule that weather values need a cited fact, while a reader who does not
+know an acronym gets an answer instead of a silent fallback.
+
 ### Scope without a second model
 
 The claim gate enforces provenance, not intent. A second classifier would add a call

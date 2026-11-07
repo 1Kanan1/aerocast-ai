@@ -15,6 +15,7 @@ BUNDLE = {
     "stations": [
         {
             "icao": "KSFO",
+            "name": "San Francisco Intl",
             "metar": {
                 "ref": "metar.KSFO",
                 "flight_category": {
@@ -34,6 +35,12 @@ BUNDLE = {
             },
         }
     ],
+    "definitions": {
+        "VFR": "Ceiling above 3,000 ft and visibility above 5 statute miles.",
+        "MVFR": (
+            "Ceiling 1,000 to 3,000 ft or visibility 3 to 5 statute miles."
+        ),
+    },
     "brief_hash": "sha256:test",
 }
 
@@ -185,6 +192,83 @@ def test_a_real_bundle_accepts_a_grounded_claim():
     )
 
     assert result.claims[0].refs == ("metar.KSFO.ceiling",)
+
+
+def test_a_real_bundle_exposes_its_definitions_as_refs():
+    reference = datetime(2026, 11, 1, 9, 30, tzinfo=UTC)
+    station = BriefStation(
+        icao="KSFO",
+        name="San Francisco Intl",
+        lat=37.6196,
+        lon=-122.3656,
+        observation=parse_metar(
+            "METAR KSFO 010856Z 27009KT 7SM RA FEW018 BKN024 OVC030 "
+            "12/10 A2985",
+            reference=reference,
+        ),
+    )
+    bundle = build_brief([station], reference)
+
+    result = validate_answer(
+        answer(
+            "KSFO has a broken layer.",
+            [
+                claim(
+                    "MVFR is a ceiling of 1,000 to 3,000 ft.",
+                    "defs.MVFR",
+                )
+            ],
+        ),
+        bundle,
+    )
+
+    assert result.claims[0].refs == ("defs.MVFR",)
+
+
+def test_a_definition_claim_can_cite_the_definition():
+    result = validate_answer(
+        answer(
+            "VFR still applies.",
+            [claim("VFR means a ceiling above 3,000 ft.", "defs.VFR")],
+        ),
+        BUNDLE,
+    )
+
+    assert result.claims[0].refs == ("defs.VFR",)
+
+
+def test_station_identity_can_be_cited():
+    result = validate_answer(
+        answer(
+            "This is KSFO.",
+            [claim("KSFO is San Francisco Intl.", "station.KSFO")],
+        ),
+        BUNDLE,
+    )
+
+    assert result.claims[0].refs == ("station.KSFO",)
+
+
+def test_station_ref_cannot_borrow_weather_numbers():
+    with pytest.raises(InvalidAnswerError, match="number not in"):
+        validate_answer(
+            answer(
+                "This is KSFO.",
+                [claim("The ceiling is 4,300 ft.", "station.KSFO")],
+            ),
+            BUNDLE,
+        )
+
+
+def test_an_unknown_definition_ref_is_rejected():
+    with pytest.raises(InvalidAnswerError, match="unknown ref"):
+        validate_answer(
+            answer(
+                "A term.",
+                [claim("LIFR is the lowest category.", "defs.NOPE")],
+            ),
+            BUNDLE,
+        )
 
 
 def test_parse_model_answer_reads_a_draft():

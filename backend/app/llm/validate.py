@@ -102,6 +102,31 @@ def _ref_index(bundle: object) -> dict[str, object]:
                 walk(item)
 
     walk(bundle)
+
+    if isinstance(bundle, dict):
+        # Definitions are plain strings in the wire shape, so give them a
+        # synthetic ref. Without this, explaining "VFR" cannot be cited.
+        definitions = bundle.get("definitions")
+        if isinstance(definitions, dict):
+            for key, value in definitions.items():
+                if isinstance(key, str) and isinstance(value, str):
+                    index[f"defs.{key}"] = value
+
+        # Identity only. Indexing the whole station node would let a weather
+        # claim borrow its numbers through the station ref.
+        stations = bundle.get("stations")
+        if isinstance(stations, list):
+            for station in stations:
+                if not isinstance(station, dict):
+                    continue
+                icao = station.get("icao")
+                name = station.get("name")
+                if isinstance(icao, str) and isinstance(name, str):
+                    index[f"station.{icao}"] = {
+                        "icao": icao,
+                        "name": name,
+                    }
+
     return index
 
 

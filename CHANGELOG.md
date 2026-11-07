@@ -142,6 +142,9 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - Claim gate: a non-refusal answer needs at least one claim, every ref must exist in the
   bundle, every number must appear in the cited fact, and verdict language rejects the
   answer. This is what stops small talk and fabricated weather from rendering.
+- Two synthetic refs keep the gate from rejecting explanations: `defs.<KEY>` for bundled
+  definitions such as VFR, and `station.<ICAO>` for the selected station's identifier and
+  name. The station ref carries no weather values on purpose.
 - Prompt with a scope contract, refusal examples and a delimited user question, plus a
   version string for the future cache key.
 - Eval fixture expanded to 24 questions across on-topic, decision, off-topic and hostile
