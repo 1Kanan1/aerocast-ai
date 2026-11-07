@@ -111,6 +111,24 @@ export default createController(routes, {
       })
     },
 
+    async brief(context) {
+      let result = await apiGetBrief(
+        context.params.icao.toUpperCase(),
+        context.request.signal,
+      )
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'station facts are unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    },
+
     async ask(context) {
       let icao = context.params.icao.toUpperCase()
       let form = await context.request.formData()

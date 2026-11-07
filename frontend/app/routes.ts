@@ -9,4 +9,6 @@ export const routes = route({
   about: '/about',
   /** Same-origin JSON proxy for the map island. */
   layers: get('/api/map/layers'),
+  /** Same-origin JSON proxy for the station popup. */
+  brief: get('/api/stations/:icao/brief'),
 })
