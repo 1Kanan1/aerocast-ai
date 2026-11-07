@@ -211,6 +211,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
           claims: payload.claims ?? [],
           caveats: payload.caveats ?? [],
           refusal: null,
+          notice: payload.notice ?? null,
         }
       } else {
         entry.problem = 'The explanation layer returned an unexpected answer.'

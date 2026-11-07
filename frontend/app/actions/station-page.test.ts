@@ -191,4 +191,28 @@ describe('station page', () => {
     assert.match(html, /Answer for KSFO/)
     assert.match(html, /not available right now/)
   })
+
+  it('renders the template and a quiet notice for a fallback', async (t) => {
+    mockApi(t, {
+      ...stationHandlers(),
+      '/api/ask': () =>
+        Response.json({
+          summary: 'KSFO is reporting VFR conditions, visibility 10 SM.',
+          claims: [],
+          caveats: [],
+          refusal: null,
+          notice:
+            'Showing the decoded facts for this station. A generated ' +
+            'explanation was not available for this question.',
+        }),
+    })
+
+    let response = await ask(null)
+    let html = await response.text()
+
+    assert.equal(response.status, 200)
+    assert.match(html, /KSFO is reporting VFR conditions/)
+    assert.match(html, /Showing the decoded facts/)
+    assert.equal(/invalid/i.test(html), false)
+  })
 })

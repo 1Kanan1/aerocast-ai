@@ -662,8 +662,10 @@ question
    `clear to depart`, `recommend flying`, `is it safe` and similar, matched against both
    question and output.
 5. **Length cap** on summary and claim count.
-6. On any failure: `status = invalid`, and the UI shows the facts plus the template
-   summary. It never shows a partially validated paragraph.
+6. On any failure: `status = invalid`, and the UI shows the facts plus a
+   deterministic template summary. One quiet line above the facts says a generated
+   explanation was not available for this question. The word "invalid" stays in the
+   database and out of the copy, because the weather facts are not what failed.
 
 Refusals get fixed, pre-written copy, not a model-generated apology. Deterministic
 where it matters. There are three reasons, all stored in `ai_answers.reason`:

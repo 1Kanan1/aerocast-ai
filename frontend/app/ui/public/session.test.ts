@@ -154,6 +154,7 @@ describe('station session', () => {
             ],
             caveats: [],
             refusal: null,
+            notice: null,
           })
         : stationApi(path),
     )
@@ -165,6 +166,29 @@ describe('station session', () => {
     let entry = session.selected?.thread[0]
     assert.equal(entry?.answer?.summary, 'KSFO is VFR.')
     assert.equal(entry?.answer?.claims[0]?.refs[0], 'metar.KSFO.visibility')
+  })
+
+  it('keeps a fallback notice separate from the summary', async (t) => {
+    mockFetch(t, (path) =>
+      path.includes('/ask')
+        ? Response.json({
+            summary: 'KSFO is reporting VFR conditions.',
+            claims: [],
+            caveats: [],
+            refusal: null,
+            notice:
+              'Showing the decoded facts for this station. A generated explanation was not available for this question.',
+          })
+        : stationApi(path),
+    )
+    let session = new StationSession()
+    await session.select('KSFO')
+
+    await session.ask('How is the visibility?')
+
+    let entry = session.selected?.thread[0]
+    assert.equal(entry?.answer?.claims.length, 0)
+    assert.match(entry?.answer?.notice ?? '', /decoded facts/)
   })
 
   it('ignores an empty question and clears the selection', async (t) => {

@@ -125,6 +125,9 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 
 - Answer contract: `summary`, claims with refs, caveats and a refusal reason, with a JSON
   schema the provider can enforce.
+- Deterministic fallback: when validation fails, a template summary built from the same
+  bundle is shown with a quiet notice that a generated explanation was not available.
+  The status stays `invalid` server-side; the copy never blames the facts.
 - Deterministic guardrails: verdict regex with fixed refusal copy for three reasons
   (`decision`, `out_of_scope`, `not_in_bundle`), checked before the provider and again
   against the output.

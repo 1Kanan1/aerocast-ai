@@ -55,6 +55,7 @@ export const AskPanel = clientEntry(
                   claims: payload.claims ?? [],
                   caveats: payload.caveats ?? [],
                   refusal: null,
+                  notice: payload.notice ?? null,
                 }
               } else {
                 problem = 'The explanation layer returned an unexpected answer.'

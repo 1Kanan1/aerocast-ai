@@ -28,6 +28,7 @@ class Answer:
     claims: tuple[DraftClaim, ...]
     caveats: tuple[str, ...]
     refusal: str | None
+    notice: str | None = None
 
 
 ANSWER_SCHEMA: dict[str, object] = {
@@ -71,6 +72,7 @@ def wire_answer(model: Answer) -> dict[str, object]:
         ],
         "caveats": list(model.caveats),
         "refusal": model.refusal,
+        "notice": model.notice,
     }
 
 

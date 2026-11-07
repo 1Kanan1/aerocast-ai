@@ -10,4 +10,5 @@ export interface Answer {
   claims: Claim[]
   caveats: string[]
   refusal: string | null
+  notice: string | null
 }

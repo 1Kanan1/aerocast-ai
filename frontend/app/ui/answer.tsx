@@ -39,14 +39,19 @@ export function AnswerView(handle: Handle<AnswerViewProps>) {
     return (
       <div mix={answerStyle}>
         <p mix={leadStyle}>{answer.summary}</p>
-        <ul mix={claimsStyle}>
-          {answer.claims.map((claim) => (
-            <li key={claim.text}>
-              <span>{claim.text}</span>
-              <span mix={refsStyle}>{claim.refs.join(' · ')}</span>
-            </li>
-          ))}
-        </ul>
+        {answer.notice === null ? null : (
+          <p mix={noticeStyle}>{answer.notice}</p>
+        )}
+        {answer.claims.length === 0 ? null : (
+          <ul mix={claimsStyle}>
+            {answer.claims.map((claim) => (
+              <li key={claim.text}>
+                <span>{claim.text}</span>
+                <span mix={refsStyle}>{claim.refs.join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {answer.caveats.length === 0 ? null : (
           <ul mix={caveatsStyle}>
             {answer.caveats.map((caveat) => (
@@ -62,6 +67,12 @@ export function AnswerView(handle: Handle<AnswerViewProps>) {
 const answerStyle = css({ marginBlockStart: '16px' })
 
 const leadStyle = css({ margin: '0 0 10px' })
+
+const noticeStyle = css({
+  margin: '0 0 10px',
+  fontSize: '12px',
+  color: 'var(--ink-3)',
+})
 
 const plainStyle = css({ margin: 0, fontSize: '12px' })
 
