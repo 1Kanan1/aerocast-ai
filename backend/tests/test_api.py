@@ -5,8 +5,10 @@ from typing import Any
 
 import httpx
 
+from app.api import ask as ask_module
 from app.api import stations as stations_module
 from app.api import weather as weather_module
+from app.llm.client import Completion
 from app.main import app
 
 OBSERVED_AT = datetime(2026, 11, 1, 8, 56, tzinfo=UTC)
@@ -177,6 +179,14 @@ async def get(path: str) -> httpx.Response:
         return await client.get(path)
 
 
+async def post(path: str, body: dict[str, object]) -> httpx.Response:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
+        return await client.post(path, json=body)
+
+
 async def test_station_search_wraps_its_rows(monkeypatch) -> None:
     install(monkeypatch)
 
@@ -326,3 +336,129 @@ async def test_openapi_points_the_brief_at_the_bundle_schema() -> None:
     name = reference["schema"]["$ref"].rsplit("/", 1)[-1]
 
     assert name in schema["components"]["schemas"]
+
+
+def completion(payload: dict[str, object]) -> Completion:
+    return Completion(
+        payload=payload,
+        provider="test",
+        model="test-model",
+        latency_ms=5,
+    )
+
+
+def grounded_answer() -> dict[str, object]:
+    return {
+        "summary": "KSFO is MVFR.",
+        "claims": [
+            {
+                "text": "The ceiling is 2,400 ft.",
+                "refs": ["metar.KSFO.ceiling"],
+            }
+        ],
+        "caveats": [],
+        "refusal_kind": None,
+    }
+
+
+async def test_ask_returns_a_validated_answer(monkeypatch) -> None:
+    install(monkeypatch)
+
+    async def fake_complete(*args: object, **kwargs: object):
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    response = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["summary"] == "KSFO is MVFR."
+    assert body["claims"][0]["refs"] == ["metar.KSFO.ceiling"]
+    assert body["notice"] is None
+
+
+async def test_ask_refuses_a_verdict_without_a_model(monkeypatch) -> None:
+    install(monkeypatch)
+
+    async def fail(*args: object, **kwargs: object):
+        raise AssertionError("a verdict question must not reach a model")
+
+    monkeypatch.setattr(ask_module, "complete", fail)
+
+    response = await post(
+        "/api/ask", {"icao": "KSFO", "question": "Is it safe to fly?"}
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["refusal"]
+    assert body["claims"] == []
+
+
+async def test_ask_falls_back_when_the_answer_is_invented(monkeypatch) -> None:
+    install(monkeypatch)
+    invented: dict[str, object] = {
+        "summary": "KSFO is MVFR.",
+        "claims": [
+            {
+                "text": "The ceiling is 12,000 ft.",
+                "refs": ["metar.KSFO.ceiling"],
+            }
+        ],
+        "caveats": [],
+        "refusal_kind": None,
+    }
+
+    async def fake_complete(*args: object, **kwargs: object):
+        return completion(invented)
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    response = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["notice"]
+    assert body["claims"] == []
+    assert "KSFO is reporting" in body["summary"]
+
+
+async def test_ask_falls_back_when_every_provider_is_down(monkeypatch) -> None:
+    install(monkeypatch)
+
+    async def fake_complete(*args: object, **kwargs: object):
+        return None
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    response = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["notice"]
+    assert body["notice"].startswith("Showing the decoded facts")
+
+
+async def test_ask_rejects_a_blank_question(monkeypatch) -> None:
+    install(monkeypatch)
+
+    response = await post("/api/ask", {"icao": "KSFO", "question": "   "})
+
+    assert response.status_code == 422
+
+
+async def test_ask_answers_404_for_an_unknown_station(monkeypatch) -> None:
+    install(monkeypatch, stations=[])
+
+    response = await post(
+        "/api/ask", {"icao": "KZZZ", "question": "What is the ceiling?"}
+    )
+
+    assert response.status_code == 404

@@ -118,11 +118,16 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - Advisories page grouped by hazard, and an about page with provenance, the cross-check
   numbers, the limits, and live API, database and provider status.
 - Ask panel as a real form: the enhanced path posts JSON, the no-JavaScript path receives
-  an HTML answer page, and the panel says the explanation layer is unavailable until
-  Phase 5 exists.
+  an HTML answer page, and both render the same answer contract, including the template
+  notice when a generated explanation is unavailable.
 
 **Explanations (in progress)**
 
+- `POST /api/ask`: takes a station and a question, rebuilds the fact bundle, checks for
+  verdict requests, walks `LLM_CHAIN`, validates the citations and returns either a
+  grounded answer or the deterministic template with its notice.
+- Provider client: OpenAI-compatible chat completions, pinned model ids, one attempt per
+  rung, JSON schema for Gemini and JSON mode elsewhere, and a fenced-response reader.
 - Answer contract: `summary`, claims with refs, caveats and a refusal reason, with a JSON
   schema the provider can enforce.
 - Deterministic fallback: when validation fails, a template summary built from the same

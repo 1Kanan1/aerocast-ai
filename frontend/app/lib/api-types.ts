@@ -18,6 +18,24 @@ export interface AdvisoryList {
   meta: Meta
 }
 
+export interface Answer {
+  summary: string
+  claims: AnswerClaim[]
+  caveats: string[]
+  refusal: string | null
+  notice: string | null
+}
+
+export interface AnswerClaim {
+  text: string
+  refs: string[]
+}
+
+export interface AskRequest {
+  icao: string
+  question: string
+}
+
 export interface Bundle {
   generated_at: string
   definition_version: string

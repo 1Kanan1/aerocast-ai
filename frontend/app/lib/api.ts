@@ -13,6 +13,7 @@ import type { Answer } from './answer.ts'
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 const DEFAULT_TIMEOUT_MS = 3000
+const ASK_TIMEOUT_MS = 180_000
 
 export interface ApiResult<T> {
   ok: boolean
@@ -28,6 +29,7 @@ async function request<T>(
   signal: AbortSignal | undefined,
   acceptStatus: StatusPredicate,
   init: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<ApiResult<T>> {
   let url: string
   try {
@@ -37,8 +39,8 @@ async function request<T>(
   }
 
   let combined = signal
-    ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_TIMEOUT_MS)])
-    : AbortSignal.timeout(DEFAULT_TIMEOUT_MS)
+    ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+    : AbortSignal.timeout(timeoutMs)
   let headers = new Headers(init.headers)
   headers.set('accept', 'application/json')
 
@@ -56,7 +58,7 @@ async function request<T>(
     return { ok: true, status: response.status, data: (await response.json()) as T }
   } catch (error) {
     if (error instanceof Error && error.name === 'TimeoutError') {
-      return { ok: false, status: 0, error: `API timed out after ${DEFAULT_TIMEOUT_MS}ms` }
+      return { ok: false, status: 0, error: `API timed out after ${timeoutMs}ms` }
     }
     return {
       ok: false,
@@ -134,5 +136,6 @@ export function apiAsk(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ icao, question }),
     },
+    ASK_TIMEOUT_MS,
   )
 }

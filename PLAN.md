@@ -816,6 +816,22 @@ production and the chain degrades to the two hosted providers without any code c
 Run with `make eval`, output a table of pass/fail that goes in the README. This is the
 single most persuasive artifact in the repo and it costs about half a day.
 
+### Phase 5, as built
+
+`POST /api/ask` takes `{icao, question}`, rebuilds the bundle through the same helper as
+the brief endpoint, and returns the answer contract. The request path is:
+
+1. Verdict regex. A match returns fixed refusal copy without a provider call.
+2. Provider chain from `LLM_CHAIN`. One attempt per rung, pinned model ids, per-provider
+   timeouts. Gemini uses the JSON schema response format; the others ask for JSON.
+3. Parse and validate. Unknown refs, invented numbers, verdict language, too many claims
+   or a refusal that carries claims all reject the draft.
+4. On rejection or an unreachable chain, the deterministic template and its notice.
+
+Remaining for the phase: the answer cache, the per-IP token bucket, `ai_answers` storage,
+and the `make eval` runner. The endpoint works without them; the free tiers are the reason
+they exist, not the correctness of the answer.
+
 ## 10. Frontend
 
 ### Routes

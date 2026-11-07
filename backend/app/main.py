@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import __version__
+from app.api.ask import router as ask_router
 from app.api.health import router as health_router
 from app.api.meta import router as meta_router
 from app.api.stations import router as stations_router
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(meta_router)
     app.include_router(stations_router)
     app.include_router(weather_router)
+    app.include_router(ask_router)
     return app
 
 

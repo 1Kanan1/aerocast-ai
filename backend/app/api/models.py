@@ -302,3 +302,21 @@ class AdvisoryList(Envelope[list[Advisory]]): ...
 
 
 class PirepList(Envelope[list[Pirep]]): ...
+
+
+class AskRequest(BaseModel):
+    icao: str = Field(min_length=3, max_length=8)
+    question: str = Field(min_length=1, max_length=400)
+
+
+class AnswerClaim(BaseModel):
+    text: str
+    refs: list[str]
+
+
+class Answer(BaseModel):
+    summary: str
+    claims: list[AnswerClaim]
+    caveats: list[str]
+    refusal: str | None
+    notice: str | None

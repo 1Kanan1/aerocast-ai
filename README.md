@@ -16,10 +16,13 @@ Phases 0 to 4 are complete. The API serves stations, observations, advisories, P
 the fact bundle; the web app is a dark, glassy map workspace with an icon navbar, a search
 popover, a station card anchored above the selected dot that carries the full station
 detail, and an explanation drawer that slides in on ask. It also serves the station pages
-with the 48 hour timeline, the advisory list and the about page. The explanation layer is
-Phase 5, so the drawer currently reports that it is unavailable while the facts around it
-keep working. See [PLAN.md](PLAN.md) for the build order and [CHANGELOG.md](CHANGELOG.md)
-for what has landed so far.
+with the 48 hour timeline, the advisory list and the about page.
+
+Phase 5 is in progress: `POST /api/ask` builds the fact bundle, checks for verdict
+requests, walks the provider chain, validates citations and falls back to a deterministic
+template with a quiet notice. Answer caching, per-IP rate limits and stored answers are
+still to come. See [PLAN.md](PLAN.md) for the build order and
+[CHANGELOG.md](CHANGELOG.md) for what has landed so far.
 
 ## Stack
 

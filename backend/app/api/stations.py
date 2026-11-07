@@ -92,11 +92,25 @@ async def observations(
 
 @router.get("/stations/{icao}/brief", response_model=models.StationBrief)
 async def brief(icao: str) -> dict[str, Any]:
-    """The fact bundle, and nothing the model inferred.
+    """The fact bundle, and nothing the model inferred."""
+    bundle, observation = await station_bundle(icao)
 
-    Rebuilt from the stored raw text rather than the cached `decoded`
-    column, so a bundle can never describe a newer or older parser than
-    the one serving it.
+    return wrap(
+        bundle,
+        source="aviationweather.gov",
+        observed_at=observation["obs_time"] if observation else None,
+        fetched_at=observation["fetched_at"] if observation else None,
+        max_age_seconds=METAR_STALE_SECONDS,
+    )
+
+
+async def station_bundle(
+    icao: str,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Rebuild the bundle from stored raw text, for the brief and /ask.
+
+    A bundle can never describe a newer or older parser than the one
+    serving it.
     """
     station = await fetch_one(
         f"select {STATION_COLUMNS} from stations where icao = :icao",
@@ -133,13 +147,7 @@ async def brief(icao: str) -> dict[str, Any]:
         datetime.now(UTC),
     )
 
-    return wrap(
-        bundle,
-        source="aviationweather.gov",
-        observed_at=observation["obs_time"] if observation else None,
-        fetched_at=observation["fetched_at"] if observation else None,
-        max_age_seconds=METAR_STALE_SECONDS,
-    )
+    return bundle, observation
 
 
 @router.get("/map/layers", response_model=models.MapLayersResponse)
