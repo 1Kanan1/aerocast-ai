@@ -57,7 +57,7 @@ async def test_chain_order_is_preserved() -> None:
         "gemini",
         "gemini",
     ]
-    assert described[2]["model"] == "gemini-3.8-flash"
+    assert described[2]["model"] == "gemini-3.5-flash-lite"
 
 
 async def test_gemini_expands_into_its_model_ladder() -> None:

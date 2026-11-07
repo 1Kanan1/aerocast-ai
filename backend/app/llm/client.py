@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -13,6 +14,18 @@ import httpx
 from app.config import Settings
 
 logger = logging.getLogger(__name__)
+
+#: No single rung may hold an interactive request this long.
+RUNG_BUDGET_SECONDS = 8.0
+
+#: A rung that just timed out or returned 429 is skipped for a while.
+COOLDOWN_SECONDS = 60.0
+
+_cooldowns: dict[str, float] = {}
+
+
+def reset_cooldowns() -> None:
+    _cooldowns.clear()
 
 
 @dataclass(frozen=True)
@@ -82,21 +95,48 @@ async def complete(
     settings: Settings,
     messages: list[dict[str, str]],
     schema: dict[str, object],
+    budget_seconds: float | None = None,
 ) -> Completion | None:
-    """Try each rung once. None means every provider failed."""
+    """Try each rung once. None means failure or an exhausted budget."""
+    deadline = (
+        None if budget_seconds is None else time.monotonic() + budget_seconds
+    )
+
     for rung in rungs(settings):
+        key = f"{rung.name}:{rung.model}"
+        if _cooldowns.get(key, 0.0) > time.monotonic():
+            logger.info("skipping %s during its cooldown", key)
+            continue
+
+        timeout = rung.timeout
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.info("answer budget exhausted before %s", rung.name)
+                break
+            timeout = min(timeout, remaining, RUNG_BUDGET_SECONDS)
+
         started = time.monotonic()
         try:
-            payload = await _call(rung, messages, schema)
-        except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
+            async with asyncio.timeout(timeout):
+                payload = await _call(rung, messages, schema, timeout)
+        except (
+            TimeoutError,
+            httpx.HTTPError,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as error:
             logger.warning(
                 "provider %s (%s) failed: %s",
                 rung.name,
                 rung.model,
                 error,
             )
+            _cooldowns[key] = time.monotonic() + COOLDOWN_SECONDS
             continue
 
+        _cooldowns.pop(key, None)
         return Completion(
             payload=payload,
             provider=rung.name,
@@ -111,6 +151,7 @@ async def _call(
     rung: Rung,
     messages: list[dict[str, str]],
     schema: dict[str, object],
+    timeout: float,
 ) -> object:
     body: dict[str, Any] = {
         "model": rung.model,
@@ -135,7 +176,7 @@ async def _call(
         {"authorization": f"Bearer {rung.api_key}"} if rung.api_key else {}
     )
 
-    async with httpx.AsyncClient(timeout=rung.timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             rung.base_url.rstrip("/") + "/chat/completions",
             json=body,

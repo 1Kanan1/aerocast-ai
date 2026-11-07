@@ -128,6 +128,9 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   grounded answer or the deterministic template with its notice.
 - Provider client: OpenAI-compatible chat completions, pinned model ids, one attempt per
   rung, JSON schema for Gemini and JSON mode elsewhere, and a fenced-response reader.
+- Interactive answer budget: 20s for the whole chain, 8s for any rung, and a 60s cooldown
+  after a timeout or 429. The fast Gemini model is first by default, so a thinking model
+  cannot hold the drawer for a minute.
 - Answer contract: `summary`, claims with refs, caveats and a refusal reason, with a JSON
   schema the provider can enforce.
 - Deterministic fallback: when validation fails, a template summary built from the same

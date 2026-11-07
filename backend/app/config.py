@@ -39,9 +39,10 @@ class Settings(BaseSettings):
     gemini_base_url: str = (
         "https://generativelanguage.googleapis.com/v1beta/openai/"
     )
-    #: Ladder, tried left to right. Quality first, then the two fast models.
+    #: Ladder, tried left to right. Fast first for the interactive drawer;
+    #: put the quality model first when running the eval.
     gemini_models: str = (
-        "gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
+        "gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.8-flash"
     )
     gemini_reasoning_effort: str = "low"
 

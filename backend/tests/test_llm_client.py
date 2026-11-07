@@ -1,10 +1,18 @@
 import json
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from app.config import Settings
-from app.llm.client import complete, rungs
+from app.llm.client import complete, reset_cooldowns, rungs
+
+
+@pytest.fixture(autouse=True)
+def clear_cooldowns():
+    reset_cooldowns()
+    yield
+    reset_cooldowns()
 
 
 def settings(**overrides: object) -> Settings:
@@ -98,6 +106,60 @@ async def test_complete_returns_none_when_every_rung_fails(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
     assert await complete(settings(), [], {}) is None
+
+
+async def test_complete_stops_before_the_budget_runs_out(monkeypatch):
+    async def fail(*args: object, **kwargs: object) -> FakeResponse:
+        raise AssertionError("no provider should be called")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fail)
+
+    assert await complete(settings(), [], {}, budget_seconds=0) is None
+
+
+async def test_complete_falls_through_a_timeout(monkeypatch):
+    attempts: list[str] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        attempts.append(url)
+        if "z.ai" in url:
+            raise TimeoutError
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    completion = await complete(settings(), [], {}, budget_seconds=5)
+
+    assert completion is not None
+    assert completion.provider == "gemini"
+    assert len(attempts) == 2
+
+
+async def test_a_failed_rung_is_skipped_during_its_cooldown(monkeypatch):
+    attempts: list[str] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        attempts.append(url)
+        if "z.ai" in url:
+            raise httpx.ConnectError("down")
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    await complete(settings(), [], {})
+    await complete(settings(), [], {})
+
+    assert len([url for url in attempts if "z.ai" in url]) == 1
 
 
 async def test_complete_accepts_a_fenced_json_answer(monkeypatch):

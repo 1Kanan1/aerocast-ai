@@ -13,7 +13,7 @@ import type { Answer } from './answer.ts'
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 const DEFAULT_TIMEOUT_MS = 3000
-const ASK_TIMEOUT_MS = 180_000
+const ASK_TIMEOUT_MS = 30_000
 
 export interface ApiResult<T> {
   ok: boolean

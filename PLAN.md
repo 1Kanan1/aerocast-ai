@@ -746,16 +746,18 @@ disagreed twice.
   explicitly, per provider. The Z.ai `thinking` parameter is Z.ai-specific and must not be
   sent to Gemini.
 
-Consequence for timeouts: they are per provider, not global. 20s for the fast path and 120s
-for a provider that thinks. One global value either fails Gemini too early or lets a hung
-Z.ai request stall for two minutes before the failover.
+Consequence for timeouts: they are per provider, not global, and capped again per request.
+`/api/ask` gives the whole chain 20s and no single rung more than 8s, so a thinking model
+cannot hold the drawer for a minute. The longer provider timeouts remain for
+non-interactive callers. A rung that times out or returns 429 is skipped for 60s, which
+keeps a hung provider from costing every request.
 
 Consequence for the fallback rung: a 63s explanation is not an interactive experience, so
-the Gemini rung is a **ladder**, not a single model: `gemini-3.8-flash` for quality first,
-then `gemini-3.6-flash`, then `gemini-3.5-flash-lite`. The first rung that answers inside
-its budget wins, and a timeout or a rejected claim falls through to the next. Dropping
-`gemini-3.8-flash` from `GEMINI_MODELS` makes the rung fast first and good second, which is
-a one line change once the eval fixture says how much quality it is actually buying.
+the default ladder is fast first: `gemini-3.5-flash-lite`, `gemini-3.6-flash`, then
+`gemini-3.8-flash`. The first rung that answers inside its budget wins, and a timeout or
+a rejected claim falls through to the next. Putting the quality model first is one env
+change when `make eval` says how much quality it actually buys, at the cost of a slower
+drawer.
 
 ### The local rung
 
@@ -823,7 +825,9 @@ the brief endpoint, and returns the answer contract. The request path is:
 
 1. Verdict regex. A match returns fixed refusal copy without a provider call.
 2. Provider chain from `LLM_CHAIN`. One attempt per rung, pinned model ids, per-provider
-   timeouts. Gemini uses the JSON schema response format; the others ask for JSON.
+   timeouts, a 20s request budget and an 8s cap per rung. Gemini uses the JSON schema
+   response format; the others ask for JSON. A rung that times out or returns 429 is
+   skipped for 60s.
 3. Parse and validate. Unknown refs, invented numbers, verdict language, too many claims
    or a refusal that carries claims all reject the draft.
 4. On rejection or an unreachable chain, the deterministic template and its notice.

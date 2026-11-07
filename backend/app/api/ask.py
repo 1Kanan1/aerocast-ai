@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["ask"])
 
+ASK_BUDGET_SECONDS = 20.0
+
 
 @router.post("/ask", response_model=models.Answer)
 async def ask(request: models.AskRequest) -> dict[str, object]:
@@ -41,6 +43,7 @@ async def ask(request: models.AskRequest) -> dict[str, object]:
         get_settings(),
         build_messages(bundle, question),
         ANSWER_SCHEMA,
+        budget_seconds=ASK_BUDGET_SECONDS,
     )
     if completion is None:
         return wire_answer(fallback_answer(bundle))
