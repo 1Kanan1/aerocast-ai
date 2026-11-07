@@ -192,7 +192,7 @@ const drawerStyle = css({
 
 const disclaimerStyle = css({
   position: 'absolute',
-  bottom: '14px',
+  bottom: '44px',
   left: '50%',
   transform: 'translateX(-50%)',
   zIndex: 2,
