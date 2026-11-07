@@ -3,6 +3,7 @@ import { clientEntry, css, on } from 'remix/component'
 
 import type { Station } from '../../lib/api-types.ts'
 import { routes } from '../../routes.ts'
+import { session } from '../../ui/public/session.ts'
 import {
   ArrowIcon,
   CloseIcon,
@@ -126,10 +127,26 @@ export const StationSearch = clientEntry(
               <p mix={emptyStyle}>No stations match “{query}”.</p>
             )
           ) : (
-            <ul mix={listStyle}>
+            <ul
+              mix={[
+                listStyle,
+                on('click', (event) => {
+                  let anchor = (event.target as HTMLElement).closest('a')
+                  let icao = anchor?.dataset.icao
+                  if (!icao) return
+
+                  event.preventDefault()
+                  document.getElementById('station-search')?.hidePopover()
+                  void session.select(icao)
+                }),
+              ]}
+            >
               {results.map((station) => (
                 <li key={station.icao}>
-                  <a href={routes.station.href({ icao: station.icao })}>
+                  <a
+                    data-icao={station.icao}
+                    href={routes.station.href({ icao: station.icao })}
+                  >
                     <span mix={icaoStyle}>{station.icao}</span>
                     <span>{station.name}</span>
                     <span mix={stateStyle}>{station.state ?? ''}</span>
@@ -149,7 +166,6 @@ const panelStyle = css({
   inset: 'auto',
   top: '88px',
   left: '50%',
-  transform: 'translateX(-50%)',
   width: 'min(560px, calc(100vw - 24px))',
   margin: 0,
   padding: '8px',
@@ -160,6 +176,14 @@ const panelStyle = css({
   boxShadow: 'var(--shadow)',
   backdropFilter: 'blur(26px) saturate(1.2)',
   WebkitBackdropFilter: 'blur(26px) saturate(1.2)',
+  opacity: 0,
+  transform: 'translate(-50%, -6px)',
+  transition:
+    'opacity 160ms ease, transform 160ms ease, display 160ms allow-discrete, overlay 160ms allow-discrete',
+  '&:popover-open': { opacity: 1, transform: 'translate(-50%, 0)' },
+  '@starting-style': {
+    '&:popover-open': { opacity: 0, transform: 'translate(-50%, -6px)' },
+  },
   '&::backdrop': {
     background: 'rgba(0, 0, 0, 0.5)',
     backdropFilter: 'blur(3px)',

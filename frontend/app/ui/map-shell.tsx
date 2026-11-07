@@ -175,19 +175,20 @@ const drawerStyle = css({
   margin: 0,
   padding: 0,
   border: 0,
-  borderInlineStart: '1px solid var(--glass-border)',
-  background: 'var(--glass-strong)',
+  borderInlineStart: '1px solid rgba(255, 255, 255, 0.14)',
+  background: 'rgba(18, 18, 22, 0.42)',
   color: 'var(--ink-0)',
-  boxShadow: '-30px 0 90px rgba(0, 0, 0, 0.6)',
-  backdropFilter: 'blur(28px) saturate(1.2)',
-  WebkitBackdropFilter: 'blur(28px) saturate(1.2)',
+  boxShadow: '-30px 0 90px rgba(0, 0, 0, 0.65)',
+  backdropFilter: 'blur(34px) saturate(1.3)',
+  WebkitBackdropFilter: 'blur(34px) saturate(1.3)',
   transform: 'translateX(100%)',
-  transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  transition:
+    'transform 240ms cubic-bezier(0.22, 1, 0.36, 1), display 240ms allow-discrete, overlay 240ms allow-discrete',
   '&:popover-open': { transform: 'translateX(0)' },
   '@starting-style': {
     '&:popover-open': { transform: 'translateX(100%)' },
   },
-  '&::backdrop': { background: 'rgba(0, 0, 0, 0.4)' },
+  '&::backdrop': { background: 'rgba(0, 0, 0, 0.45)' },
 })
 
 const disclaimerStyle = css({
