@@ -1,22 +1,41 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import type { ThreadEntry } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import { closePopover, onPopoverDismiss } from '#app/ui/public/popover.ts'
-import { AnswerView } from '#app/ui/answer.tsx'
+import { SendIcon } from '#app/ui/public/icons.tsx'
+import {
+  type Suggestion,
+  AssistantTurn,
+  ThreadWelcome,
+  UserTurn,
+} from '#app/ui/public/thread-parts.tsx'
 
 const DRAWER_EXIT_MS = 200
+
+const SUGGESTIONS: readonly Suggestion[] = [
+  { prompt: 'What is the ceiling?' },
+  { prompt: 'What is the visibility?' },
+  { prompt: 'What is the wind doing?' },
+  { prompt: 'What does the forecast say?' },
+  { prompt: 'What does MVFR mean?' },
+]
 
 /** The persistent right column: one thread, shared with the station popup. */
 export const ChatSidebar = clientEntry(
   import.meta.url,
   function ChatSidebar(handle: Handle) {
     let root: HTMLElement | undefined
+    let scroller: HTMLElement | undefined
+    let draft = ''
 
     function drawer(): HTMLElement | null {
       let popover = root?.closest('[popover]')
       return popover instanceof HTMLElement ? popover : null
+    }
+
+    function scrollToEnd(): void {
+      if (scroller) scroller.scrollTop = scroller.scrollHeight
     }
 
     handle.queueTask(() => {
@@ -27,19 +46,36 @@ export const ChatSidebar = clientEntry(
         () => closePopover(panel, DRAWER_EXIT_MS),
         handle.signal,
       )
+      scrollToEnd()
     })
 
-    session.addEventListener('change', () => handle.update(), {
-      signal: handle.signal,
-    })
+    session.addEventListener(
+      'change',
+      async () => {
+        await handle.update()
+        scrollToEnd()
+      },
+      { signal: handle.signal },
+    )
 
     return () => {
       let station = session.selected
+      let pending =
+        station !== null && station.thread.some((entry) => entry.pending)
+      let canAsk = station !== null && !pending
 
       return (
         <div mix={[sidebarStyle, ref((node) => (root = node))]}>
           <header mix={headerStyle}>
-            <span mix={titleStyle}>Explanation</span>
+            <div mix={headingStyle}>
+              <span mix={titleStyle}>Explanation</span>
+              {station === null ? null : (
+                <span mix={stationLineStyle}>
+                  {station.icao} · {station.name}
+                  {station.category === null ? '' : ` · ${station.category}`}
+                </span>
+              )}
+            </div>
             <span mix={actionsStyle}>
               {station === null ? null : (
                 <button
@@ -65,32 +101,32 @@ export const ChatSidebar = clientEntry(
             </span>
           </header>
 
-          <div mix={threadStyle}>
+          <div mix={[threadStyle, ref((node) => (scroller = node))]}>
             {station === null ? (
-              <p mix={promptStyle}>
-                Select a station on the map to ask about its weather. Answers
-                restate the facts shown there and cite them.
-              </p>
-            ) : (
-              <>
-                <p mix={stationStyle}>
-                  <strong>{station.icao}</strong> · {station.name}
-                  {station.category === null ? '' : ` · ${station.category}`}
+              <div mix={emptyStyle}>
+                <p mix={kickerStyle}>Explanation layer</p>
+                <h2 mix={emptyTitleStyle}>Select a station</h2>
+                <p mix={emptyTextStyle}>
+                  Pick a dot on the map, then ask about its weather. Answers
+                  restate the facts shown there and cite them.
                 </p>
-                {station.thread.length === 0 ? (
-                  <p mix={promptStyle}>
-                    Nothing asked yet. The explanation layer may only describe
-                    this station's facts.
-                  </p>
-                ) : (
-                  station.thread.map((entry, index) => (
-                    <Exchange
-                      entry={entry}
-                      key={`${entry.question}-${index}`}
-                    />
-                  ))
-                )}
-              </>
+              </div>
+            ) : station.thread.length === 0 ? (
+              <ThreadWelcome
+                category={station.category}
+                disabled={!canAsk}
+                icao={station.icao}
+                name={station.name}
+                onAsk={(prompt) => void session.ask(prompt)}
+                suggestions={SUGGESTIONS}
+              />
+            ) : (
+              station.thread.map((entry, index) => (
+                <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
+                  <UserTurn question={entry.question} />
+                  <AssistantTurn entry={entry} />
+                </div>
+              ))
             )}
           </div>
 
@@ -100,22 +136,63 @@ export const ChatSidebar = clientEntry(
               on('submit', (event) => {
                 event.preventDefault()
                 let form = event.currentTarget
-                let question = String(new FormData(form).get('question') ?? '')
+                let question = draft.trim()
+                let field = form.elements.namedItem('question')
                 form.reset()
-                void session.ask(question)
+                if (field instanceof HTMLTextAreaElement) {
+                  field.style.height = 'auto'
+                }
+                draft = ''
+                handle.update()
+                if (question !== '') void session.ask(question)
               }),
             ]}
           >
-            <textarea
-              maxLength={400}
-              name="question"
-              placeholder="Ask about the selected station"
-              rows={2}
-              disabled={station === null}
-            />
-            <button disabled={station === null} mix={askStyle} type="submit">
-              Ask
-            </button>
+            <div mix={composerShellStyle}>
+              <textarea
+                aria-label="Ask about the selected station"
+                disabled={!canAsk}
+                maxLength={400}
+                mix={[
+                  on('input', (event) => {
+                    draft = event.currentTarget.value
+                    let field = event.currentTarget
+                    field.style.height = 'auto'
+                    field.style.height = `${Math.min(field.scrollHeight, 132)}px`
+                    handle.update()
+                  }),
+                  on('keydown', (event) => {
+                    if (event.key !== 'Enter' || event.shiftKey) return
+                    event.preventDefault()
+                    event.currentTarget.form?.requestSubmit()
+                  }),
+                ]}
+                name="question"
+                placeholder={
+                  station === null
+                    ? 'Select a station first'
+                    : `Ask about ${station.icao}'s weather…`
+                }
+                rows={1}
+              />
+              <div mix={composerRowStyle}>
+                <span mix={hintStyle}>
+                  {station === null
+                    ? 'Select a station to ask'
+                    : pending
+                      ? 'Working…'
+                      : 'Enter to send · Shift+Enter for a new line'}
+                </span>
+                <button
+                  aria-label="Send question"
+                  disabled={!canAsk || draft.trim() === ''}
+                  mix={sendStyle}
+                  type="submit"
+                >
+                  <SendIcon />
+                </button>
+              </div>
+            </div>
           </form>
 
           <p mix={disclaimerStyle}>
@@ -129,47 +206,61 @@ export const ChatSidebar = clientEntry(
   },
 )
 
-function Exchange(handle: Handle<{ entry: ThreadEntry }>) {
-  return () => {
-    let { entry } = handle.props
-
-    return (
-      <article mix={exchangeStyle}>
-        <p mix={questionStyle}>{entry.question}</p>
-        {entry.pending ? (
-          <p mix={pendingStyle}>Asking…</p>
-        ) : (
-          <AnswerView
-            answer={entry.answer}
-            problem={entry.problem}
-            refusal={entry.refusal}
-          />
-        )}
-      </article>
-    )
-  }
-}
-
 const sidebarStyle = css({
   display: 'flex',
   flexDirection: 'column',
   height: '100%',
   minHeight: 0,
-  padding: '16px 18px',
-  gap: '12px',
 })
 
 const headerStyle = css({
   display: 'flex',
-  alignItems: 'center',
+  alignItems: 'flex-start',
   justifyContent: 'space-between',
   gap: '12px',
+  padding: '16px 20px 12px',
+  borderBlockEnd: '1px solid var(--glass-border)',
+})
+
+const headingStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
+  minWidth: 0,
+})
+
+const titleStyle = css({
+  fontSize: '10px',
+  fontWeight: 700,
+  letterSpacing: '0.16em',
+  textTransform: 'uppercase',
+  color: 'var(--ink-3)',
+})
+
+const stationLineStyle = css({
+  fontSize: '11px',
+  color: 'var(--ink-2)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
 })
 
 const actionsStyle = css({
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
+  flexShrink: 0,
+})
+
+const clearStyle = css({
+  border: 0,
+  background: 'none',
+  padding: 0,
+  color: 'var(--ink-3)',
+  font: 'inherit',
+  fontSize: '11px',
+  cursor: 'pointer',
+  '&:hover': { color: 'var(--ink-1)' },
 })
 
 const closeStyle = css({
@@ -186,85 +277,124 @@ const closeStyle = css({
   '&:hover': { color: 'var(--ink-0)', background: 'rgba(255, 255, 255, 0.08)' },
 })
 
-const titleStyle = css({
-  fontSize: '12px',
-  fontWeight: 700,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-2)',
-})
-
-const clearStyle = css({
-  border: 0,
-  background: 'none',
-  padding: 0,
-  color: 'var(--ink-3)',
-  font: 'inherit',
-  fontSize: '12px',
-  cursor: 'pointer',
-  textDecoration: 'underline',
-})
-
 const threadStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',
+  overflowX: 'hidden',
   display: 'flex',
   flexDirection: 'column',
-  gap: '12px',
+  gap: '22px',
+  padding: '16px 20px 8px',
+  scrollBehavior: 'smooth',
 })
 
-const stationStyle = css({ margin: 0, fontSize: '13px' })
+const exchangeStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px',
+})
 
-const promptStyle = css({ margin: 0, fontSize: '12px', color: 'var(--ink-3)' })
+const emptyStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '7px',
+  marginBlock: 'auto',
+  paddingBlock: '12px',
+})
+
+const kickerStyle = css({
+  margin: 0,
+  fontSize: '10px',
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+  color: 'var(--accent)',
+})
+
+const emptyTitleStyle = css({
+  margin: 0,
+  fontSize: '20px',
+  fontWeight: 600,
+  color: 'var(--ink-0)',
+})
+
+const emptyTextStyle = css({
+  margin: 0,
+  fontSize: '12px',
+  lineHeight: 1.55,
+  color: 'var(--ink-3)',
+})
 
 const composerStyle = css({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
+  padding: '12px 20px 8px',
   borderBlockStart: '1px solid var(--glass-border)',
-  paddingBlockStart: '12px',
-  '& textarea': {
-    padding: '9px 11px',
-    border: '1px solid var(--glass-border)',
-    borderRadius: '14px',
-    background: 'rgba(0, 0, 0, 0.28)',
-    color: 'var(--ink-0)',
-    font: 'inherit',
-    resize: 'none',
-  },
 })
 
-const askStyle = css({
-  alignSelf: 'flex-end',
-  padding: '7px 18px',
-  border: '1px solid rgba(255, 255, 255, 0.16)',
+const composerShellStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  padding: '8px',
+  border: '1px solid var(--glass-border)',
+  borderRadius: '16px',
+  background: 'rgba(0, 0, 0, 0.26)',
+  transition: 'border-color 140ms ease',
+  '&:focus-within': { borderColor: 'rgba(255, 255, 255, 0.22)' },
+  '& textarea': {
+    width: '100%',
+    minHeight: '40px',
+    maxHeight: '132px',
+    padding: '5px 6px 3px',
+    border: 0,
+    outline: 'none',
+    background: 'transparent',
+    color: 'var(--ink-0)',
+    font: 'inherit',
+    fontSize: '13px',
+    lineHeight: 1.55,
+    resize: 'none',
+    overflowY: 'auto',
+  },
+  '& textarea::placeholder': { color: 'var(--ink-3)' },
+  '& textarea:disabled': { cursor: 'not-allowed' },
+})
+
+const composerRowStyle = css({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '8px',
+  paddingInlineStart: '6px',
+})
+
+const hintStyle = css({
+  fontSize: '10px',
+  color: 'var(--ink-3)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+})
+
+const sendStyle = css({
+  display: 'grid',
+  placeItems: 'center',
+  width: '30px',
+  height: '30px',
+  flexShrink: 0,
+  border: 0,
   borderRadius: '999px',
   background: 'var(--ink-0)',
   color: 'var(--paper)',
-  font: 'inherit',
   cursor: 'pointer',
-  '&:disabled': { opacity: 0.4, cursor: 'not-allowed' },
+  transition: 'opacity 120ms ease, transform 120ms ease',
+  '&:hover': { transform: 'translateY(-1px)' },
+  '&:disabled': { opacity: 0.3, cursor: 'not-allowed', transform: 'none' },
 })
 
 const disclaimerStyle = css({
   margin: 0,
-  paddingBlockStart: '10px',
-  borderBlockStart: '1px solid var(--glass-border)',
-  fontSize: '11px',
+  padding: '0 20px 16px',
+  fontSize: '10px',
+  lineHeight: 1.5,
   color: 'var(--ink-3)',
 })
-
-const exchangeStyle = css({
-  borderBlockEnd: '1px solid var(--glass-border)',
-  paddingBlockEnd: '10px',
-  '&:last-child': { borderBlockEnd: 0, paddingBlockEnd: 0 },
-})
-
-const questionStyle = css({
-  margin: '0 0 6px',
-  fontWeight: 700,
-  fontSize: '12px',
-})
-
-const pendingStyle = css({ margin: 0, fontSize: '12px', color: 'var(--ink-3)' })

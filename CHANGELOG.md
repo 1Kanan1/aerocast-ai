@@ -120,6 +120,10 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - Ask panel as a real form: the enhanced path posts JSON, the no-JavaScript path receives
   an HTML answer page, and both render the same answer contract, including the template
   notice when a generated explanation is unavailable.
+- Drawer thread redesign: a welcome screen with starter prompts for the selected station,
+  right-aligned user bubbles, plain assistant turns with cited claim cards, a pulsing
+  pending line, and one elevated composer pinned to the bottom. Enter sends, Shift+Enter
+  inserts a newline, and the send button stays disabled until a station is selected.
 
 **Explanations (in progress)**
 

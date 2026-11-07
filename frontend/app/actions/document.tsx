@@ -49,6 +49,14 @@ export function Document(handle: Handle<DocumentProps>) {
 @keyframes rmx-pop-out {
   from { opacity: 1; transform: translate(-50%, 0); }
   to { opacity: 0; transform: translate(-50%, -6px); }
+}
+@keyframes rmx-thread-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes rmx-thread-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
 }`}
           </style>
           <title>{title}</title>

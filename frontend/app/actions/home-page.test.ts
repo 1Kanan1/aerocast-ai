@@ -45,6 +45,8 @@ describe('map page', () => {
     assert.match(html, /AEROCAST/)
     assert.match(html, /MapIsland/)
     assert.match(html, /ChatSidebar/)
+    assert.match(html, /Select a station/)
+    assert.match(html, /Explanation layer/)
     assert.match(html, /StationPopup/)
     assert.match(html, /id="station-search"/)
     assert.match(html, /id="ai-drawer"/)

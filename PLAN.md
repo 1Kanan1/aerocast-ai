@@ -911,6 +911,11 @@ HTML, and the facts stay readable with JavaScript off.
   when the card asks a question, and it holds the whole thread for the selected station.
   Its translucent fill keeps the map readable underneath; the card stays more opaque
   because it carries dense text. The card shows facts only, so the answer has one home.
+  The thread follows the assistant-ui pattern: a welcome screen with starter prompts on
+  an empty station, right-aligned user bubbles, plain assistant turns with cited claim
+  cards, a pulsing pending line, and one elevated composer pinned to the bottom. The
+  composer sends on Enter, keeps Shift+Enter for a newline, and stays disabled until a
+  station is selected.
 - **MapLibre is vendored, not imported.** `public/vendor/maplibre/` holds the ESM
   build, its worker and the stylesheet, copied from the pinned dependency. v6
   resolves its worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`,
