@@ -1,8 +1,8 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import { ceilingFt, visibilitySm } from '../lib/observations.ts'
-import { timeLabel } from '../lib/format.ts'
+import { ceilingFt, visibilitySm } from '#app/lib/observations.ts'
+import { timeLabel } from '#app/lib/format.ts'
 
 export interface TimelinePoint {
   time: string

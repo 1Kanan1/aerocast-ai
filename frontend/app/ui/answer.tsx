@@ -1,7 +1,7 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import type { Answer } from '../lib/answer.ts'
+import type { Answer } from '#app/lib/answer.ts'
 
 interface AnswerViewProps {
   answer: Answer | null

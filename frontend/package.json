@@ -2,6 +2,10 @@
   "name": "aerocast-ai",
   "private": true,
   "type": "module",
+  "imports": {
+    "#app/*.ts": "./app/*.ts",
+    "#app/*.tsx": "./app/*.tsx"
+  },
   "scripts": {
     "dev": "NODE_ENV=development node --watch --import remix/node-tsx server.ts",
     "hmr": "NODE_ENV=development node hmr.ts",

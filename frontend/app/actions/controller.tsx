@@ -2,8 +2,8 @@ import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 import { createController } from 'remix/router'
 
-import { assets } from '../assets.ts'
-import type { Answer } from '../lib/answer.ts'
+import { assets } from '#app/assets.ts'
+import type { Answer } from '#app/lib/answer.ts'
 import {
   apiAsk,
   apiGetAdvisories,
@@ -13,14 +13,14 @@ import {
   apiGetMapLayers,
   apiGetStation,
   apiGetStations,
-} from '../lib/api.ts'
-import { routes } from '../routes.ts'
-import { AnswerView } from '../ui/answer.tsx'
-import { cardStyle, headingStyle, mutedStyle, Page } from '../ui/layout.tsx'
+} from '#app/lib/api.ts'
+import { routes } from '#app/routes.ts'
+import { AnswerView } from '#app/ui/answer.tsx'
+import { cardStyle, headingStyle, mutedStyle, Page } from '#app/ui/layout.tsx'
 import { AboutPage } from './about-page.tsx'
 import { AdvisoriesPage } from './advisories-page.tsx'
 import { StationPage } from './station-page.tsx'
-import { MapShell } from '../ui/map-shell.tsx'
+import { MapShell } from '#app/ui/map-shell.tsx'
 
 /** Roughly the continental US, which is the default map view. */
 const CONUS_BBOX = '-125,24,-66,50'

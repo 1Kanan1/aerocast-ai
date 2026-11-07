@@ -1,17 +1,17 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import { ageLabel, timeLabel, windowLabel } from '../../lib/format.ts'
+import { ageLabel, timeLabel, windowLabel } from '#app/lib/format.ts'
 import {
   ceilingLabel,
   periodWindLabel,
   temperatureLabel,
   visibilityLabel,
   windLabel,
-} from '../../lib/public/labels.ts'
-import { type Anchor, session } from '../../ui/public/session.ts'
-import type { SelectedStation } from '../../ui/public/session.ts'
-import { Timeline, timelinePoints } from '../../ui/timeline.tsx'
+} from '#app/lib/public/labels.ts'
+import { type Anchor, session } from '#app/ui/public/session.ts'
+import type { SelectedStation } from '#app/ui/public/session.ts'
+import { Timeline, timelinePoints } from '#app/ui/timeline.tsx'
 
 const CARD_GAP = 16
 const CARD_PAD = 12

@@ -1,10 +1,10 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import type { Advisory, AdvisoryList } from '../lib/api-types.ts'
-import type { ApiResult } from '../lib/api.ts'
-import { timeLabel, windowLabel } from '../lib/format.ts'
-import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '../ui/layout.tsx'
+import type { Advisory, AdvisoryList } from '#app/lib/api-types.ts'
+import type { ApiResult } from '#app/lib/api.ts'
+import { timeLabel, windowLabel } from '#app/lib/format.ts'
+import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '#app/ui/layout.tsx'
 
 export function AdvisoriesPage(
   handle: Handle<{ advisories: ApiResult<AdvisoryList> }>,

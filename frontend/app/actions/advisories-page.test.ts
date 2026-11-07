@@ -1,7 +1,7 @@
 import * as assert from 'remix/assert'
 import { describe, it } from 'remix/test'
 
-import { routes } from '../routes.ts'
+import { routes } from '#app/routes.ts'
 import { envelope, get, mockApi, META } from './test-helpers.ts'
 
 const ADVISORY = {

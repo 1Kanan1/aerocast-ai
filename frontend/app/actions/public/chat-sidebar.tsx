@@ -1,10 +1,10 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import type { ThreadEntry } from '../../ui/public/session.ts'
-import { session } from '../../ui/public/session.ts'
-import { closePopover, onPopoverDismiss } from '../../ui/public/popover.ts'
-import { AnswerView } from '../../ui/answer.tsx'
+import type { ThreadEntry } from '#app/ui/public/session.ts'
+import { session } from '#app/ui/public/session.ts'
+import { closePopover, onPopoverDismiss } from '#app/ui/public/popover.ts'
+import { AnswerView } from '#app/ui/answer.tsx'
 
 const DRAWER_EXIT_MS = 200
 

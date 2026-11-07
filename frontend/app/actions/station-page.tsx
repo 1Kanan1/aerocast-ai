@@ -7,23 +7,23 @@ import type {
   StationBrief,
   StationDetailResponse,
   StationHistory,
-} from '../lib/api-types.ts'
-import type { ApiResult } from '../lib/api.ts'
-import { ageLabel, timeLabel, windowLabel } from '../lib/format.ts'
+} from '#app/lib/api-types.ts'
+import type { ApiResult } from '#app/lib/api.ts'
+import { ageLabel, timeLabel, windowLabel } from '#app/lib/format.ts'
 import {
   CATEGORY_SHADES,
   categoryInk,
-} from '../lib/public/categories.ts'
+} from '#app/lib/public/categories.ts'
 import {
   ceilingLabel,
   periodWindLabel,
   temperatureLabel,
   visibilityLabel,
   windLabel,
-} from '../lib/public/labels.ts'
-import { routes } from '../routes.ts'
-import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '../ui/layout.tsx'
-import { Timeline, timelinePoints } from '../ui/timeline.tsx'
+} from '#app/lib/public/labels.ts'
+import { routes } from '#app/routes.ts'
+import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '#app/ui/layout.tsx'
+import { Timeline, timelinePoints } from '#app/ui/timeline.tsx'
 import { AskPanel } from './public/ask-panel.tsx'
 
 interface StationPageProps {

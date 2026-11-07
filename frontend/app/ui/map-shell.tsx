@@ -4,15 +4,15 @@ import { css } from 'remix/component'
 import type {
   MapLayersResponse,
   StationList as StationListResponse,
-} from '../lib/api-types.ts'
-import type { ApiResult } from '../lib/api.ts'
-import { EMPTY_LAYERS, islandLayers } from '../lib/map-data.ts'
-import { routes } from '../routes.ts'
-import { Document } from '../actions/document.tsx'
-import { ChatSidebar } from '../actions/public/chat-sidebar.tsx'
-import { MapIsland } from '../actions/public/map-island.tsx'
-import { StationPopup } from '../actions/public/station-popup.tsx'
-import { StationSearch } from '../actions/public/station-search.tsx'
+} from '#app/lib/api-types.ts'
+import type { ApiResult } from '#app/lib/api.ts'
+import { EMPTY_LAYERS, islandLayers } from '#app/lib/map-data.ts'
+import { routes } from '#app/routes.ts'
+import { Document } from '#app/actions/document.tsx'
+import { ChatSidebar } from '#app/actions/public/chat-sidebar.tsx'
+import { MapIsland } from '#app/actions/public/map-island.tsx'
+import { StationPopup } from '#app/actions/public/station-popup.tsx'
+import { StationSearch } from '#app/actions/public/station-search.tsx'
 import {
   AlertIcon,
   InfoIcon,

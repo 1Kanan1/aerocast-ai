@@ -1,8 +1,8 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on } from 'remix/component'
 
-import type { Answer } from '../../lib/answer.ts'
-import { AnswerView } from '../../ui/answer.tsx'
+import type { Answer } from '#app/lib/answer.ts'
+import { AnswerView } from '#app/ui/answer.tsx'
 
 interface AskResponse extends Partial<Answer> {
   error?: string

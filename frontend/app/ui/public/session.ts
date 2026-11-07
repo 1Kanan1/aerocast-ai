@@ -1,6 +1,6 @@
 import { TypedEventTarget } from 'remix/component'
 
-import type { Answer } from '../../lib/answer.ts'
+import type { Answer } from '#app/lib/answer.ts'
 import type {
   Bundle,
   BundleAdvisory,
@@ -8,8 +8,8 @@ import type {
   BundleTaf,
   StationDetailResponse,
   StationHistory,
-} from '../../lib/api-types.ts'
-import { routes } from '../../routes.ts'
+} from '#app/lib/api-types.ts'
+import { routes } from '#app/routes.ts'
 
 /** Same threshold the envelope applies, so the card can flag a stale report. */
 const METAR_STALE_SECONDS = 90 * 60

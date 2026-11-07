@@ -808,6 +808,10 @@ single most persuasive artifact in the repo and it costs about half a day.
 
 ### Remix 3 mechanics
 
+- Imports inside `app/` use the `#app/*` subpath alias declared in `frontend/package.json`
+  instead of climbing with `../`. Node resolves it natively, TypeScript follows the
+  `imports` field, and the asset server emits matching import-map scopes for the browser.
+  The extension stays in the specifier because this app does not bundle server code.
 - Controllers fetch from FastAPI server-side (`API_BASE_URL`), `cache: "no-store"`.
   Browser only ever talks to the same origin.
 - Four client entries, not one: the map, the station card, the search popover and the

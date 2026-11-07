@@ -1,8 +1,8 @@
 import type { Handle, RemixNode } from 'remix/component'
 import { css } from 'remix/component'
 
-import { Document } from '../actions/document.tsx'
-import { routes } from '../routes.ts'
+import { Document } from '#app/actions/document.tsx'
+import { routes } from '#app/routes.ts'
 
 export interface PageProps {
   active: 'map' | 'advisories' | 'about'

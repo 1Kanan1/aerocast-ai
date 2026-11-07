@@ -1,9 +1,9 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import type { Health } from '../lib/api-types.ts'
-import type { ApiResult } from '../lib/api.ts'
-import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '../ui/layout.tsx'
+import type { Health } from '#app/lib/api-types.ts'
+import type { ApiResult } from '#app/lib/api.ts'
+import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '#app/ui/layout.tsx'
 
 export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
   return () => {

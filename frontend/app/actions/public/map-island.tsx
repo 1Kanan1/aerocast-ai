@@ -7,18 +7,18 @@ import type {
 import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
-import type { MapLayers } from '../../lib/api-types.ts'
+import type { MapLayers } from '#app/lib/api-types.ts'
 import {
   type IslandLayers,
   islandLayers,
-} from '../../lib/map-data.ts'
-import { toDarkMonochrome } from '../../lib/monochrome.ts'
+} from '#app/lib/map-data.ts'
+import { toDarkMonochrome } from '#app/lib/monochrome.ts'
 import {
   CATEGORY_BADGES,
   CATEGORY_SHADES,
-} from '../../lib/public/categories.ts'
-import { routes } from '../../routes.ts'
-import { type Anchor, session } from '../../ui/public/session.ts'
+} from '#app/lib/public/categories.ts'
+import { routes } from '#app/routes.ts'
+import { type Anchor, session } from '#app/ui/public/session.ts'
 
 const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'

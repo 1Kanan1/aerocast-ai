@@ -1,15 +1,15 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import type { Station } from '../../lib/api-types.ts'
-import { routes } from '../../routes.ts'
-import { session } from '../../ui/public/session.ts'
-import { closePopover, onPopoverDismiss } from '../../ui/public/popover.ts'
+import type { Station } from '#app/lib/api-types.ts'
+import { routes } from '#app/routes.ts'
+import { session } from '#app/ui/public/session.ts'
+import { closePopover, onPopoverDismiss } from '#app/ui/public/popover.ts'
 import {
   ArrowIcon,
   CloseIcon,
   SearchIcon,
-} from '../../ui/public/icons.tsx'
+} from '#app/ui/public/icons.tsx'
 
 interface StationSearchProps {
   initial: Station[]

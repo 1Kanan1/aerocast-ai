@@ -1,6 +1,6 @@
 import type { TestContext } from 'remix/test'
 
-import { router } from '../router.ts'
+import { router } from '#app/router.ts'
 
 export const ORIGIN = 'http://localhost'
 

@@ -1,4 +1,4 @@
-import type { BundleMetar, BundlePeriod } from '../api-types.ts'
+import type { BundleMetar, BundlePeriod } from '#app/lib/api-types.ts'
 
 /** Fact labels shared by the station page and the map popup. */
 

@@ -1,7 +1,7 @@
 import * as assert from 'remix/assert'
 import { describe, it } from 'remix/test'
 
-import type { BundleMetar, BundlePeriod } from '../api-types.ts'
+import type { BundleMetar, BundlePeriod } from '#app/lib/api-types.ts'
 import {
   ceilingLabel,
   periodWindLabel,
