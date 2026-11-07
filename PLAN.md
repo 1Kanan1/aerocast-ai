@@ -810,20 +810,24 @@ single most persuasive artifact in the repo and it costs about half a day.
 
 - Controllers fetch from FastAPI server-side (`API_BASE_URL`), `cache: "no-store"`.
   Browser only ever talks to the same origin.
-- Three client entries, not one: the map, the station popup and the chat rail. They
-  share selection and thread state through `app/ui/public/session.ts` rather than
-  through a parent component, so a station click never re-renders the map.
+- Four client entries, not one: the map, the station card, the search popover and the
+  explanation drawer. They share selection, anchor and thread state through
+  `app/ui/public/session.ts` rather than through a parent component, so a station click
+  never re-renders the map.
 - The map island mounts MapLibre in `ref(...)`, disposes on `handle.signal`, re-fetches
   `/api/map/layers` on `moveend` with a debounce, and updates sources with `setData`.
-  Zoom sits bottom-left; a station click publishes the ICAO to the session.
-- Search is a normal `GET /` form. The server renders the results inside the overlay,
-  so it works without JavaScript and lands on the full station page; the map keeps
-  the quick path through the popup.
+  Zoom sits bottom-left. A station click publishes the ICAO and the dot's screen
+  point to the session, and `move` keeps that anchor current so the card follows.
+- The search bar is a native popover opened from a navbar icon, with `autofocus` and
+  Escape handled by the platform. Typing searches through `/api/stations`; submitting
+  without JavaScript is a normal `GET /` that renders results in the same popover.
+- The explanation drawer is a second native popover, slid in from the right. It opens
+  from the navbar icon or when the station card asks a question.
 - MapLibre is vendored into `frontend/public/vendor/maplibre/` and referenced
   through the import map. v6 loads its worker from a separate file at runtime, so
   vendoring the whole `dist` directory is less fight than teaching the asset server.
 - Timeline is server-rendered SVG small multiples. No chart library.
-- The popup and the chat rail post to the Remix ask route, which proxies to FastAPI.
+- The station card and the drawer post to the Remix ask route, which proxies to FastAPI.
   No key exists in the web container at all, so there is nothing to leak into a
   `clientEntry` prop (Remix serializes those into the page source).
 - Facts must remain readable with JavaScript disabled. Progressive enhancement is not
@@ -831,34 +835,45 @@ single most persuasive artifact in the repo and it costs about half a day.
 
 ### Design
 
-Strictly monochrome UI. Near-black ink on warm paper, one accent reserved for hazard
-outlines.
+Dark by default: near-black surfaces, off-white ink, and one accent reserved for
+hazards. Panels are glass: a translucent fill, a hairline light border, heavy blur
+behind it, and one soft shadow scale. Controls are pills, and on the map page the
+navbar, search and explanation float over the canvas instead of framing it.
 
 ```
-ink-0  #0a0a0a   ink-1  #1a1a1a   ink-2  #3d3d3d   ink-3  #6b6b6b
-line   #d4d4d4   paper  #fafafa   paper-2 #f0efed
-accent #b23a1f   (hazard outlines and the current-time marker only)
+ink-0  #f4f4f2   ink-1  #d7d7d3   ink-2  #a6a6a1   ink-3  #83837e
+line   rgba(255,255,255,0.10)     paper  #09090a   paper-2 #101012
+glass  rgba(22,22,25,0.62)         glass-strong rgba(24,24,28,0.86)
+accent #e0603f   (hazard outlines and stale badges only)
 ```
 
-Flight category is encoded as a grayscale intensity ramp plus a letter badge (V/M/I/L),
-so it never depends on color alone. An optional high-contrast mode uses the conventional
-green/blue/red for pilots who expect it, but the default is monochrome as asked.
+Flight category is a grey ramp plus a letter badge (V/M/I/L) in both places it appears.
+On the dark basemap the ramp runs the other way: VFR is the dimmest dot and LIFR the
+brightest, so worse weather stands out instead of fading in. The basemap is the light
+OpenFreeMap style greyscaled and inverted at load time, which keeps one style source and
+no second key.
 
 Advisory polygons get hatched fills and thin accent outlines, never a fill color as the
 only signal.
 
 ### Phase 4, as built
 
-Three islands: the map, the station popup and the chat rail. They share selection and
-thread state through `app/ui/public/session.ts`, so the map is built once and a station
-click never re-renders it. Everything else is server-rendered HTML, and the facts stay
-readable with JavaScript off.
+Four islands: the map, the station card, the search popover and the explanation drawer.
+They share selection, anchor and thread state through `app/ui/public/session.ts`, so the
+map is built once and a station click never re-renders it. Everything else is
+server-rendered HTML, and the facts stay readable with JavaScript off.
 
-- **The map page is a workspace, not a document.** A full-bleed map with the search
-  overlay and the station card on the left, a fixed chat rail on the right, and the
-  flight-planning disclaimer in the rail footer. Under 900px the rail moves below
-  the map instead of becoming a drawer, which keeps every control visible without a
-  toggle.
+- **The map page floats its chrome.** A dark, full-bleed canvas with a pill navbar, a
+  glass search popover, a card anchored to the clicked dot, a drawer that slides in
+  from the right, and the flight-planning line in a pill at the bottom. Nothing frames
+  the map.
+- **The station card follows its dot.** The map publishes the projected screen point on
+  click and on every move; the card picks the roomier side of the dot, clamps itself to
+  the map area and shrinks its scroll region rather than overflowing. Its composer is
+  pinned to the card's bottom edge.
+- **The explanation is a drawer, not a column.** It opens from the navbar icon or when
+  the card asks a question, and it holds the whole thread for the selected station. The
+  card shows facts only, so the answer has one home.
 - **MapLibre is vendored, not imported.** `public/vendor/maplibre/` holds the ESM
   build, its worker and the stylesheet, copied from the pinned dependency. v6
   resolves its worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`,
@@ -866,26 +881,22 @@ readable with JavaScript off.
   relationship. The island loads the module through a runtime `import()` of that
   path; the specifier is marked external in `assets.ts` so the compiler leaves it
   alone instead of failing to resolve it.
-- **The basemap is monochrome by rewriting the style, not with a CSS filter.** A
-  filter over the canvas would desaturate the hazard outlines too, and those are the
-  one colour the design keeps. `lib/monochrome.ts` walks the style JSON and replaces
-  every colour with its grey equivalent; the data layers are added afterwards, so
-  they keep their ink and accent.
-- **The map never calls FastAPI directly.** `GET /api/map/layers` and
-  `GET /api/stations/:icao/brief` on the web origin proxy the hop server-side and return
-  the envelope as JSON, so the browser stays same-origin and no API base URL reaches the
+- **The basemap is grey and inverted, not filtered.** A CSS filter would desaturate the
+  hazard outlines too. `lib/monochrome.ts` walks the style JSON, greyscales every colour
+  and inverts it; the data layers are added afterwards, so they keep their ink.
+- **The map never calls FastAPI directly.** `GET /api/map/layers`,
+  `GET /api/stations` and `GET /api/stations/:icao/brief` on the web origin proxy the
+  hop server-side, so the browser stays same-origin and no API base URL reaches the
   page. Moving the viewport refetches layers with a 250 ms debounce.
-- **Search is a plain form.** The server renders the results in the overlay, so it works
-  without JavaScript and links to the full station page; the popup is the quick path.
+- **Search opens from an icon and searches in place.** A native popover handles the
+  open state, focus and Escape; typing is debounced into `/api/stations`, and the no-JS
+  path is still a normal `GET /` whose results render in the same popover.
 - **Badges wait for zoom.** Dots carry the category as a grey ramp at every zoom;
   the letter is a symbol layer that appears at zoom 5, because 3,500 letters over the
   national view is noise rather than information.
 - **The timeline is two server-rendered SVG panels**: ceiling and visibility across
   the history feed, with the MVFR and IFR thresholds dashed in. No chart library, no
   client code.
-- **The popup and the rail share one conversation.** The popup shows the latest exchange
-  above its pinned composer; the rail shows the whole thread for the same station. Both
-  post to the Remix ask route, which proxies FastAPI.
 - **The ask path is a real form.** With JavaScript it intercepts the submit and expects
   JSON; without it, the same POST returns an HTML page carrying the answer. FastAPI's
   `/api/ask` arrives in Phase 5, so today the thread says the explanation layer is not

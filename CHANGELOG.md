@@ -94,8 +94,19 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   and stylesheet), station dots on a grey category ramp, hatched advisory polygons with an
   accent outline, station click-through, and a debounced viewport refetch through
   `GET /api/map/layers` on the same origin.
-- Monochrome basemap: the OpenFreeMap style JSON is rewritten to grey at load time instead
+- Dark basemap: the OpenFreeMap style JSON is greyscaled and inverted at load time instead
   of filtering the canvas, so the hazard outlines keep the one accent colour.
+- Dark, glassy chrome: a floating pill navbar with icon buttons, a search popover, a card
+  anchored to the clicked dot, and an explanation drawer that slides in from the right.
+- Icon navbar: search, advisories, about and explanation are glyph buttons with labels and
+  tooltips; the search bar is a native popover with autofocus and Escape handling.
+- Search in place: typing is debounced into `GET /api/stations` on the web origin; the
+  no-JavaScript path is still a normal `GET /` whose results render in the same popover.
+- `GET /api/stations` and `GET /api/stations/:icao/brief` on the web origin, so search and
+  the station card never call FastAPI directly.
+- Anchored station card: the map publishes the dot's projected point on click and on move,
+  so the card follows the map, picks the roomier side, and keeps its composer pinned to the
+  bottom edge. Asking from it opens the drawer.
 - Station page: raw METAR, decoded facts with the category basis, TAF period table, a 48
   hour ceiling and visibility timeline as server-rendered SVG, nearby advisories, a stale
   badge, and a visible warning when our parser disagrees with AWC.
@@ -104,14 +115,6 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - Ask panel as a real form: the enhanced path posts JSON, the no-JavaScript path receives
   an HTML answer page, and the panel says the explanation layer is unavailable until
   Phase 5 exists.
-- Map workspace: full-bleed map with the search overlay, a fixed chat rail and the safety
-  footer; zoom bottom-left; the station list rendered by the server inside the search
-  overlay so it still works without JavaScript.
-- Station card on map click: observation, category basis, age and stale flag, nearby
-  advisories, raw METAR, a link to the full page, and a composer pinned to the card's
-  bottom edge. It and the chat rail share one thread through `app/ui/public/session.ts`.
-- `GET /api/stations/:icao/brief` on the web origin, so the card never calls FastAPI
-  directly.
 
 **Tooling and infrastructure**
 
@@ -128,9 +131,13 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 
 ### Changed
 
+- **The theme is dark.** Near-black surfaces, off-white ink and glass panels replace the
+  paper-and-ink palette; the map is the same OpenFreeMap style greyscaled and inverted.
+- **The chrome floats.** The navbar is a pill over the map, search is a popover opened from
+  an icon, the station card is anchored to its dot, and the explanation is a drawer rather
+  than a fixed column. Under 900px the drawer covers the map instead of reflowing it.
 - **The home page is the map workspace.** The centered status page is gone; the map fills
-  the window, search is an overlay, and the explanation lives in a rail that is always on
-  screen. Under 900px the rail moves below the map.
+  the window and every control floats over it.
 - **Station clicks open a card instead of navigating.** The full station page stays one
   click away and still serves direct links and the no-JavaScript path.
 - **The status page became the about page.** Live API, database and provider state moved to

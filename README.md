@@ -13,12 +13,12 @@ cannot assess your aircraft, currency, or ratings.
 ## Status
 
 Phases 0 to 4 are complete. The API serves stations, observations, advisories, PIREPs and
-the fact bundle; the web app is a full-bleed map workspace with server-rendered search, a
-station card whose composer is pinned to its bottom edge, a chat rail on the same thread,
-plus the station pages, the advisory list and the about page. The explanation layer is
-Phase 5, so the chat currently reports that it is unavailable while the facts around it
-keep working. See [PLAN.md](PLAN.md) for the build order and
-[CHANGELOG.md](CHANGELOG.md) for what has landed so far.
+the fact bundle; the web app is a dark, glassy map workspace with an icon navbar, a search
+popover, a station card anchored to its dot, and an explanation drawer that opens on ask.
+It also serves the station pages with the 48 hour timeline, the advisory list and the about
+page. The explanation layer is Phase 5, so the drawer currently reports that it is
+unavailable while the facts around it keep working. See [PLAN.md](PLAN.md) for the build
+order and [CHANGELOG.md](CHANGELOG.md) for what has landed so far.
 
 ## Stack
 
@@ -68,8 +68,8 @@ make up
 backend/    FastAPI. Owns the database, parsers, ingestion, and the model keys.
   app/domain/   pure logic, no IO: METAR, TAF, flight category, fact bundle
 frontend/   Remix 3. Presentation plus a same-origin proxy to the API.
-  app/actions/public/  the three browser islands: map, station card, chat rail
-  app/ui/public/  the session they share and the fact labels they format
+  app/actions/public/  the four browser islands: map, station card, search, drawer
+  app/ui/public/  the session they share, icons and the fact labels they format
   public/vendor/maplibre/  pinned MapLibre build, worker and stylesheet
 PLAN.md     Scope, schema, API surface, safety requirements, build order.
 ```
