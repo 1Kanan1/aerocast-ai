@@ -121,9 +121,15 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   an HTML answer page, and both render the same answer contract, including the template
   notice when a generated explanation is unavailable.
 - Drawer thread redesign: a welcome screen with starter prompts for the selected station,
-  right-aligned user bubbles, plain assistant turns with cited claim cards, a pulsing
-  pending line, and one elevated composer pinned to the bottom. Enter sends, Shift+Enter
-  inserts a newline, and the send button stays disabled until a station is selected.
+  right-aligned user bubbles, plain assistant turns, a pulsing pending line, and one
+  elevated composer pinned to the bottom. Enter sends, Shift+Enter inserts a newline, and
+  the send button stays disabled until a station is selected.
+- The validated claims and refs stay server-side. The reader sees only the prose, which
+  reveals word by word; there is no token streaming, because validation needs the complete
+  answer.
+- While an answer runs, the send button becomes a stop that aborts the request and leaves
+  a muted "Stopped" turn. The latest question can be pulled back into the composer with a
+  pencil and re-run, and each answer has a copy icon that appears on hover.
 
 **Explanations (in progress)**
 

@@ -2,7 +2,12 @@ import type { Handle } from 'remix/component'
 import { css, on } from 'remix/component'
 
 import type { ThreadEntry } from '#app/ui/public/session.ts'
-import { SparkIcon } from '#app/ui/public/icons.tsx'
+import {
+  CheckIcon,
+  CopyIcon,
+  PencilIcon,
+  SparkIcon,
+} from '#app/ui/public/icons.tsx'
 
 export interface Suggestion {
   prompt: string
@@ -57,10 +62,21 @@ export function ThreadWelcome(handle: Handle<WelcomeProps>) {
   }
 }
 
-/** A user turn: right aligned, compact, no assistant chrome. */
-export function UserTurn(handle: Handle<{ question: string }>) {
+/** A user turn: right aligned, compact, with an edit action on the last one. */
+export function UserTurn(
+  handle: Handle<{ question: string; onEdit?: () => void }>,
+) {
   return () => (
     <div mix={userRowStyle}>
+      {handle.props.onEdit === undefined ? null : (
+        <button
+          aria-label="Edit last question"
+          mix={[editButtonStyle, on('click', () => handle.props.onEdit?.())]}
+          type="button"
+        >
+          <PencilIcon />
+        </button>
+      )}
       <p mix={[userBubbleStyle, turnInStyle]}>{handle.props.question}</p>
     </div>
   )
@@ -68,6 +84,37 @@ export function UserTurn(handle: Handle<{ question: string }>) {
 
 /** An assistant turn: plain text, citations and any fallback notice. */
 export function AssistantTurn(handle: Handle<{ entry: ThreadEntry }>) {
+  let copied = false
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+
+  handle.signal.addEventListener('abort', () => clearTimeout(copiedTimer), {
+    once: true,
+  })
+
+  function copy(): void {
+    let answer = handle.props.entry.answer
+    if (answer === null) return
+    void writeClipboard(answer)
+  }
+
+  async function writeClipboard(
+    answer: NonNullable<ThreadEntry['answer']>,
+  ): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(copyText(answer))
+    } catch {
+      return
+    }
+
+    copied = true
+    handle.update()
+    clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
+      copied = false
+      handle.update()
+    }, 1500)
+  }
+
   return () => {
     let { entry } = handle.props
 
@@ -85,6 +132,8 @@ export function AssistantTurn(handle: Handle<{ entry: ThreadEntry }>) {
             <span mix={pulseStyle} />
             Reading the observation…
           </p>
+        ) : entry.stopped ? (
+          <p mix={stoppedStyle}>Stopped.</p>
         ) : entry.refusal !== null ? (
           <div mix={[refusalStyle, turnInStyle]}>
             <p mix={bodyTextStyle}>{entry.refusal}</p>
@@ -97,25 +146,9 @@ export function AssistantTurn(handle: Handle<{ entry: ThreadEntry }>) {
           <p mix={[problemStyle, turnInStyle]}>{entry.problem}</p>
         ) : entry.answer === null ? null : (
           <div mix={[answerBodyStyle, turnInStyle]}>
-            <p mix={summaryStyle}>{entry.answer.summary}</p>
+            <RevealText text={entry.answer.summary} />
             {entry.answer.notice === null ? null : (
               <p mix={noticeStyle}>{entry.answer.notice}</p>
-            )}
-            {entry.answer.claims.length === 0 ? null : (
-              <ul mix={claimsStyle}>
-                {entry.answer.claims.map((claim) => (
-                  <li key={claim.text} mix={claimStyle}>
-                    <p mix={claimTextStyle}>{claim.text}</p>
-                    <span mix={refsStyle}>
-                      {claim.refs.map((ref) => (
-                        <code key={ref} mix={refStyle}>
-                          {ref}
-                        </code>
-                      ))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             )}
             {entry.answer.caveats.length === 0 ? null : (
               <ul mix={caveatsStyle}>
@@ -124,6 +157,16 @@ export function AssistantTurn(handle: Handle<{ entry: ThreadEntry }>) {
                 ))}
               </ul>
             )}
+            <div mix={answerFooterStyle}>
+              <button
+                aria-label={copied ? 'Copied' : 'Copy answer'}
+                data-copy="true"
+                mix={[copyButtonStyle, on('click', copy)]}
+                type="button"
+              >
+                {copied ? <CheckIcon /> : <CopyIcon />}
+              </button>
+            </div>
           </div>
         )}
       </article>
@@ -131,8 +174,41 @@ export function AssistantTurn(handle: Handle<{ entry: ThreadEntry }>) {
   }
 }
 
+/** Word-by-word reveal after the whole answer has already been validated. */
+function RevealText(handle: Handle<{ text: string }>) {
+  return () => {
+    let words = handle.props.text.split(' ')
+
+    return (
+      <p mix={summaryStyle}>
+        {words.map((word, index) => (
+          <span key={`${word}-${index}`}>
+            <span
+              mix={wordStyle}
+              style={{
+                animationDelay: `${Math.min(index, 80) * 12}ms`,
+              }}
+            >
+              {word}
+            </span>{' '}
+          </span>
+        ))}
+      </p>
+    )
+  }
+}
+
+function copyText(answer: NonNullable<ThreadEntry['answer']>): string {
+  let parts = [answer.summary]
+  if (answer.caveats.length > 0) {
+    parts.push(answer.caveats.map((caveat) => `Note: ${caveat}`).join('\n'))
+  }
+  return parts.join('\n\n')
+}
+
 const turnInStyle = css({
   animation: 'rmx-thread-in 220ms ease-out both',
+  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
 })
 
 const welcomeStyle = css({
@@ -194,6 +270,7 @@ const suggestionStyle = css({
   cursor: 'pointer',
   animation: 'rmx-thread-in 220ms ease-out both',
   transition: 'background 120ms ease, border-color 120ms ease',
+  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
   '&:hover': {
     background: 'rgba(255, 255, 255, 0.06)',
     borderColor: 'rgba(255, 255, 255, 0.18)',
@@ -211,7 +288,26 @@ const suggestionTitleStyle = css({ fontSize: '13px' })
 
 const userRowStyle = css({
   display: 'flex',
+  alignItems: 'center',
   justifyContent: 'flex-end',
+  gap: '6px',
+})
+
+const editButtonStyle = css({
+  display: 'grid',
+  placeItems: 'center',
+  width: '26px',
+  height: '26px',
+  flexShrink: 0,
+  border: 0,
+  borderRadius: '999px',
+  background: 'transparent',
+  color: 'var(--ink-3)',
+  opacity: 0.55,
+  cursor: 'pointer',
+  transition: 'opacity 120ms ease, color 120ms ease',
+  '&:hover': { opacity: 1, color: 'var(--ink-1)' },
+  '&:focus-visible': { opacity: 1, color: 'var(--ink-1)' },
 })
 
 const userBubbleStyle = css({
@@ -264,6 +360,12 @@ const summaryStyle = css({
   color: 'var(--ink-0)',
 })
 
+const wordStyle = css({
+  display: 'inline-block',
+  animation: 'rmx-word-in 200ms ease-out both',
+  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+})
+
 const noticeStyle = css({
   margin: 0,
   paddingInlineStart: '9px',
@@ -271,45 +373,6 @@ const noticeStyle = css({
   fontSize: '12px',
   lineHeight: 1.5,
   color: 'var(--ink-3)',
-})
-
-const claimsStyle = css({
-  listStyle: 'none',
-  margin: 0,
-  padding: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '7px',
-})
-
-const claimStyle = css({
-  padding: '8px 10px',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '12px',
-  background: 'rgba(0, 0, 0, 0.18)',
-})
-
-const claimTextStyle = css({
-  margin: 0,
-  fontSize: '12px',
-  lineHeight: 1.55,
-  color: 'var(--ink-1)',
-})
-
-const refsStyle = css({
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '4px',
-  marginBlockStart: '6px',
-})
-
-const refStyle = css({
-  padding: '1px 5px',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '5px',
-  fontSize: '10px',
-  color: 'var(--ink-3)',
-  fontFamily: 'inherit',
 })
 
 const caveatsStyle = css({
@@ -338,6 +401,42 @@ const problemStyle = css({
   margin: 0,
   fontSize: '12px',
   color: 'var(--accent)',
+})
+
+const stoppedStyle = css({
+  margin: 0,
+  fontSize: '12px',
+  color: 'var(--ink-3)',
+})
+
+const answerFooterStyle = css({
+  display: 'flex',
+  alignItems: 'center',
+  marginBlockStart: '-10px',
+  '& > button': { opacity: 0 },
+  '&:hover > button, &:focus-within > button': { opacity: 1 },
+  '@media (hover: none)': { '& > button': { opacity: 1 } },
+})
+
+const copyButtonStyle = css({
+  display: 'grid',
+  placeItems: 'center',
+  width: '22px',
+  height: '22px',
+  flexShrink: 0,
+  marginBlockStart: '1px',
+  padding: 0,
+  border: 0,
+  borderRadius: '6px',
+  background: 'transparent',
+  color: 'var(--ink-3)',
+  cursor: 'pointer',
+  outline: 'none',
+  '&:hover': { color: 'var(--ink-1)' },
+  '&:focus-visible': {
+    outline: '1px solid var(--glass-border)',
+    outlineOffset: '2px',
+  },
 })
 
 const bodyTextStyle = css({

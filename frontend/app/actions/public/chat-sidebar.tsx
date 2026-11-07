@@ -3,7 +3,7 @@ import { clientEntry, css, on, ref } from 'remix/component'
 
 import { session } from '#app/ui/public/session.ts'
 import { closePopover, onPopoverDismiss } from '#app/ui/public/popover.ts'
-import { SendIcon } from '#app/ui/public/icons.tsx'
+import { SendIcon, StopIcon } from '#app/ui/public/icons.tsx'
 import {
   type Suggestion,
   AssistantTurn,
@@ -27,6 +27,7 @@ export const ChatSidebar = clientEntry(
   function ChatSidebar(handle: Handle) {
     let root: HTMLElement | undefined
     let scroller: HTMLElement | undefined
+    let composer: HTMLTextAreaElement | undefined
     let draft = ''
 
     function drawer(): HTMLElement | null {
@@ -36,6 +37,20 @@ export const ChatSidebar = clientEntry(
 
     function scrollToEnd(): void {
       if (scroller) scroller.scrollTop = scroller.scrollHeight
+    }
+
+    function editLast(): void {
+      let question = session.rewindLast()
+      if (question === null) return
+
+      draft = question
+      handle.update()
+      if (composer) {
+        composer.value = question
+        composer.style.height = 'auto'
+        composer.style.height = `${Math.min(composer.scrollHeight, 132)}px`
+        composer.focus()
+      }
     }
 
     handle.queueTask(() => {
@@ -123,7 +138,14 @@ export const ChatSidebar = clientEntry(
             ) : (
               station.thread.map((entry, index) => (
                 <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
-                  <UserTurn question={entry.question} />
+                  <UserTurn
+                    onEdit={
+                      index === station.thread.length - 1 && !entry.pending
+                        ? editLast
+                        : undefined
+                    }
+                    question={entry.question}
+                  />
                   <AssistantTurn entry={entry} />
                 </div>
               ))
@@ -154,6 +176,7 @@ export const ChatSidebar = clientEntry(
                 disabled={!canAsk}
                 maxLength={400}
                 mix={[
+                  ref((node) => (composer = node)),
                   on('input', (event) => {
                     draft = event.currentTarget.value
                     let field = event.currentTarget
@@ -183,14 +206,24 @@ export const ChatSidebar = clientEntry(
                       ? 'Working…'
                       : 'Enter to send · Shift+Enter for a new line'}
                 </span>
-                <button
-                  aria-label="Send question"
-                  disabled={!canAsk || draft.trim() === ''}
-                  mix={sendStyle}
-                  type="submit"
-                >
-                  <SendIcon />
-                </button>
+                {pending ? (
+                  <button
+                    aria-label="Stop answer"
+                    mix={[sendStyle, on('click', () => session.cancelAsk())]}
+                    type="button"
+                  >
+                    <StopIcon />
+                  </button>
+                ) : (
+                  <button
+                    aria-label="Send question"
+                    disabled={!canAsk || draft.trim() === ''}
+                    mix={sendStyle}
+                    type="submit"
+                  >
+                    <SendIcon />
+                  </button>
+                )}
               </div>
             </div>
           </form>

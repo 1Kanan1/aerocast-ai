@@ -20,6 +20,7 @@ export interface ThreadEntry {
   problem: string | null
   question: string
   refusal: string | null
+  stopped: boolean
 }
 
 export interface Anchor {
@@ -60,6 +61,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   selected: SelectedStation | null = null
   anchor: Anchor | null = null
   #pending: AbortController | null = null
+  #ask: AbortController | null = null
   #anchorListeners = new Set<(anchor: Anchor | null) => void>()
 
   /** The map owns projection, so it reports the dot's screen point here. */
@@ -80,6 +82,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     let thread = previous?.icao === icao ? previous.thread : []
 
     this.#pending?.abort()
+    this.#ask?.abort()
+    this.#ask = null
     let controller = new AbortController()
     this.#pending = controller
 
@@ -183,9 +187,13 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
       problem: null,
       question: text,
       refusal: null,
+      stopped: false,
     }
     selected.thread.push(entry)
     this.notify()
+
+    let controller = new AbortController()
+    this.#ask = controller
 
     let form = new FormData()
     form.set('question', text)
@@ -195,6 +203,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
         method: 'POST',
         body: form,
         headers: { accept: 'application/json' },
+        signal: controller.signal,
       })
       let payload = (await response.json().catch(() => null)) as
         | (Partial<Answer> & { error?: string })
@@ -217,15 +226,53 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
         entry.problem = 'The explanation layer returned an unexpected answer.'
       }
     } catch {
+      if (controller.signal.aborted) {
+        entry.pending = false
+        entry.stopped = true
+        if (this.#ask === controller) this.#ask = null
+        this.notify()
+        return
+      }
       entry.problem = 'The request failed before an answer arrived.'
     }
 
+    if (this.#ask === controller) this.#ask = null
     entry.pending = false
     this.notify()
   }
 
+  /** Stop the answer in flight; the entry stays in the thread as stopped. */
+  cancelAsk(): void {
+    let controller = this.#ask
+    if (controller === null) return
+
+    controller.abort()
+    this.#ask = null
+
+    let entry = this.selected?.thread.find((item) => item.pending)
+    if (entry) {
+      entry.pending = false
+      entry.stopped = true
+    }
+    this.notify()
+  }
+
+  /** Remove the last question and hand it back for editing. */
+  rewindLast(): string | null {
+    let selected = this.selected
+    if (selected === null || selected.thread.length === 0) return null
+
+    this.#ask?.abort()
+    this.#ask = null
+    let entry = selected.thread.pop()
+    this.notify()
+    return entry?.question ?? null
+  }
+
   clear(): void {
     this.#pending?.abort()
+    this.#ask?.abort()
+    this.#ask = null
     this.selected = null
     this.setAnchor(null)
     this.notify()

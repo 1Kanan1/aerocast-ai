@@ -202,6 +202,57 @@ describe('station session', () => {
     assert.equal(session.selected, null)
   })
 
+  it('stops an answer in flight', async (t) => {
+    t.mock.method(
+      globalThis,
+      'fetch',
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        let path =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url
+
+        if (path.includes('/ask')) {
+          return new Promise<Response>((_, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('Aborted', 'AbortError'))
+            })
+          })
+        }
+
+        return stationApi(path)
+      },
+    )
+    let session = new StationSession()
+    await session.select('KSFO')
+
+    let asking = session.ask('What is the ceiling?')
+    session.cancelAsk()
+    await asking
+
+    let entry = session.selected?.thread[0]
+    assert.equal(entry?.pending, false)
+    assert.equal(entry?.stopped, true)
+  })
+
+  it('rewinds the last question for editing', async (t) => {
+    mockFetch(t, (path) =>
+      path.includes('/ask')
+        ? Response.json({ error: 'not available' }, { status: 503 })
+        : stationApi(path),
+    )
+    let session = new StationSession()
+    await session.select('KSFO')
+    await session.ask('How is the visibility?')
+
+    let question = session.rewindLast()
+
+    assert.equal(question, 'How is the visibility?')
+    assert.equal(session.selected?.thread.length, 0)
+  })
+
   it('reports the dot anchor until the listener unsubscribes', () => {
     let session = new StationSession()
     let seen: (Anchor | null)[] = []

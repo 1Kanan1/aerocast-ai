@@ -133,3 +133,67 @@ export function SendIcon(_handle: Handle) {
     </svg>
   )
 }
+
+export function StopIcon(_handle: Handle) {
+  return () => (
+    <svg aria-hidden="true" height="14" viewBox="0 0 14 14" width="14">
+      <rect fill="currentColor" height="10" rx="2" width="10" x="2" y="2" />
+    </svg>
+  )
+}
+
+export function PencilIcon(_handle: Handle) {
+  return () => (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="14"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.6"
+      viewBox="0 0 24 24"
+      width="14"
+    >
+      <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+      <path d="m13.5 6.5 4 4" />
+    </svg>
+  )
+}
+
+export function CopyIcon(_handle: Handle) {
+  return () => (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.6"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <rect height="12" rx="2" width="12" x="8" y="8" />
+      <path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" />
+    </svg>
+  )
+}
+
+export function CheckIcon(_handle: Handle) {
+  return () => (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <path d="m5 12 5 5L20 7" />
+    </svg>
+  )
+}

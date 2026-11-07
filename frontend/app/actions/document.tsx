@@ -57,6 +57,10 @@ export function Document(handle: Handle<DocumentProps>) {
 @keyframes rmx-thread-pulse {
   0%, 100% { opacity: 0.25; }
   50% { opacity: 1; }
+}
+@keyframes rmx-word-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
 }`}
           </style>
           <title>{title}</title>

@@ -912,10 +912,15 @@ HTML, and the facts stay readable with JavaScript off.
   Its translucent fill keeps the map readable underneath; the card stays more opaque
   because it carries dense text. The card shows facts only, so the answer has one home.
   The thread follows the assistant-ui pattern: a welcome screen with starter prompts on
-  an empty station, right-aligned user bubbles, plain assistant turns with cited claim
-  cards, a pulsing pending line, and one elevated composer pinned to the bottom. The
-  composer sends on Enter, keeps Shift+Enter for a newline, and stays disabled until a
-  station is selected.
+  an empty station, right-aligned user bubbles, plain assistant turns, a pulsing pending
+  line, and one elevated composer pinned to the bottom. The composer sends on Enter,
+  keeps Shift+Enter for a newline, and stays disabled until a station is selected. The
+  validated claims and refs stay server-side; the reader sees the prose only, with a copy
+  icon that appears on hover. The summary reveals word by word. It is not token streaming;
+  validation needs the complete answer before a single word is shown. While an answer runs,
+  the send control becomes a stop that aborts the request and leaves a muted "Stopped"
+  turn. The latest question carries a pencil that removes the exchange and returns its
+  text to the composer for editing and re-running.
 - **MapLibre is vendored, not imported.** `public/vendor/maplibre/` holds the ESM
   build, its worker and the stylesheet, copied from the pinned dependency. v6
   resolves its worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`,
