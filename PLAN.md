@@ -652,18 +652,37 @@ question
 
 ### Validation, in order, all server-side
 
-1. **Every ref must exist** in the bundle. One unknown ref rejects the answer.
-2. **Every number in a claim must appear** in the referenced fact values, after
+1. **A non-refusal answer must contain a claim.** Zero claims is not an
+   answer: it is small talk or a refusal the model did not label, so it
+   becomes `out_of_scope`.
+2. **Every ref must exist** in the bundle. One unknown ref rejects the answer.
+3. **Every number in a claim must appear** in the referenced fact values, after
    normalization (feet, knots, SM, Celsius, times). Catches invented altitudes.
-3. **Refusal patterns block the answer.** `safe to fly`, `go/no-go`, `you can fly`,
+4. **Refusal patterns block the answer.** `safe to fly`, `go/no-go`, `you can fly`,
    `clear to depart`, `recommend flying`, `is it safe` and similar, matched against both
    question and output.
-4. **Length cap** on summary and claim count.
-5. On any failure: `status = invalid`, and the UI shows the facts plus the template
+5. **Length cap** on summary and claim count.
+6. On any failure: `status = invalid`, and the UI shows the facts plus the template
    summary. It never shows a partially validated paragraph.
 
 Refusals get fixed, pre-written copy, not a model-generated apology. Deterministic
-where it matters.
+where it matters. There are three reasons, all stored in `ai_answers.reason`:
+
+- `decision`: a go/no-go, safe-to-fly, aircraft or route call. Caught by regex before
+  the provider is called.
+- `out_of_scope`: small talk or anything outside the station's weather. The model may
+  label it, but zero claims also lands here.
+- `not_in_bundle`: weather data the bundle does not carry, such as a NOTAM or a report
+  older than the history window.
+
+### Scope without a second model
+
+The claim gate enforces provenance, not intent. A second classifier would add a call
+to every question to catch a small minority, so the first version asks the model for a
+`refusal_kind` in the same JSON and checks it deterministically. If the eval shows
+off-topic answers passing as validated claims, the measured next step is a cheap
+scope classifier before the generator, not a second generator. The threshold for that
+decision is written into the eval fixture, not guessed.
 
 ### Why there is no token streaming
 

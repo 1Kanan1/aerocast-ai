@@ -121,6 +121,21 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   an HTML answer page, and the panel says the explanation layer is unavailable until
   Phase 5 exists.
 
+**Explanations (in progress)**
+
+- Answer contract: `summary`, claims with refs, caveats and a refusal reason, with a JSON
+  schema the provider can enforce.
+- Deterministic guardrails: verdict regex with fixed refusal copy for three reasons
+  (`decision`, `out_of_scope`, `not_in_bundle`), checked before the provider and again
+  against the output.
+- Claim gate: a non-refusal answer needs at least one claim, every ref must exist in the
+  bundle, every number must appear in the cited fact, and verdict language rejects the
+  answer. This is what stops small talk and fabricated weather from rendering.
+- Prompt with a scope contract, refusal examples and a delimited user question, plus a
+  version string for the future cache key.
+- Eval fixture expanded to 24 questions across on-topic, decision, off-topic and hostile
+  cases. The runner waits on the provider chain.
+
 **Tooling and infrastructure**
 
 - `compose.yaml` (Postgres, API, web), `Makefile`, `.env.example`, backend and frontend
