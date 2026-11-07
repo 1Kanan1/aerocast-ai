@@ -15,6 +15,7 @@ export const assets = createAssetServer({
     'app/**/public/**',
     // Shared with the islands; each one is browser-safe by construction.
     'app/lib/answer.ts',
+    'app/lib/format.ts',
     'app/lib/map-data.ts',
     'app/lib/monochrome.ts',
     'app/ui/answer.tsx',
