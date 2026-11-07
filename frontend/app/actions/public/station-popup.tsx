@@ -10,17 +10,22 @@ import {
   windLabel,
 } from '../../lib/public/labels.ts'
 import { type Anchor, session } from '../../ui/public/session.ts'
+import type { SelectedStation } from '../../ui/public/session.ts'
 import { Timeline, timelinePoints } from '../../ui/timeline.tsx'
 
 const CARD_GAP = 16
 const CARD_PAD = 12
 const NAVBAR_FLOOR = 84
+const CARD_EXIT_MS = 160
 
 /** The station card: every fact the API has, with its composer pinned below. */
 export const StationPopup = clientEntry(
   import.meta.url,
   function StationPopup(handle: Handle) {
     let host: HTMLElement | undefined
+    let closing = false
+    let closingTimer: ReturnType<typeof setTimeout> | undefined
+    let last: SelectedStation | null = null
 
     function place(anchor: Anchor | null): void {
       if (!host || anchor === null || !host.parentElement) return
@@ -56,23 +61,64 @@ export const StationPopup = clientEntry(
     session.addEventListener(
       'change',
       async () => {
+        let next = session.selected
+
+        if (next === null) {
+          if (last === null || closing) return
+
+          // Keep the last station on screen while the exit animation runs.
+          closing = true
+          await handle.update()
+          closingTimer = setTimeout(() => {
+            closing = false
+            last = null
+            handle.update()
+          }, CARD_EXIT_MS)
+          return
+        }
+
+        clearTimeout(closingTimer)
+        closing = false
+        last = next
         await handle.update()
         place(session.anchor)
       },
       { signal: handle.signal },
     )
 
-    handle.queueTask(() => place(session.anchor))
+    handle.queueTask(() => {
+      document.addEventListener(
+        'keydown',
+        (event) => {
+          if (event.key !== 'Escape') return
+          if (document.querySelector('[popover]:popover-open') !== null) return
+          if (session.selected === null) return
+          session.clear()
+        },
+        { signal: handle.signal },
+      )
+    })
+
+    handle.queueTask(() => {
+      last = session.selected
+      place(session.anchor)
+    })
 
     return () => {
-      let station = session.selected
+      let station = session.selected ?? (closing ? last : null)
       let facts = station?.facts ?? null
       let taf = station?.taf ?? null
 
       return (
         <div
           mix={[hostStyle, ref((node) => (host = node))]}
-          style={{ display: station === null ? 'none' : 'flex' }}
+          style={{
+            display: station === null ? 'none' : 'flex',
+            animation: closing
+              ? 'rmx-card-out 160ms ease-in forwards'
+              : 'rmx-card-in 180ms ease-out',
+            pointerEvents: closing ? 'none' : undefined,
+          }}
         >
           {station === null ? null : (
             <>

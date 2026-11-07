@@ -818,21 +818,20 @@ single most persuasive artifact in the repo and it costs about half a day.
   `/api/map/layers` on `moveend` with a debounce, and updates sources with `setData`.
   Zoom sits bottom-left. A station click publishes the ICAO to the session.
 - The search bar is a native popover opened from a navbar icon, with `autofocus` and
-  Escape handled by the platform. Typing searches through `/api/stations`; a result
-  click selects the station on the map, while submitting without JavaScript is a normal
-  `GET /` that renders results in the same popover. The panel fades and lifts on open
-  and reverses on close, using the same discrete transitions as the drawer.
-- The explanation drawer is a second native popover, slid in from the right. It opens
-  from the navbar icon or when the station card asks a question, and its open and close
-  are both transitions (`allow-discrete` plus `@starting-style`), not a keyframe that
-  only runs on entry.
+  typing debounced into `/api/stations`; a result click selects the station on the map.
+  Submitting without JavaScript is still a normal `GET /` that renders results in the
+  same popover. The panel is a `manual` popover so Escape and outside clicks run the
+  exit animation instead of the platform hiding it in one frame.
+- The explanation drawer is a second popover, slid in from the right. It opens from the
+  navbar icon or when the station card asks a question. Closing from the ×, Escape or a
+  click outside marks `data-closing`, plays the exit keyframe, then hides the popover.
 - The station card is anchored to the selected dot, above it when there is room. The
   map reports the dot's projected point on select and keeps it current on `move`, so the
   card travels with the map instead of sitting in a viewport corner. It carries the full
-  station detail rather than linking to a separate page.
-- The selected dot keeps a persistent accent ring, and further dot clicks are ignored
-  while the card is open. One station at a time is the rule: close the card (or pick a
-  result from search) to switch.
+  station detail rather than linking to a separate page. A click on empty map, Escape,
+  or the × fades it out before the selection is dropped.
+- The selected dot keeps a persistent accent ring and a heavier stroke. Clicking another
+  dot switches the card to that station; the highlight and anchor move with it.
 - MapLibre is vendored into `frontend/public/vendor/maplibre/` and referenced
   through the import map. v6 loads its worker from a separate file at runtime, so
   vendoring the whole `dist` directory is less fight than teaching the asset server.
@@ -888,8 +887,8 @@ HTML, and the facts stay readable with JavaScript off.
   bottom edge. The full detail page is a convenience for direct links, not a place you
   have to go.
 - **The selected dot is marked.** A persistent accent ring and a heavier stroke show
-  which station the card belongs to, and another dot click is ignored while the card is
-  open, so the panel can never be about a station the highlight does not show.
+  which station the card belongs to. Clicking another dot moves both the card and the
+  highlight; clicking empty map, pressing Escape, or the × fades the card out first.
 - **The explanation is a glass drawer, not a column.** It opens from the navbar icon or
   when the card asks a question, and it holds the whole thread for the selected station.
   Its translucent fill keeps the map readable underneath; the card stays more opaque

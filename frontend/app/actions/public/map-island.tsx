@@ -87,6 +87,15 @@ export const MapIsland = clientEntry(
         fallback?.remove()
       })
 
+      // Clicking the map away from a dot dismisses the card.
+      map.on('click', (event) => {
+        if (map.getLayer('stations-dots') === undefined) return
+        let hits = map.queryRenderedFeatures(event.point, {
+          layers: ['stations-dots'],
+        })
+        if (hits.length === 0) session.clear()
+      })
+
       // Keep the station card and its highlight over the dot as the map moves.
       map.on('move', () => {
         if (selectedIcao === null) return
@@ -102,18 +111,17 @@ export const MapIsland = clientEntry(
         () => {
           let station = session.selected
           if (station === null) {
-            if (selectedIcao !== null) markSelected(map, selectedIcao, false)
             selectedIcao = null
+            showSelection(map, null)
             session.setAnchor(null)
             return
           }
 
           if (station.icao === selectedIcao) return
-          if (selectedIcao !== null) markSelected(map, selectedIcao, false)
           selectedIcao = station.icao
-          markSelected(map, selectedIcao, true)
 
-          let point = points.get(station.icao)
+          let point = points.get(station.icao) ?? null
+          showSelection(map, point)
           if (point) session.setAnchor(project(map, point))
         },
         { signal: handle.signal },
@@ -171,17 +179,16 @@ function emptyStyle(): StyleSpecification {
 }
 
 function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
-  map.addSource('stations', {
+  map.addSource('stations', { type: 'geojson', data: stationsOf(data) })
+  map.addSource('selection', {
     type: 'geojson',
-    data: stationsOf(data),
-    promoteId: 'icao',
+    data: { type: 'FeatureCollection', features: [] },
   })
 
   map.addLayer({
-    id: 'stations-halo',
+    id: 'selection-halo',
     type: 'circle',
-    source: 'stations',
-    filter: ['boolean', ['feature-state', 'selected'], false],
+    source: 'selection',
     paint: {
       'circle-radius': 11,
       'circle-color': 'rgba(224, 96, 63, 0)',
@@ -209,18 +216,8 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
         CATEGORY_SHADES.LIFR,
         '#9a9a9a',
       ],
-      'circle-stroke-color': [
-        'case',
-        ['boolean', ['feature-state', 'selected'], false],
-        ACCENT,
-        PAPER,
-      ],
-      'circle-stroke-width': [
-        'case',
-        ['boolean', ['feature-state', 'selected'], false],
-        2.5,
-        1.5,
-      ],
+      'circle-stroke-color': PAPER,
+      'circle-stroke-width': 1.5,
     },
   })
 
@@ -244,9 +241,6 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
   }
 
   map.on('click', 'stations-dots', (event) => {
-    // One station at a time: the card must be closed before another is picked.
-    if (session.selected !== null) return
-
     let icao = event.features?.[0]?.properties?.icao
     if (typeof icao === 'string') void session.select(icao)
   })
@@ -328,16 +322,24 @@ function project(map: MapLibreMap, point: [number, number]): Anchor {
   return { x: projected.x, y: projected.y }
 }
 
-function markSelected(
+function showSelection(
   map: MapLibreMap,
-  icao: string,
-  selected: boolean,
+  point: [number, number] | null,
 ): void {
-  try {
-    map.setFeatureState({ source: 'stations', id: icao }, { selected })
-  } catch {
-    // The source is rebuilt on viewport refresh; a missing id is harmless.
-  }
+  let source = map.getSource('selection') as GeoJSONSource | undefined
+  source?.setData({
+    type: 'FeatureCollection',
+    features:
+      point === null
+        ? []
+        : [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: point },
+              properties: {},
+            },
+          ],
+  })
 }
 
 function stationsOf(data: IslandLayers): FeatureCollection {

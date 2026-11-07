@@ -86,7 +86,7 @@ export function MapShell(handle: Handle<MapShellProps>) {
 
           <StationSearch initial={rows} query={query} />
 
-          <div id="ai-drawer" mix={drawerStyle} popover="auto">
+          <div id="ai-drawer" mix={drawerStyle} popover="manual">
             <ChatSidebar />
           </div>
 
@@ -182,11 +182,12 @@ const drawerStyle = css({
   backdropFilter: 'blur(34px) saturate(1.3)',
   WebkitBackdropFilter: 'blur(34px) saturate(1.3)',
   transform: 'translateX(100%)',
-  transition:
-    'transform 240ms cubic-bezier(0.22, 1, 0.36, 1), display 240ms allow-discrete, overlay 240ms allow-discrete',
-  '&:popover-open': { transform: 'translateX(0)' },
-  '@starting-style': {
-    '&:popover-open': { transform: 'translateX(100%)' },
+  '&:popover-open': {
+    transform: 'translateX(0)',
+    animation: 'rmx-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+  },
+  '&[data-closing="true"]': {
+    animation: 'rmx-drawer-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards',
   },
   '&::backdrop': { background: 'rgba(0, 0, 0, 0.45)' },
 })

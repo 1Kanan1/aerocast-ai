@@ -1,14 +1,34 @@
 import type { Handle } from 'remix/component'
-import { clientEntry, css, on } from 'remix/component'
+import { clientEntry, css, on, ref } from 'remix/component'
 
 import type { ThreadEntry } from '../../ui/public/session.ts'
 import { session } from '../../ui/public/session.ts'
+import { closePopover, onPopoverDismiss } from '../../ui/public/popover.ts'
 import { AnswerView } from '../../ui/answer.tsx'
+
+const DRAWER_EXIT_MS = 200
 
 /** The persistent right column: one thread, shared with the station popup. */
 export const ChatSidebar = clientEntry(
   import.meta.url,
   function ChatSidebar(handle: Handle) {
+    let root: HTMLElement | undefined
+
+    function drawer(): HTMLElement | null {
+      let popover = root?.closest('[popover]')
+      return popover instanceof HTMLElement ? popover : null
+    }
+
+    handle.queueTask(() => {
+      let panel = drawer()
+      if (panel === null) return
+      onPopoverDismiss(
+        panel,
+        () => closePopover(panel, DRAWER_EXIT_MS),
+        handle.signal,
+      )
+    })
+
     session.addEventListener('change', () => handle.update(), {
       signal: handle.signal,
     })
@@ -17,7 +37,7 @@ export const ChatSidebar = clientEntry(
       let station = session.selected
 
       return (
-        <div mix={sidebarStyle}>
+        <div mix={[sidebarStyle, ref((node) => (root = node))]}>
           <header mix={headerStyle}>
             <span mix={titleStyle}>Explanation</span>
             <span mix={actionsStyle}>
@@ -31,9 +51,13 @@ export const ChatSidebar = clientEntry(
               )}
               <button
                 aria-label="Close explanation"
-                mix={closeStyle}
-                popovertarget="ai-drawer"
-                popovertargetaction="hide"
+                mix={[
+                  closeStyle,
+                  on('click', () => {
+                    let panel = drawer()
+                    if (panel !== null) closePopover(panel, DRAWER_EXIT_MS)
+                  }),
+                ]}
                 type="button"
               >
                 ×

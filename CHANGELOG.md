@@ -110,7 +110,8 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   one panel, the raw METAR, the parser cross-check, the TAF periods, the 48 hour timeline
   and nearby advisories. It follows the map, scrolls in the room above the dot, and keeps
   its composer pinned to the bottom edge; asking from it opens the drawer. The dot keeps
-  an accent ring, and another dot click is ignored until the card is closed.
+  an accent ring, clicking another dot switches the card, and empty-map or Escape closes
+  it with a fade.
 - Station page: raw METAR, decoded facts with the category basis, TAF period table, a 48
   hour ceiling and visibility timeline as server-rendered SVG, nearby advisories, a stale
   badge, and a visible warning when our parser disagrees with AWC.
@@ -140,7 +141,8 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - **The chrome floats.** The navbar is a pill over the map, search is a popover opened from
   an icon, the station card is anchored above the selected dot, and the explanation is a
   drawer rather than a fixed column. The drawer is more transparent than the card and
-  slides in and out; under 900px it covers the map instead of reflowing it.
+  slides both ways; search fades both ways; the card fades when a station is selected and
+  when it is dismissed. Under 900px the drawer covers the map instead of reflowing it.
 - **The home page is the map workspace.** The centered status page is gone; the map fills
   the window and every control floats over it.
 - **Station clicks open a card instead of navigating.** The full station page stays one

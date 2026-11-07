@@ -1,9 +1,10 @@
 import type { Handle } from 'remix/component'
-import { clientEntry, css, on } from 'remix/component'
+import { clientEntry, css, on, ref } from 'remix/component'
 
 import type { Station } from '../../lib/api-types.ts'
 import { routes } from '../../routes.ts'
 import { session } from '../../ui/public/session.ts'
+import { closePopover, onPopoverDismiss } from '../../ui/public/popover.ts'
 import {
   ArrowIcon,
   CloseIcon,
@@ -16,6 +17,7 @@ interface StationSearchProps {
 }
 
 const DEBOUNCE_MS = 250
+const POP_EXIT_MS = 140
 
 /** The search popover: opened by the navbar icon, searched in place. */
 export const StationSearch = clientEntry(
@@ -27,6 +29,17 @@ export const StationSearch = clientEntry(
     let pending = false
     let debounce: ReturnType<typeof setTimeout> | undefined
     let controller: AbortController | null = null
+    let panel: HTMLElement | undefined
+
+    handle.queueTask(() => {
+      if (panel === undefined) return
+      let search = panel
+      onPopoverDismiss(
+        search,
+        () => closePopover(search, POP_EXIT_MS),
+        handle.signal,
+      )
+    })
 
     async function run(value: string): Promise<void> {
       query = value
@@ -68,7 +81,11 @@ export const StationSearch = clientEntry(
     )
 
     return () => (
-      <div id="station-search" mix={panelStyle} popover="auto">
+      <div
+        id="station-search"
+        mix={[panelStyle, ref((node) => (panel = node))]}
+        popover="manual"
+      >
         <form
           action={routes.home.href()}
           method="get"
@@ -108,9 +125,12 @@ export const StationSearch = clientEntry(
           </button>
           <button
             aria-label="Close search"
-            mix={iconStyle}
-            popovertarget="station-search"
-            popovertargetaction="hide"
+            mix={[
+              iconStyle,
+              on('click', () => {
+                if (panel !== undefined) closePopover(panel, POP_EXIT_MS)
+              }),
+            ]}
             type="button"
           >
             <CloseIcon />
@@ -136,7 +156,7 @@ export const StationSearch = clientEntry(
                   if (!icao) return
 
                   event.preventDefault()
-                  document.getElementById('station-search')?.hidePopover()
+                  if (panel !== undefined) closePopover(panel, POP_EXIT_MS)
                   void session.select(icao)
                 }),
               ]}
@@ -177,12 +197,13 @@ const panelStyle = css({
   backdropFilter: 'blur(26px) saturate(1.2)',
   WebkitBackdropFilter: 'blur(26px) saturate(1.2)',
   opacity: 0,
-  transform: 'translate(-50%, -6px)',
-  transition:
-    'opacity 160ms ease, transform 160ms ease, display 160ms allow-discrete, overlay 160ms allow-discrete',
-  '&:popover-open': { opacity: 1, transform: 'translate(-50%, 0)' },
-  '@starting-style': {
-    '&:popover-open': { opacity: 0, transform: 'translate(-50%, -6px)' },
+  transform: 'translateX(-50%)',
+  '&:popover-open': {
+    opacity: 1,
+    animation: 'rmx-pop-in 160ms ease-out',
+  },
+  '&[data-closing="true"]': {
+    animation: 'rmx-pop-out 140ms ease-in forwards',
   },
   '&::backdrop': {
     background: 'rgba(0, 0, 0, 0.5)',
