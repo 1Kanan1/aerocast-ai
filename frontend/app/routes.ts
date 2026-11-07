@@ -7,6 +7,8 @@ export const routes = route({
   ask: post('/stations/:icao/ask'),
   advisories: '/advisories',
   about: '/about',
+  /** Same-origin JSON proxy for the search popover. */
+  search: get('/api/stations'),
   /** Same-origin JSON proxy for the map island. */
   layers: get('/api/map/layers'),
   /** Same-origin JSON proxy for the station popup. */

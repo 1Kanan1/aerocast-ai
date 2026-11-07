@@ -20,14 +20,25 @@ export const ChatSidebar = clientEntry(
         <div mix={sidebarStyle}>
           <header mix={headerStyle}>
             <span mix={titleStyle}>Explanation</span>
-            {station === null ? null : (
+            <span mix={actionsStyle}>
+              {station === null ? null : (
+                <button
+                  mix={[clearStyle, on('click', () => session.clear())]}
+                  type="button"
+                >
+                  Clear
+                </button>
+              )}
               <button
-                mix={[clearStyle, on('click', () => session.clear())]}
+                aria-label="Close explanation"
+                mix={closeStyle}
+                popovertarget="ai-drawer"
+                popovertargetaction="hide"
                 type="button"
               >
-                Clear
+                ×
               </button>
-            )}
+            </span>
           </header>
 
           <div mix={threadStyle}>
@@ -127,8 +138,29 @@ const sidebarStyle = css({
 
 const headerStyle = css({
   display: 'flex',
-  alignItems: 'baseline',
+  alignItems: 'center',
   justifyContent: 'space-between',
+  gap: '12px',
+})
+
+const actionsStyle = css({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+})
+
+const closeStyle = css({
+  width: '28px',
+  height: '28px',
+  borderRadius: '999px',
+  border: '1px solid var(--glass-border)',
+  background: 'rgba(255, 255, 255, 0.04)',
+  color: 'var(--ink-2)',
+  font: 'inherit',
+  fontSize: '16px',
+  lineHeight: 1,
+  cursor: 'pointer',
+  '&:hover': { color: 'var(--ink-0)', background: 'rgba(255, 255, 255, 0.08)' },
 })
 
 const titleStyle = css({
@@ -167,13 +199,13 @@ const composerStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
-  borderBlockStart: '1px solid var(--line)',
+  borderBlockStart: '1px solid var(--glass-border)',
   paddingBlockStart: '12px',
   '& textarea': {
-    padding: '8px 10px',
-    border: '1px solid var(--line)',
-    borderRadius: '6px',
-    background: 'var(--paper)',
+    padding: '9px 11px',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '14px',
+    background: 'rgba(0, 0, 0, 0.28)',
     color: 'var(--ink-0)',
     font: 'inherit',
     resize: 'none',
@@ -182,26 +214,26 @@ const composerStyle = css({
 
 const askStyle = css({
   alignSelf: 'flex-end',
-  padding: '6px 14px',
-  border: '1px solid var(--ink-0)',
-  borderRadius: '6px',
+  padding: '7px 18px',
+  border: '1px solid rgba(255, 255, 255, 0.16)',
+  borderRadius: '999px',
   background: 'var(--ink-0)',
   color: 'var(--paper)',
   font: 'inherit',
   cursor: 'pointer',
-  '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
+  '&:disabled': { opacity: 0.4, cursor: 'not-allowed' },
 })
 
 const disclaimerStyle = css({
   margin: 0,
   paddingBlockStart: '10px',
-  borderBlockStart: '1px solid var(--line)',
+  borderBlockStart: '1px solid var(--glass-border)',
   fontSize: '11px',
   color: 'var(--ink-3)',
 })
 
 const exchangeStyle = css({
-  borderBlockEnd: '1px solid var(--line)',
+  borderBlockEnd: '1px solid var(--glass-border)',
   paddingBlockEnd: '10px',
   '&:last-child': { borderBlockEnd: 0, paddingBlockEnd: 0 },
 })

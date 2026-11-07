@@ -12,7 +12,14 @@ import { Document } from '../actions/document.tsx'
 import { ChatSidebar } from '../actions/public/chat-sidebar.tsx'
 import { MapIsland } from '../actions/public/map-island.tsx'
 import { StationPopup } from '../actions/public/station-popup.tsx'
-import { navStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
+import { StationSearch } from '../actions/public/station-search.tsx'
+import {
+  AlertIcon,
+  InfoIcon,
+  SearchIcon,
+  SparkIcon,
+} from './public/icons.tsx'
+import { glassStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
 
 interface MapShellProps {
   layers: ApiResult<MapLayersResponse>
@@ -20,83 +27,72 @@ interface MapShellProps {
   stations: ApiResult<StationListResponse>
 }
 
-/** The map page is its own shell: full bleed, with the chat rail always on screen. */
+/** The map fills the window; every control floats over it. */
 export function MapShell(handle: Handle<MapShellProps>) {
   return () => {
     let { layers, query, stations } = handle.props
     let island = layers.data ? islandLayers(layers.data.data) : EMPTY_LAYERS
     let rows = stations.data?.data ?? []
-    let searching = query.trim() !== ''
 
     return (
       <Document title="AeroCast AI">
         <main mix={[tokensStyle, shellStyle]}>
-          <header mix={navbarStyle}>
-            <a href={routes.home.href()} mix={wordmarkStyle}>
-              AEROCAST
-            </a>
-            <nav mix={navStyle}>
-              <a aria-current="page" href={routes.home.href()}>
-                Map
-              </a>
-              <a href={routes.advisories.href()}>Advisories</a>
-              <a href={routes.about.href()}>About</a>
-            </nav>
-          </header>
-
           <div mix={mapAreaStyle}>
             <MapIsland initial={island} />
-
-            <form action={routes.home.href()} method="get" mix={searchStyle}>
-              <div mix={searchRowStyle}>
-                <input
-                  aria-label="Search stations"
-                  defaultValue={query}
-                  name="q"
-                  placeholder="Search ICAO, name or state"
-                  type="search"
-                />
-                <button type="submit">Search</button>
-              </div>
-
-              {searching ? (
-                rows.length === 0 ? (
-                  <p mix={emptyStyle}>No stations match this search.</p>
-                ) : (
-                  <ul mix={resultsStyle}>
-                    {rows.map((station) => (
-                      <li key={station.icao}>
-                        <a href={routes.station.href({ icao: station.icao })}>
-                          <span mix={resultIcaoStyle}>{station.icao}</span>
-                          <span>{station.name}</span>
-                          <span mix={resultStateStyle}>
-                            {station.state ?? ''}
-                          </span>
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              ) : null}
-            </form>
-
             <StationPopup />
-
             <p mix={mapNoteStyle}>Not for navigation.</p>
           </div>
 
-          <div mix={railStyle}>
-            <div mix={chatSlotStyle}>
-              <ChatSidebar />
-            </div>
-            <footer mix={footerStyle}>
-              <p>
-                Educational tool. Not for flight planning. Obtain an official
-                briefing from Flight Service (1-800-WX-BRIEF) before you fly.
-              </p>
-              <p>Weather data: aviationweather.gov, US Government public domain.</p>
-            </footer>
+          <header mix={[glassStyle, navbarStyle]}>
+            <a href={routes.home.href()} mix={wordmarkStyle}>
+              AEROCAST
+            </a>
+            <span mix={dividerStyle} />
+            <button
+              aria-label="Search stations"
+              mix={iconStyle}
+              popovertarget="station-search"
+              title="Search"
+              type="button"
+            >
+              <SearchIcon />
+            </button>
+            <a
+              aria-label="Advisories"
+              href={routes.advisories.href()}
+              mix={iconStyle}
+              title="Advisories"
+            >
+              <AlertIcon />
+            </a>
+            <a
+              aria-label="About"
+              href={routes.about.href()}
+              mix={iconStyle}
+              title="About"
+            >
+              <InfoIcon />
+            </a>
+            <button
+              aria-label="Open explanation"
+              mix={iconStyle}
+              popovertarget="ai-drawer"
+              title="Explanation"
+              type="button"
+            >
+              <SparkIcon />
+            </button>
+          </header>
+
+          <StationSearch initial={rows} query={query} />
+
+          <div id="ai-drawer" mix={drawerStyle} popover="auto">
+            <ChatSidebar />
           </div>
+
+          <p mix={[glassStyle, disclaimerStyle]}>
+            Educational tool. Not for flight planning. Briefing: 1-800-WX-BRIEF.
+          </p>
         </main>
       </Document>
     )
@@ -105,10 +101,8 @@ export function MapShell(handle: Handle<MapShellProps>) {
 
 const shellStyle = css({
   '& *, & *::before, & *::after': { boxSizing: 'border-box' },
+  position: 'relative',
   height: '100dvh',
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) 360px',
-  gridTemplateRows: 'auto minmax(0, 1fr)',
   overflow: 'hidden',
   background: 'var(--paper)',
   color: 'var(--ink-0)',
@@ -116,134 +110,98 @@ const shellStyle = css({
   fontSize: '14px',
   lineHeight: 1.6,
   WebkitFontSmoothing: 'antialiased',
-  '@media (max-width: 900px)': {
-    gridTemplateColumns: 'minmax(0, 1fr)',
-    gridTemplateRows: 'auto minmax(0, 55dvh) minmax(0, 1fr)',
-  },
-})
-
-const navbarStyle = css({
-  gridColumn: '1 / -1',
-  display: 'flex',
-  alignItems: 'baseline',
-  justifyContent: 'space-between',
-  gap: '12px 24px',
-  padding: '10px 18px',
-  borderBlockEnd: '1px solid var(--line)',
-  background: 'var(--paper)',
 })
 
 const mapAreaStyle = css({
-  position: 'relative',
-  minHeight: 0,
-  background: 'var(--paper-2)',
+  position: 'absolute',
+  inset: 0,
 })
 
-const searchStyle = css({
+const navbarStyle = css({
   position: 'absolute',
   top: '16px',
   left: '50%',
   transform: 'translateX(-50%)',
-  zIndex: 2,
-  width: 'min(420px, calc(100% - 32px))',
-  padding: '10px 12px',
-  border: '1px solid var(--line)',
-  borderRadius: '10px',
-  background: 'var(--paper)',
-  boxShadow: '0 10px 24px rgba(10, 10, 10, 0.08)',
-})
-
-const searchRowStyle = css({
+  zIndex: 4,
   display: 'flex',
-  gap: '8px',
-  '& input': {
-    flex: '1 1 auto',
-    minWidth: 0,
-    padding: '6px 9px',
-    border: '1px solid var(--line)',
-    borderRadius: '6px',
-    background: 'var(--paper)',
+  alignItems: 'center',
+  gap: '2px',
+  padding: '6px 8px 6px 18px',
+  borderRadius: '999px',
+  maxWidth: 'calc(100vw - 24px)',
+})
+
+const dividerStyle = css({
+  width: '1px',
+  height: '18px',
+  marginInline: '8px',
+  background: 'var(--line)',
+})
+
+const iconStyle = css({
+  display: 'grid',
+  placeItems: 'center',
+  width: '36px',
+  height: '36px',
+  borderRadius: '999px',
+  border: '1px solid transparent',
+  background: 'transparent',
+  color: 'var(--ink-2)',
+  cursor: 'pointer',
+  textDecoration: 'none',
+  '&:hover': {
+    background: 'rgba(255, 255, 255, 0.07)',
     color: 'var(--ink-0)',
-    font: 'inherit',
-    fontSize: '13px',
   },
-  '& button': {
-    padding: '6px 12px',
-    border: '1px solid var(--ink-0)',
-    borderRadius: '6px',
-    background: 'var(--ink-0)',
-    color: 'var(--paper)',
-    font: 'inherit',
-    fontSize: '13px',
-    cursor: 'pointer',
-  },
-})
-
-const resultsStyle = css({
-  listStyle: 'none',
-  margin: '8px 0 0',
-  padding: 0,
-  maxHeight: '40vh',
-  overflowY: 'auto',
-  borderBlockStart: '1px solid var(--line)',
-  '& li': { borderBlockEnd: '1px solid var(--line)' },
-  '& a': {
-    display: 'grid',
-    gridTemplateColumns: '4.5rem 1fr auto',
-    gap: '10px',
-    padding: '7px 2px',
-    color: 'var(--ink-1)',
-    textDecoration: 'none',
-    fontSize: '13px',
-  },
-  '& a:hover': { background: 'var(--paper-2)' },
-})
-
-const resultIcaoStyle = css({ fontWeight: 700, letterSpacing: '0.04em' })
-
-const resultStateStyle = css({ color: 'var(--ink-3)' })
-
-const emptyStyle = css({
-  margin: '8px 0 0',
-  fontSize: '12px',
-  color: 'var(--ink-3)',
 })
 
 const mapNoteStyle = css({
   position: 'absolute',
-  top: '12px',
-  right: '14px',
+  top: '22px',
+  right: '22px',
+  zIndex: 2,
   margin: 0,
   fontSize: '10px',
-  letterSpacing: '0.08em',
+  letterSpacing: '0.1em',
   textTransform: 'uppercase',
   color: 'var(--ink-3)',
-  zIndex: 2,
 })
 
-const railStyle = css({
-  display: 'flex',
-  flexDirection: 'column',
-  minHeight: 0,
-  borderInlineStart: '1px solid var(--line)',
-  background: 'var(--paper)',
-  '@media (max-width: 900px)': {
-    borderInlineStart: 0,
-    borderBlockStart: '1px solid var(--line)',
+const drawerStyle = css({
+  position: 'fixed',
+  inset: '0 0 0 auto',
+  width: 'min(420px, 100vw)',
+  height: '100dvh',
+  margin: 0,
+  padding: 0,
+  border: 0,
+  borderInlineStart: '1px solid var(--glass-border)',
+  background: 'var(--glass-strong)',
+  color: 'var(--ink-0)',
+  boxShadow: '-30px 0 90px rgba(0, 0, 0, 0.6)',
+  backdropFilter: 'blur(28px) saturate(1.2)',
+  WebkitBackdropFilter: 'blur(28px) saturate(1.2)',
+  transform: 'translateX(100%)',
+  transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  '&:popover-open': { transform: 'translateX(0)' },
+  '@starting-style': {
+    '&:popover-open': { transform: 'translateX(100%)' },
   },
+  '&::backdrop': { background: 'rgba(0, 0, 0, 0.4)' },
 })
 
-const chatSlotStyle = css({
-  flex: '1 1 auto',
-  minHeight: 0,
-  overflow: 'hidden',
-})
-
-const footerStyle = css({
-  padding: '10px 18px 12px',
-  borderBlockStart: '1px solid var(--line)',
+const disclaimerStyle = css({
+  position: 'absolute',
+  bottom: '14px',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 2,
+  margin: 0,
+  padding: '6px 14px',
+  borderRadius: '999px',
+  maxWidth: 'min(560px, calc(100vw - 24px))',
   fontSize: '10px',
-  lineHeight: 1.5,
+  lineHeight: 1.4,
+  textAlign: 'center',
   color: 'var(--ink-3)',
-  '& p': { margin: '0 0 4px' },
 })

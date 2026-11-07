@@ -7,6 +7,11 @@ import { routes } from '../../routes.ts'
 /** Same threshold the envelope applies, so the popup can flag a stale report. */
 const METAR_STALE_SECONDS = 90 * 60
 
+export interface Anchor {
+  x: number
+  y: number
+}
+
 export interface ThreadEntry {
   answer: Answer | null
   pending: boolean
@@ -36,7 +41,22 @@ export interface SelectedStation {
  */
 export class StationSession extends TypedEventTarget<{ change: Event }> {
   selected: SelectedStation | null = null
+  anchor: Anchor | null = null
   #pending: AbortController | null = null
+  #anchorListeners = new Set<(anchor: Anchor | null) => void>()
+
+  /** The map owns projection, so it reports the dot's screen point here. */
+  onAnchor(listener: (anchor: Anchor | null) => void): () => void {
+    this.#anchorListeners.add(listener)
+    return () => {
+      this.#anchorListeners.delete(listener)
+    }
+  }
+
+  setAnchor(anchor: Anchor | null): void {
+    this.anchor = anchor
+    for (let listener of this.#anchorListeners) listener(anchor)
+  }
 
   async select(icao: string): Promise<void> {
     let previous = this.selected

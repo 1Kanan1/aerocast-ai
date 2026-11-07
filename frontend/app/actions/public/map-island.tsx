@@ -72,6 +72,7 @@ export const MapIsland = clientEntry(
       )
 
       let moveTimer: ReturnType<typeof setTimeout> | undefined
+      let selectedPoint: [number, number] | null = null
 
       // The server text is for a browser without JavaScript; from here it is
       // only a loading note until the first style is ready.
@@ -81,9 +82,26 @@ export const MapIsland = clientEntry(
         if (signal.aborted) return
 
         addAdvisoryLayers(map, handle.props.initial)
-        addStationLayers(map, handle.props.initial)
+        addStationLayers(map, handle.props.initial, (point) => {
+          selectedPoint = point
+        })
         fallback?.remove()
       })
+
+      // Keep the station card over its dot while the map moves under it.
+      map.on('move', () => {
+        if (selectedPoint === null) return
+        let point = map.project(selectedPoint)
+        session.setAnchor({ x: point.x, y: point.y })
+      })
+
+      session.addEventListener(
+        'change',
+        () => {
+          if (session.selected === null) selectedPoint = null
+        },
+        { signal: handle.signal },
+      )
 
       map.on('moveend', () => {
         clearTimeout(moveTimer)
@@ -136,7 +154,11 @@ function emptyStyle(): StyleSpecification {
   }
 }
 
-function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
+function addStationLayers(
+  map: MapLibreMap,
+  data: IslandLayers,
+  select: (point: [number, number] | null) => void,
+): void {
   map.addSource('stations', { type: 'geojson', data: stationsOf(data) })
 
   map.addLayer({
@@ -183,8 +205,24 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
   }
 
   map.on('click', 'stations-dots', (event) => {
-    let icao = event.features?.[0]?.properties?.icao
-    if (typeof icao === 'string') void session.select(icao)
+    let feature = event.features?.[0]
+    let icao = feature?.properties?.icao
+    if (typeof icao !== 'string') return
+
+    let geometry = feature?.geometry
+    let point: [number, number] | null =
+      geometry?.type === 'Point' &&
+      Array.isArray(geometry.coordinates) &&
+      typeof geometry.coordinates[0] === 'number'
+        ? [geometry.coordinates[0], geometry.coordinates[1]]
+        : null
+
+    select(point)
+    session.setAnchor({
+      x: event.point.x,
+      y: event.point.y,
+    })
+    void session.select(icao)
   })
   map.on('mouseenter', 'stations-dots', () => {
     map.getCanvas().style.cursor = 'pointer'

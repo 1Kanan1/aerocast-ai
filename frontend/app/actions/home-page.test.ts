@@ -46,6 +46,10 @@ describe('map page', () => {
     assert.match(html, /MapIsland/)
     assert.match(html, /ChatSidebar/)
     assert.match(html, /StationPopup/)
+    assert.match(html, /id="station-search"/)
+    assert.match(html, /id="ai-drawer"/)
+    assert.match(html, /aria-label="Search stations"/)
+    assert.match(html, /aria-label="Open explanation"/)
     assert.match(html, /Not for navigation/)
     assert.match(html, /Not for flight planning/)
   })
@@ -73,6 +77,15 @@ describe('map page', () => {
     assert.deepEqual(await response.json(), layers)
   })
 
+  it('proxies station search same-origin', async (t) => {
+    mockApi(t, { '/api/stations': () => Response.json(envelope([STATION])) })
+
+    let response = await get(`${routes.search.href()}?q=sfo`)
+
+    assert.equal(response.status, 200)
+    assert.match(JSON.stringify(await response.json()), /KSFO/)
+  })
+
   it('proxies the brief the popup reads', async (t) => {
     mockApi(t, {
       '/api/stations/KSFO/brief': () => Response.json(BRIEF),
@@ -92,5 +105,6 @@ describe('map page', () => {
       (await get(routes.brief.href({ icao: 'KSFO' }))).status,
       502,
     )
+    assert.equal((await get(routes.search.href())).status, 502)
   })
 })

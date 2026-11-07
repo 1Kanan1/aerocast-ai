@@ -111,6 +111,24 @@ export default createController(routes, {
       })
     },
 
+    async search(context) {
+      let result = await apiGetStations(
+        context.url.searchParams.get('q') ?? '',
+        context.request.signal,
+      )
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'search is unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    },
+
     async brief(context) {
       let result = await apiGetBrief(
         context.params.icao.toUpperCase(),

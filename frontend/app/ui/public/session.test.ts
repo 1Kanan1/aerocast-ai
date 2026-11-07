@@ -3,6 +3,7 @@ import type { TestContext } from 'remix/test'
 import { describe, it } from 'remix/test'
 
 import { StationSession } from './session.ts'
+import type { Anchor } from './session.ts'
 
 const BRIEF = {
   data: {
@@ -148,5 +149,19 @@ describe('station session', () => {
     session.clear()
 
     assert.equal(session.selected, null)
+  })
+
+  it('reports the dot anchor until the listener unsubscribes', () => {
+    let session = new StationSession()
+    let seen: (Anchor | null)[] = []
+    let stop = session.onAnchor((anchor) => seen.push(anchor))
+
+    session.setAnchor({ x: 10, y: 20 })
+    session.setAnchor(null)
+    stop()
+    session.setAnchor({ x: 30, y: 40 })
+
+    assert.deepEqual(seen, [{ x: 10, y: 20 }, null])
+    assert.deepEqual(session.anchor, { x: 30, y: 40 })
   })
 })

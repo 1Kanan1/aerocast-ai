@@ -1,5 +1,5 @@
 import type { Handle } from 'remix/component'
-import { clientEntry, css, on } from 'remix/component'
+import { clientEntry, css, on, ref } from 'remix/component'
 
 import { ageLabel } from '../../lib/format.ts'
 import {
@@ -9,25 +9,67 @@ import {
   windLabel,
 } from '../../lib/public/labels.ts'
 import { routes } from '../../routes.ts'
-import { session } from '../../ui/public/session.ts'
-import { AnswerView } from '../../ui/answer.tsx'
+import { type Anchor, session } from '../../ui/public/session.ts'
 
-/** The floating station card, with its composer pinned to its bottom edge. */
+/** The station card, anchored over its dot and clamped to the map area. */
 export const StationPopup = clientEntry(
   import.meta.url,
   function StationPopup(handle: Handle) {
-    session.addEventListener('change', () => handle.update(), {
-      signal: handle.signal,
+    let host: HTMLElement | undefined
+    let lastAnchor: Anchor | null = null
+
+    function place(anchor: Anchor | null): void {
+      lastAnchor = anchor
+      if (!host || anchor === null || !host.parentElement) return
+
+      let bounds = host.parentElement.getBoundingClientRect()
+      let width = host.offsetWidth
+      let gap = 16
+      let pad = 10
+      let topLimit = 84
+      let spaceAbove = anchor.y - gap - topLimit
+      let spaceBelow = bounds.height - anchor.y - gap - pad
+      let above = spaceAbove >= Math.max(180, spaceBelow)
+      let space = Math.max(160, above ? spaceAbove : spaceBelow)
+
+      host.style.maxHeight = `${space}px`
+
+      let left = Math.min(
+        Math.max(anchor.x, pad + width / 2),
+        bounds.width - pad - width / 2,
+      )
+
+      host.style.left = `${left}px`
+      host.style.top = above ? `${anchor.y - gap}px` : `${anchor.y + gap}px`
+      host.style.transform = above
+        ? 'translate(-50%, -100%)'
+        : 'translate(-50%, 0)'
+      host.dataset.side = above ? 'above' : 'below'
+    }
+
+    let unsubscribe = session.onAnchor(place)
+    handle.signal.addEventListener('abort', unsubscribe, { once: true })
+
+    session.addEventListener(
+      'change',
+      async () => {
+        await handle.update()
+        place(lastAnchor)
+      },
+      { signal: handle.signal },
+    )
+
+    handle.queueTask(() => {
+      place(session.anchor)
     })
 
     return () => {
       let station = session.selected
       let facts = station?.facts ?? null
-      let latest = station?.thread.at(-1) ?? null
 
       return (
         <div
-          mix={hostStyle}
+          mix={[hostStyle, ref((node) => (host = node))]}
           style={{ display: station === null ? 'none' : 'flex' }}
         >
           {station === null ? null : (
@@ -71,7 +113,10 @@ export const StationPopup = clientEntry(
                       <>
                         <dl mix={factsStyle}>
                           <Fact label="Wind" value={windLabel(facts)} />
-                          <Fact label="Visibility" value={visibilityLabel(facts)} />
+                          <Fact
+                            label="Visibility"
+                            value={visibilityLabel(facts)}
+                          />
                           <Fact label="Ceiling" value={ceilingLabel(facts)} />
                           <Fact
                             label="Temperature"
@@ -89,27 +134,15 @@ export const StationPopup = clientEntry(
                             station.advisories === 1 ? 'advisory' : 'advisories'
                           } within 50 nm.`}
                     </p>
-
-                    {latest === null ? null : (
-                      <div mix={exchangeStyle}>
-                        <p mix={questionStyle}>{latest.question}</p>
-                        {latest.pending ? (
-                          <p mix={mutedStyle}>Asking…</p>
-                        ) : (
-                          <AnswerView
-                            answer={latest.answer}
-                            problem={latest.problem}
-                            refusal={latest.refusal}
-                          />
-                        )}
-                      </div>
-                    )}
                   </>
                 )}
               </div>
 
               <footer mix={footerStyle}>
-                <a mix={pageLinkStyle} href={routes.station.href({ icao: station.icao })}>
+                <a
+                  mix={pageLinkStyle}
+                  href={routes.station.href({ icao: station.icao })}
+                >
                   Open full page →
                 </a>
                 <form
@@ -122,6 +155,9 @@ export const StationPopup = clientEntry(
                         new FormData(form).get('question') ?? '',
                       )
                       form.reset()
+
+                      let drawer = document.getElementById('ai-drawer')
+                      drawer?.showPopover()
                       void session.ask(question)
                     }),
                   ]}
@@ -157,23 +193,38 @@ function Fact(handle: Handle<{ label: string; value: string }>) {
 
 const hostStyle = css({
   position: 'absolute',
-  top: '84px',
-  left: '16px',
   zIndex: 3,
-  width: 'min(340px, calc(100% - 32px))',
-  maxHeight: 'calc(100% - 100px)',
+  width: 'min(340px, calc(100% - 24px))',
+  maxHeight: 'calc(100% - 24px)',
   flexDirection: 'column',
-  border: '1px solid var(--line)',
-  borderRadius: '10px',
-  background: 'var(--paper)',
-  boxShadow: '0 12px 32px rgba(10, 10, 10, 0.12)',
-  overflow: 'hidden',
-  '@media (max-width: 700px)': {
-    top: 'auto',
-    bottom: '12px',
-    left: '12px',
-    width: 'calc(100% - 24px)',
-    maxHeight: '60%',
+  borderRadius: '20px',
+  background: 'var(--glass-strong)',
+  border: '1px solid var(--glass-border)',
+  boxShadow: 'var(--shadow)',
+  backdropFilter: 'blur(26px) saturate(1.25)',
+  WebkitBackdropFilter: 'blur(26px) saturate(1.25)',
+  overflow: 'visible',
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    left: '50%',
+    bottom: '-5px',
+    width: '10px',
+    height: '10px',
+    marginInlineStart: '-5px',
+    borderRadius: '2px',
+    background: 'var(--glass-strong)',
+    borderInlineEnd: '1px solid var(--glass-border)',
+    borderBlockEnd: '1px solid var(--glass-border)',
+    transform: 'rotate(45deg)',
+  },
+  '&[data-side="below"]::after': {
+    bottom: 'auto',
+    top: '-5px',
+    borderInlineEnd: 0,
+    borderBlockEnd: 0,
+    borderInlineStart: '1px solid var(--glass-border)',
+    borderBlockStart: '1px solid var(--glass-border)',
   },
 })
 
@@ -182,11 +233,11 @@ const headerStyle = css({
   alignItems: 'flex-start',
   justifyContent: 'space-between',
   gap: '8px',
-  padding: '10px 12px',
-  borderBlockEnd: '1px solid var(--line)',
+  padding: '12px 14px 10px',
+  borderBlockEnd: '1px solid var(--glass-border)',
 })
 
-const icaoStyle = css({ fontWeight: 700, letterSpacing: '0.04em' })
+const icaoStyle = css({ fontWeight: 700, letterSpacing: '0.06em' })
 
 const nameStyle = css({
   display: 'block',
@@ -195,21 +246,24 @@ const nameStyle = css({
 })
 
 const closeStyle = css({
-  border: 0,
-  background: 'none',
-  padding: '0 4px',
-  color: 'var(--ink-3)',
+  width: '26px',
+  height: '26px',
+  borderRadius: '999px',
+  border: '1px solid var(--glass-border)',
+  background: 'rgba(255, 255, 255, 0.04)',
+  color: 'var(--ink-2)',
   font: 'inherit',
-  fontSize: '16px',
+  fontSize: '15px',
   lineHeight: 1,
   cursor: 'pointer',
+  '&:hover': { color: 'var(--ink-0)', background: 'rgba(255, 255, 255, 0.08)' },
 })
 
 const bodyStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',
-  padding: '10px 12px',
+  padding: '12px 14px',
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
@@ -222,16 +276,16 @@ const ageStyle = css({ fontSize: '11px', color: 'var(--ink-3)' })
 
 const staleStyle = css({
   marginInlineStart: '6px',
-  padding: '0 5px',
+  padding: '0 6px',
   border: '1px solid var(--accent)',
-  borderRadius: '4px',
+  borderRadius: '999px',
   color: 'var(--accent)',
 })
 
 const factsStyle = css({
   display: 'grid',
   gridTemplateColumns: '1fr 1fr',
-  gap: '6px 12px',
+  gap: '8px 12px',
   margin: 0,
 })
 
@@ -248,9 +302,10 @@ const factStyle = css({
 
 const rawStyle = css({
   display: 'block',
-  padding: '6px 8px',
-  border: '1px solid var(--line)',
-  borderRadius: '6px',
+  padding: '7px 9px',
+  border: '1px solid var(--glass-border)',
+  borderRadius: '12px',
+  background: 'rgba(0, 0, 0, 0.25)',
   fontSize: '11px',
   whiteSpace: 'pre-wrap',
   overflowWrap: 'anywhere',
@@ -258,20 +313,9 @@ const rawStyle = css({
 
 const mutedStyle = css({ fontSize: '12px', color: 'var(--ink-3)' })
 
-const exchangeStyle = css({
-  borderBlockStart: '1px solid var(--line)',
-  paddingBlockStart: '8px',
-})
-
-const questionStyle = css({
-  margin: '0 0 4px',
-  fontSize: '12px',
-  fontWeight: 700,
-})
-
 const footerStyle = css({
-  borderBlockStart: '1px solid var(--line)',
-  padding: '8px 12px 10px',
+  borderBlockStart: '1px solid var(--glass-border)',
+  padding: '10px 14px 12px',
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
@@ -280,6 +324,8 @@ const footerStyle = css({
 const pageLinkStyle = css({
   fontSize: '11px',
   color: 'var(--ink-2)',
+  textDecoration: 'none',
+  '&:hover': { color: 'var(--ink-0)' },
 })
 
 const composerStyle = css({
@@ -288,10 +334,10 @@ const composerStyle = css({
   '& input': {
     flex: '1 1 auto',
     minWidth: 0,
-    padding: '6px 8px',
-    border: '1px solid var(--line)',
-    borderRadius: '6px',
-    background: 'var(--paper)',
+    padding: '7px 10px',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '999px',
+    background: 'rgba(0, 0, 0, 0.28)',
     color: 'var(--ink-0)',
     font: 'inherit',
     fontSize: '12px',
@@ -299,9 +345,9 @@ const composerStyle = css({
 })
 
 const askStyle = css({
-  padding: '6px 12px',
-  border: '1px solid var(--ink-0)',
-  borderRadius: '6px',
+  padding: '7px 14px',
+  border: '1px solid rgba(255, 255, 255, 0.16)',
+  borderRadius: '999px',
   background: 'var(--ink-0)',
   color: 'var(--paper)',
   font: 'inherit',
