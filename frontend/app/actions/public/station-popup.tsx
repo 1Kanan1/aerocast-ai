@@ -157,11 +157,11 @@ function Fact(handle: Handle<{ label: string; value: string }>) {
 
 const hostStyle = css({
   position: 'absolute',
-  top: '16px',
+  top: '84px',
   left: '16px',
   zIndex: 3,
   width: 'min(340px, calc(100% - 32px))',
-  maxHeight: 'calc(100% - 32px)',
+  maxHeight: 'calc(100% - 100px)',
   flexDirection: 'column',
   border: '1px solid var(--line)',
   borderRadius: '10px',
