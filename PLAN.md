@@ -801,7 +801,7 @@ single most persuasive artifact in the repo and it costs about half a day.
 
 | Path | Rendering |
 |---|---|
-| `/` | map, server-rendered shell with a server-rendered station list fallback |
+| `/` | map workspace: full-bleed map, search overlay, chat rail, station popup |
 | `/stations/:icao` | station, decoded METAR, 48h timeline, TAF periods, ask panel |
 | `/advisories` | active advisories, grouped by hazard |
 | `/about` | sources, methodology, limits, disclaimers |
@@ -810,16 +810,22 @@ single most persuasive artifact in the repo and it costs about half a day.
 
 - Controllers fetch from FastAPI server-side (`API_BASE_URL`), `cache: "no-store"`.
   Browser only ever talks to the same origin.
-- Exactly one big `clientEntry`: the map. Everything else is server-rendered HTML.
-- Map island mounts MapLibre in `ref(...)`, disposes on `handle.signal`, re-fetches
+- Three client entries, not one: the map, the station popup and the chat rail. They
+  share selection and thread state through `app/ui/public/session.ts` rather than
+  through a parent component, so a station click never re-renders the map.
+- The map island mounts MapLibre in `ref(...)`, disposes on `handle.signal`, re-fetches
   `/api/map/layers` on `moveend` with a debounce, and updates sources with `setData`.
-- MapLibre is vendored into `frontend/public/vendor/maplibre/` and referenced through the
-  import map. v6 loads its worker from a separate file at runtime, so vendoring the whole
-  `dist` directory is less fight than trying to make the asset server do it.
+  Zoom sits bottom-left; a station click publishes the ICAO to the session.
+- Search is a normal `GET /` form. The server renders the results inside the overlay,
+  so it works without JavaScript and lands on the full station page; the map keeps
+  the quick path through the popup.
+- MapLibre is vendored into `frontend/public/vendor/maplibre/` and referenced
+  through the import map. v6 loads its worker from a separate file at runtime, so
+  vendoring the whole `dist` directory is less fight than teaching the asset server.
 - Timeline is server-rendered SVG small multiples. No chart library.
-- Ask panel posts to the Remix route, which proxies to FastAPI. No key exists in the web
-  container at all, so there is nothing to leak into a `clientEntry` prop (Remix
-  serializes those into the page source).
+- The popup and the chat rail post to the Remix ask route, which proxies to FastAPI.
+  No key exists in the web container at all, so there is nothing to leak into a
+  `clientEntry` prop (Remix serializes those into the page source).
 - Facts must remain readable with JavaScript disabled. Progressive enhancement is not
   decoration here; it is the same rule that keeps the AI optional.
 
@@ -843,9 +849,16 @@ only signal.
 
 ### Phase 4, as built
 
-One island, `app/actions/public/map-island.tsx`. Every other part of every page is
-server-rendered HTML, and the facts stay readable with JavaScript off.
+Three islands: the map, the station popup and the chat rail. They share selection and
+thread state through `app/ui/public/session.ts`, so the map is built once and a station
+click never re-renders it. Everything else is server-rendered HTML, and the facts stay
+readable with JavaScript off.
 
+- **The map page is a workspace, not a document.** A full-bleed map with the search
+  overlay and the station card on the left, a fixed chat rail on the right, and the
+  flight-planning disclaimer in the rail footer. Under 900px the rail moves below
+  the map instead of becoming a drawer, which keeps every control visible without a
+  toggle.
 - **MapLibre is vendored, not imported.** `public/vendor/maplibre/` holds the ESM
   build, its worker and the stylesheet, copied from the pinned dependency. v6
   resolves its worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`,
@@ -858,27 +871,33 @@ server-rendered HTML, and the facts stay readable with JavaScript off.
   one colour the design keeps. `lib/monochrome.ts` walks the style JSON and replaces
   every colour with its grey equivalent; the data layers are added afterwards, so
   they keep their ink and accent.
-- **The map never calls FastAPI directly.** `GET /api/map/layers` on the web origin
-  proxies the hop server-side and returns the envelope as JSON, so the browser stays
-  same-origin and no API base URL reaches the page. Moving the viewport refetches
-  with a 250 ms debounce.
+- **The map never calls FastAPI directly.** `GET /api/map/layers` and
+  `GET /api/stations/:icao/brief` on the web origin proxy the hop server-side and return
+  the envelope as JSON, so the browser stays same-origin and no API base URL reaches the
+  page. Moving the viewport refetches layers with a 250 ms debounce.
+- **Search is a plain form.** The server renders the results in the overlay, so it works
+  without JavaScript and links to the full station page; the popup is the quick path.
 - **Badges wait for zoom.** Dots carry the category as a grey ramp at every zoom;
   the letter is a symbol layer that appears at zoom 5, because 3,500 letters over the
   national view is noise rather than information.
 - **The timeline is two server-rendered SVG panels**: ceiling and visibility across
   the history feed, with the MVFR and IFR thresholds dashed in. No chart library, no
   client code.
-- **The ask panel is a real form.** With JavaScript it intercepts the submit and
-  expects JSON; without it, the same POST returns an HTML page carrying the answer.
-  FastAPI's `/api/ask` arrives in Phase 5, so today the panel says the explanation
-  layer is not available while the facts above it are unaffected. That degraded state
-  is one the design has to be able to show.
+- **The popup and the rail share one conversation.** The popup shows the latest exchange
+  above its pinned composer; the rail shows the whole thread for the same station. Both
+  post to the Remix ask route, which proxies FastAPI.
+- **The ask path is a real form.** With JavaScript it intercepts the submit and expects
+  JSON; without it, the same POST returns an HTML page carrying the answer. FastAPI's
+  `/api/ask` arrives in Phase 5, so today the thread says the explanation layer is not
+  available while the facts around it are unaffected. That degraded state is one the
+  design has to be able to show.
 
 Tests stay at the router boundary with `fetch` mocked, plus unit tests for the grey
-transform, the window labels and the decoded-fact readers. Browser tests are not
-wired yet: `remix test` needs Playwright and its browser binaries for those, and the
-island was verified by hand in Chrome instead. A reviewer should be able to tell
-"tested" from "looked at", so the difference is recorded here rather than implied.
+transform, the window labels, the fact labels, the decoded-fact readers and the session
+state. Browser tests are not wired yet: `remix test` needs Playwright and its browser
+binaries for those, and the islands were verified by hand in Chrome instead. A reviewer
+should be able to tell "tested" from "looked at", so the difference is recorded here
+rather than implied.
 
 ## 11. Safety requirements
 

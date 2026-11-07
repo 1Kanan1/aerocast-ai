@@ -104,6 +104,14 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - Ask panel as a real form: the enhanced path posts JSON, the no-JavaScript path receives
   an HTML answer page, and the panel says the explanation layer is unavailable until
   Phase 5 exists.
+- Map workspace: full-bleed map with the search overlay, a fixed chat rail and the safety
+  footer; zoom bottom-left; the station list rendered by the server inside the search
+  overlay so it still works without JavaScript.
+- Station card on map click: observation, category basis, age and stale flag, nearby
+  advisories, raw METAR, a link to the full page, and a composer pinned to the card's
+  bottom edge. It and the chat rail share one thread through `app/ui/public/session.ts`.
+- `GET /api/stations/:icao/brief` on the web origin, so the card never calls FastAPI
+  directly.
 
 **Tooling and infrastructure**
 
@@ -120,6 +128,11 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 
 ### Changed
 
+- **The home page is the map workspace.** The centered status page is gone; the map fills
+  the window, search is an overlay, and the explanation lives in a rail that is always on
+  screen. Under 900px the rail moves below the map.
+- **Station clicks open a card instead of navigating.** The full station page stays one
+  click away and still serves direct links and the no-JavaScript path.
 - **The status page became the about page.** Live API, database and provider state moved to
   `/about` now that `/` is the map.
 - **Browser modules are an explicit allowlist.** `assets.ts` names the four modules the
