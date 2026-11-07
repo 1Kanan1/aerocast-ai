@@ -4,13 +4,19 @@ import { css } from 'remix/component'
 import type {
   Bundle,
   BundleMetar,
-  BundlePeriod,
   StationBrief,
   StationDetailResponse,
   StationHistory,
 } from '../lib/api-types.ts'
 import type { ApiResult } from '../lib/api.ts'
 import { ageLabel, timeLabel, windowLabel } from '../lib/format.ts'
+import {
+  ceilingLabel,
+  periodWindLabel,
+  temperatureLabel,
+  visibilityLabel,
+  windLabel,
+} from '../lib/public/labels.ts'
 import { routes } from '../routes.ts'
 import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '../ui/layout.tsx'
 import { Timeline, timelinePoints } from '../ui/timeline.tsx'
@@ -195,21 +201,8 @@ function Facts(handle: Handle<{ facts: BundleMetar }>) {
         <dl mix={factsStyle}>
           <Fact label="Wind" value={windLabel(facts)} />
           <Fact label="Visibility" value={visibilityLabel(facts)} />
-          <Fact
-            label="Ceiling"
-            value={facts.ceiling.ft === null ? 'no ceiling' : `${facts.ceiling.ft.toLocaleString()} ft`}
-          />
-          <Fact
-            label="Temperature"
-            value={
-              facts.temperature === null
-                ? 'not reported'
-                : `${facts.temperature.c} °C / dewpoint ${facts.temperature.dewpoint_c} °C` +
-                  (facts.temperature.dewpoint_spread_c === null
-                    ? ''
-                    : `, spread ${facts.temperature.dewpoint_spread_c} °C`)
-            }
-          />
+          <Fact label="Ceiling" value={ceilingLabel(facts)} />
+          <Fact label="Temperature" value={temperatureLabel(facts)} />
           <Fact
             label="Altimeter"
             value={
@@ -282,7 +275,7 @@ function TafTable(
               <tr key={period.ref}>
                 <td>{period.change}</td>
                 <td>{windowLabel(period.from, period.to)}</td>
-                <td>{periodWind(period)}</td>
+                <td>{periodWindLabel(period)}</td>
                 <td>
                   {period.visibility_sm === null
                     ? '—'
@@ -303,33 +296,6 @@ function TafTable(
       </>
     )
   }
-}
-
-function windLabel(facts: BundleMetar): string {
-  let wind = facts.wind
-  if (wind === null) return 'not reported'
-  if (wind.is_calm) return 'calm'
-  let direction = wind.is_variable ? 'variable' : `${wind.direction_deg}°`
-  let gust = wind.gust_kt === null ? '' : ` gusting ${wind.gust_kt} kt`
-  return `${direction} at ${wind.speed_kt} kt${gust}`
-}
-
-function visibilityLabel(facts: BundleMetar): string {
-  let visibility = facts.visibility
-  if (visibility === null) return 'not reported'
-  let qualifier = visibility.is_greater_than
-    ? 'more than '
-    : visibility.is_less_than
-      ? 'less than '
-      : ''
-  return `${qualifier}${visibility.statute_miles} SM`
-}
-
-function periodWind(period: BundlePeriod): string {
-  let wind = period.wind
-  if (wind === null) return '—'
-  let gust = wind.gust_kt === null ? '' : ` gusting ${wind.gust_kt}`
-  return `${wind.direction_deg ?? 'VRB'}° at ${wind.speed_kt} kt${gust}`
 }
 
 const crumbStyle = css({
