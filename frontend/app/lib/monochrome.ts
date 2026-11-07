@@ -6,17 +6,26 @@ const RGB =
 
 /** Walk a style object and replace every color with its grey equivalent. */
 export function toMonochrome<T>(value: T): T {
-  if (typeof value === 'string') return recolour(value) as T
-  if (Array.isArray(value)) return value.map(toMonochrome) as T
+  return walk(value, false)
+}
+
+/** The same walk, inverted, for a dark basemap built from a light style. */
+export function toDarkMonochrome<T>(value: T): T {
+  return walk(value, true)
+}
+
+function walk<T>(value: T, invert: boolean): T {
+  if (typeof value === 'string') return recolour(value, invert) as T
+  if (Array.isArray(value)) return value.map((item) => walk(item, invert)) as T
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, toMonochrome(item)]),
+      Object.entries(value).map(([key, item]) => [key, walk(item, invert)]),
     ) as T
   }
   return value
 }
 
-function recolour(value: string): string {
+function recolour(value: string, invert: boolean): string {
   if (HEX.test(value)) {
     let digits =
       value.length === 4
@@ -28,23 +37,33 @@ function recolour(value: string): string {
         : value.slice(1)
 
     return hexGrey(
-      greyValue(
-        Number.parseInt(digits.slice(0, 2), 16),
-        Number.parseInt(digits.slice(2, 4), 16),
-        Number.parseInt(digits.slice(4, 6), 16),
+      shade(
+        greyValue(
+          Number.parseInt(digits.slice(0, 2), 16),
+          Number.parseInt(digits.slice(2, 4), 16),
+          Number.parseInt(digits.slice(4, 6), 16),
+        ),
+        invert,
       ),
     )
   }
 
   let rgb = RGB.exec(value)
   if (rgb) {
-    let grey = greyValue(Number(rgb[1]), Number(rgb[2]), Number(rgb[3]))
+    let grey = shade(
+      greyValue(Number(rgb[1]), Number(rgb[2]), Number(rgb[3])),
+      invert,
+    )
     return rgb[4] === undefined
       ? `rgb(${grey}, ${grey}, ${grey})`
       : `rgba(${grey}, ${grey}, ${grey}, ${rgb[4]})`
   }
 
   return value
+}
+
+function shade(grey: number, invert: boolean): number {
+  return invert ? 255 - grey : grey
 }
 
 function greyValue(red: number, green: number, blue: number): number {

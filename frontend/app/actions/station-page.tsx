@@ -11,6 +11,10 @@ import type {
 import type { ApiResult } from '../lib/api.ts'
 import { ageLabel, timeLabel, windowLabel } from '../lib/format.ts'
 import {
+  CATEGORY_SHADES,
+  categoryInk,
+} from '../lib/public/categories.ts'
+import {
   ceilingLabel,
   periodWindLabel,
   temperatureLabel,
@@ -174,16 +178,15 @@ export function StationPage(handle: Handle<StationPageProps>) {
 
 function CategoryBadge(handle: Handle<{ category: string | null }>) {
   return () => {
-    let { category } = handle.props
-    let index = category === null ? 3 : ['VFR', 'MVFR', 'IFR', 'LIFR'].indexOf(category)
-    let shades = ['#d0d0d0', '#8c8c8c', '#3d3d3d', '#0a0a0a']
+    let category = handle.props.category
+    let shade = category === null ? undefined : CATEGORY_SHADES[category]
 
     return (
       <span
         mix={badgeStyle}
         style={{
-          background: shades[Math.max(0, index)],
-          color: index < 1 ? 'var(--ink-0)' : 'var(--paper)',
+          background: shade ?? 'rgba(255, 255, 255, 0.06)',
+          color: shade ? categoryInk(category) : 'var(--ink-2)',
         }}
       >
         {category ?? 'no data'}
@@ -313,7 +316,8 @@ const titleRowStyle = css({
 })
 
 const badgeStyle = css({
-  padding: '4px 10px',
+  padding: '4px 12px',
+  border: '1px solid var(--glass-border)',
   borderRadius: '999px',
   fontSize: '12px',
   fontWeight: 700,

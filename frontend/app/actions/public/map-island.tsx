@@ -12,30 +12,19 @@ import {
   type IslandLayers,
   islandLayers,
 } from '../../lib/map-data.ts'
-import { toMonochrome } from '../../lib/monochrome.ts'
+import { toDarkMonochrome } from '../../lib/monochrome.ts'
+import {
+  CATEGORY_BADGES,
+  CATEGORY_SHADES,
+} from '../../lib/public/categories.ts'
 import { routes } from '../../routes.ts'
 import { session } from '../../ui/public/session.ts'
 
 const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
 const MOVE_DEBOUNCE_MS = 250
-const PAPER = '#fafafa'
-const ACCENT = '#b23a1f'
-
-/** A letter as well as an intensity, so category never depends on color. */
-const BADGES: Record<string, string> = {
-  VFR: 'V',
-  MVFR: 'M',
-  IFR: 'I',
-  LIFR: 'L',
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  VFR: '#d0d0d0',
-  MVFR: '#8c8c8c',
-  IFR: '#3d3d3d',
-  LIFR: '#0a0a0a',
-}
+const PAPER = '#09090a'
+const ACCENT = '#e0603f'
 
 interface MapIslandProps {
   initial: IslandLayers
@@ -127,7 +116,7 @@ async function loadStyle(
   try {
     let response = await fetch(STYLE_URL, { signal })
     if (!response.ok) return null
-    return toMonochrome((await response.json()) as StyleSpecification)
+    return toDarkMonochrome((await response.json()) as StyleSpecification)
   } catch {
     return null
   }
@@ -160,13 +149,13 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
         'match',
         ['get', 'category'],
         'VFR',
-        CATEGORY_COLORS.VFR,
+        CATEGORY_SHADES.VFR,
         'MVFR',
-        CATEGORY_COLORS.MVFR,
+        CATEGORY_SHADES.MVFR,
         'IFR',
-        CATEGORY_COLORS.IFR,
+        CATEGORY_SHADES.IFR,
         'LIFR',
-        CATEGORY_COLORS.LIFR,
+        CATEGORY_SHADES.LIFR,
         '#9a9a9a',
       ],
       'circle-stroke-color': PAPER,
@@ -189,7 +178,7 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
         'text-allow-overlap': true,
         'text-font': ['Noto Sans Regular'],
       },
-      paint: { 'text-color': '#0a0a0a', 'text-halo-color': PAPER },
+      paint: { 'text-color': '#f4f4f2', 'text-halo-color': PAPER },
     })
   }
 
@@ -267,7 +256,7 @@ function stationsOf(data: IslandLayers): FeatureCollection {
       properties: {
         icao: station.icao,
         category: station.category,
-        badge: BADGES[station.category ?? ''] ?? '?',
+        badge: CATEGORY_BADGES[station.category ?? ''] ?? '?',
       },
     })),
   }
@@ -312,6 +301,31 @@ const mapStyle = css({
   height: '100%',
   width: '100%',
   background: 'var(--paper)',
+  '& .maplibregl-ctrl-group': {
+    background: 'rgba(20, 20, 24, 0.68)',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '14px',
+    overflow: 'hidden',
+    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)',
+    backdropFilter: 'blur(14px)',
+    WebkitBackdropFilter: 'blur(14px)',
+  },
+  '& .maplibregl-ctrl-group button': {
+    background: 'transparent',
+    filter: 'invert(1)',
+  },
+  '& .maplibregl-ctrl-group button + button': {
+    borderBlockStart: '1px solid var(--glass-border)',
+  },
+  '& .maplibregl-ctrl-attrib': {
+    background: 'rgba(20, 20, 24, 0.62)',
+    color: 'var(--ink-3)',
+    borderRadius: '10px',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+  },
+  '& .maplibregl-ctrl-attrib a': { color: 'var(--ink-2)' },
+  '& .maplibregl-ctrl-attrib-button': { filter: 'invert(1)' },
 })
 
 const fallbackStyle = css({

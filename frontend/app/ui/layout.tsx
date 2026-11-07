@@ -62,14 +62,27 @@ export function Page(handle: Handle<PageProps>) {
 }
 
 export const tokensStyle = css({
-  '--ink-0': '#0a0a0a',
-  '--ink-1': '#1a1a1a',
-  '--ink-2': '#3d3d3d',
-  '--ink-3': '#6b6b6b',
-  '--line': '#d4d4d4',
-  '--paper': '#fafafa',
-  '--paper-2': '#f0efed',
-  '--accent': '#b23a1f',
+  colorScheme: 'dark',
+  '--ink-0': '#f4f4f2',
+  '--ink-1': '#d7d7d3',
+  '--ink-2': '#a6a6a1',
+  '--ink-3': '#83837e',
+  '--line': 'rgba(255, 255, 255, 0.10)',
+  '--paper': '#09090a',
+  '--paper-2': '#101012',
+  '--accent': '#e0603f',
+  '--glass': 'rgba(22, 22, 25, 0.62)',
+  '--glass-strong': 'rgba(24, 24, 28, 0.86)',
+  '--glass-border': 'rgba(255, 255, 255, 0.09)',
+  '--shadow': '0 24px 70px rgba(0, 0, 0, 0.55)',
+})
+
+export const glassStyle = css({
+  background: 'var(--glass)',
+  border: '1px solid var(--glass-border)',
+  boxShadow: 'var(--shadow)',
+  backdropFilter: 'blur(20px) saturate(1.2)',
+  WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
 })
 
 export const pageStyle = css({
@@ -152,10 +165,13 @@ export const subheadingStyle = css({
 })
 
 export const cardStyle = css({
-  border: '1px solid var(--line)',
-  borderRadius: '10px',
-  padding: '16px 20px',
-  background: 'var(--paper-2)',
+  border: '1px solid var(--glass-border)',
+  borderRadius: '18px',
+  padding: '18px 22px',
+  background: 'var(--glass)',
+  backdropFilter: 'blur(18px) saturate(1.15)',
+  WebkitBackdropFilter: 'blur(18px) saturate(1.15)',
+  boxShadow: '0 16px 40px rgba(0, 0, 0, 0.32)',
 })
 
 export const mutedStyle = css({ color: 'var(--ink-3)' })

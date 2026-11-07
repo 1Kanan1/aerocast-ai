@@ -1,7 +1,7 @@
 import * as assert from 'remix/assert'
 import { describe, it } from 'remix/test'
 
-import { toMonochrome } from './monochrome.ts'
+import { toDarkMonochrome, toMonochrome } from './monochrome.ts'
 
 describe('monochrome basemap', () => {
   it('converts hex colors to their grey value', () => {
@@ -25,5 +25,11 @@ describe('monochrome basemap', () => {
       layers: [{ paint: { 'fill-color': '#4c4c4c' } }],
       name: 'positron',
     })
+  })
+
+  it('inverts the greys for the dark basemap', () => {
+    assert.equal(toDarkMonochrome('#ffffff'), '#000000')
+    assert.equal(toDarkMonochrome('#000000'), '#ffffff')
+    assert.equal(toDarkMonochrome('#ff0000'), '#b3b3b3')
   })
 })
