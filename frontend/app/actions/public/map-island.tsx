@@ -5,7 +5,7 @@ import type {
   StyleSpecification,
 } from 'maplibre-gl'
 import type { Handle } from 'remix/component'
-import { clientEntry, css, navigate, ref } from 'remix/component'
+import { clientEntry, css, ref } from 'remix/component'
 
 import type { MapLayers } from '../../lib/api-types.ts'
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../lib/map-data.ts'
 import { toMonochrome } from '../../lib/monochrome.ts'
 import { routes } from '../../routes.ts'
+import { session } from '../../ui/public/session.ts'
 
 const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
@@ -75,6 +76,11 @@ export const MapIsland = clientEntry(
         pitchWithRotate: false,
         attributionControl: { compact: true },
       })
+
+      map.addControl(
+        new maplibre.NavigationControl({ showCompass: false }),
+        'bottom-left',
+      )
 
       let moveTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -189,7 +195,7 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
 
   map.on('click', 'stations-dots', (event) => {
     let icao = event.features?.[0]?.properties?.icao
-    if (typeof icao === 'string') navigate(routes.station.href({ icao }))
+    if (typeof icao === 'string') void session.select(icao)
   })
   map.on('mouseenter', 'stations-dots', () => {
     map.getCanvas().style.cursor = 'pointer'
