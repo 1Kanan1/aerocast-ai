@@ -97,16 +97,20 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - Dark basemap: the OpenFreeMap style JSON is greyscaled and inverted at load time instead
   of filtering the canvas, so the hazard outlines keep the one accent colour.
 - Dark, glassy chrome: a floating pill navbar with icon buttons, a search popover, a card
-  anchored to the clicked dot, and an explanation drawer that slides in from the right.
+  anchored above the clicked dot, and an explanation drawer that slides in from the right.
 - Icon navbar: search, advisories, about and explanation are glyph buttons with labels and
   tooltips; the search bar is a native popover with autofocus and Escape handling.
-- Search in place: typing is debounced into `GET /api/stations` on the web origin; the
-  no-JavaScript path is still a normal `GET /` whose results render in the same popover.
-- `GET /api/stations` and `GET /api/stations/:icao/brief` on the web origin, so search and
-  the station card never call FastAPI directly.
-- Anchored station card: the map publishes the dot's projected point on click and on move,
-  so the card follows the map, picks the roomier side, and keeps its composer pinned to the
-  bottom edge. Asking from it opens the drawer.
+- Search in place: typing is debounced into `GET /api/stations` on the web origin; a result
+  click selects the station on the map, while the no-JavaScript path is still a normal
+  `GET /` whose results render in the same popover.
+- `GET /api/stations`, `GET /api/stations/:icao`, `GET /api/stations/:icao/observations`
+  and `GET /api/stations/:icao/brief` on the web origin, so search and the station card
+  never call FastAPI directly.
+- Station card anchored above the selected dot: every fact the API has for the station in
+  one panel, the raw METAR, the parser cross-check, the TAF periods, the 48 hour timeline
+  and nearby advisories. It follows the map, scrolls in the room above the dot, and keeps
+  its composer pinned to the bottom edge; asking from it opens the drawer. The dot keeps
+  an accent ring, and another dot click is ignored until the card is closed.
 - Station page: raw METAR, decoded facts with the category basis, TAF period table, a 48
   hour ceiling and visibility timeline as server-rendered SVG, nearby advisories, a stale
   badge, and a visible warning when our parser disagrees with AWC.
@@ -134,8 +138,9 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - **The theme is dark.** Near-black surfaces, off-white ink and glass panels replace the
   paper-and-ink palette; the map is the same OpenFreeMap style greyscaled and inverted.
 - **The chrome floats.** The navbar is a pill over the map, search is a popover opened from
-  an icon, the station card is anchored to its dot, and the explanation is a drawer rather
-  than a fixed column. Under 900px the drawer covers the map instead of reflowing it.
+  an icon, the station card is anchored above the selected dot, and the explanation is a
+  drawer rather than a fixed column. The drawer is more transparent than the card and
+  slides in and out; under 900px it covers the map instead of reflowing it.
 - **The home page is the map workspace.** The centered status page is gone; the map fills
   the window and every control floats over it.
 - **Station clicks open a card instead of navigating.** The full station page stays one

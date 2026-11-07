@@ -801,7 +801,7 @@ single most persuasive artifact in the repo and it costs about half a day.
 
 | Path | Rendering |
 |---|---|
-| `/` | map workspace: full-bleed map, search overlay, chat rail, station popup |
+| `/` | map workspace: full-bleed map, floating navbar, search popover, station card, explanation drawer |
 | `/stations/:icao` | station, decoded METAR, 48h timeline, TAF periods, ask panel |
 | `/advisories` | active advisories, grouped by hazard |
 | `/about` | sources, methodology, limits, disclaimers |
@@ -811,18 +811,28 @@ single most persuasive artifact in the repo and it costs about half a day.
 - Controllers fetch from FastAPI server-side (`API_BASE_URL`), `cache: "no-store"`.
   Browser only ever talks to the same origin.
 - Four client entries, not one: the map, the station card, the search popover and the
-  explanation drawer. They share selection, anchor and thread state through
+  explanation drawer. They share selection and thread state through
   `app/ui/public/session.ts` rather than through a parent component, so a station click
   never re-renders the map.
 - The map island mounts MapLibre in `ref(...)`, disposes on `handle.signal`, re-fetches
   `/api/map/layers` on `moveend` with a debounce, and updates sources with `setData`.
-  Zoom sits bottom-left. A station click publishes the ICAO and the dot's screen
-  point to the session, and `move` keeps that anchor current so the card follows.
+  Zoom sits bottom-left. A station click publishes the ICAO to the session.
 - The search bar is a native popover opened from a navbar icon, with `autofocus` and
-  Escape handled by the platform. Typing searches through `/api/stations`; submitting
-  without JavaScript is a normal `GET /` that renders results in the same popover.
+  Escape handled by the platform. Typing searches through `/api/stations`; a result
+  click selects the station on the map, while submitting without JavaScript is a normal
+  `GET /` that renders results in the same popover. The panel fades and lifts on open
+  and reverses on close, using the same discrete transitions as the drawer.
 - The explanation drawer is a second native popover, slid in from the right. It opens
-  from the navbar icon or when the station card asks a question.
+  from the navbar icon or when the station card asks a question, and its open and close
+  are both transitions (`allow-discrete` plus `@starting-style`), not a keyframe that
+  only runs on entry.
+- The station card is anchored to the selected dot, above it when there is room. The
+  map reports the dot's projected point on select and keeps it current on `move`, so the
+  card travels with the map instead of sitting in a viewport corner. It carries the full
+  station detail rather than linking to a separate page.
+- The selected dot keeps a persistent accent ring, and further dot clicks are ignored
+  while the card is open. One station at a time is the rule: close the card (or pick a
+  result from search) to switch.
 - MapLibre is vendored into `frontend/public/vendor/maplibre/` and referenced
   through the import map. v6 loads its worker from a separate file at runtime, so
   vendoring the whole `dist` directory is less fight than teaching the asset server.
@@ -847,6 +857,10 @@ glass  rgba(22,22,25,0.62)         glass-strong rgba(24,24,28,0.86)
 accent #e0603f   (hazard outlines and stale badges only)
 ```
 
+The card is the most opaque surface because it carries dense text over a busy map; the
+drawer is deliberately more transparent so the map stays visible behind the thread. Both
+animate: the card fades and rises in, the drawer slides in and back out.
+
 Flight category is a grey ramp plus a letter badge (V/M/I/L) in both places it appears.
 On the dark basemap the ramp runs the other way: VFR is the dimmest dot and LIFR the
 brightest, so worse weather stands out instead of fading in. The basemap is the light
@@ -859,21 +873,27 @@ only signal.
 ### Phase 4, as built
 
 Four islands: the map, the station card, the search popover and the explanation drawer.
-They share selection, anchor and thread state through `app/ui/public/session.ts`, so the
-map is built once and a station click never re-renders it. Everything else is
-server-rendered HTML, and the facts stay readable with JavaScript off.
+They share selection and thread state through `app/ui/public/session.ts`, so the map is
+built once and a station click never re-renders it. Everything else is server-rendered
+HTML, and the facts stay readable with JavaScript off.
 
 - **The map page floats its chrome.** A dark, full-bleed canvas with a pill navbar, a
-  glass search popover, a card anchored to the clicked dot, a drawer that slides in
+  glass search popover, a card anchored above the clicked dot, a drawer that slides in
   from the right, and the flight-planning line in a pill at the bottom. Nothing frames
   the map.
-- **The station card follows its dot.** The map publishes the projected screen point on
-  click and on every move; the card picks the roomier side of the dot, clamps itself to
-  the map area and shrinks its scroll region rather than overflowing. Its composer is
-  pinned to the card's bottom edge.
-- **The explanation is a drawer, not a column.** It opens from the navbar icon or when
-  the card asks a question, and it holds the whole thread for the selected station. The
-  card shows facts only, so the answer has one home.
+- **The station card holds everything.** Every fact the API has for the station, the raw
+  METAR, the parser cross-check, the TAF periods, the 48 hour timeline and the nearby
+  advisories all live in one panel. It sits above its dot and follows the map, and the
+  body scrolls inside the space above the dot while the composer stays pinned to the
+  bottom edge. The full detail page is a convenience for direct links, not a place you
+  have to go.
+- **The selected dot is marked.** A persistent accent ring and a heavier stroke show
+  which station the card belongs to, and another dot click is ignored while the card is
+  open, so the panel can never be about a station the highlight does not show.
+- **The explanation is a glass drawer, not a column.** It opens from the navbar icon or
+  when the card asks a question, and it holds the whole thread for the selected station.
+  Its translucent fill keeps the map readable underneath; the card stays more opaque
+  because it carries dense text. The card shows facts only, so the answer has one home.
 - **MapLibre is vendored, not imported.** `public/vendor/maplibre/` holds the ESM
   build, its worker and the stylesheet, copied from the pinned dependency. v6
   resolves its worker with `new URL('./maplibre-gl-worker.mjs', import.meta.url)`,
@@ -884,13 +904,15 @@ server-rendered HTML, and the facts stay readable with JavaScript off.
 - **The basemap is grey and inverted, not filtered.** A CSS filter would desaturate the
   hazard outlines too. `lib/monochrome.ts` walks the style JSON, greyscales every colour
   and inverts it; the data layers are added afterwards, so they keep their ink.
-- **The map never calls FastAPI directly.** `GET /api/map/layers`,
-  `GET /api/stations` and `GET /api/stations/:icao/brief` on the web origin proxy the
-  hop server-side, so the browser stays same-origin and no API base URL reaches the
-  page. Moving the viewport refetches layers with a 250 ms debounce.
+- **The map never calls FastAPI directly.** `GET /api/map/layers`, `GET /api/stations`,
+  `GET /api/stations/:icao`, `GET /api/stations/:icao/observations` and
+  `GET /api/stations/:icao/brief` on the web origin proxy the hop server-side, so the
+  browser stays same-origin and no API base URL reaches the page. Moving the viewport
+  refetches layers with a 250 ms debounce.
 - **Search opens from an icon and searches in place.** A native popover handles the
-  open state, focus and Escape; typing is debounced into `/api/stations`, and the no-JS
-  path is still a normal `GET /` whose results render in the same popover.
+  open state, focus and Escape; typing is debounced into `/api/stations`, and a result
+  click selects the station on the map instead of navigating. The no-JS path is still a
+  normal `GET /` whose results render in the same popover.
 - **Badges wait for zoom.** Dots carry the category as a grey ramp at every zoom;
   the letter is a symbol layer that appears at zoom 5, because 3,500 letters over the
   national view is noise rather than information.

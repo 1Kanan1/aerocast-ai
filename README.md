@@ -14,11 +14,12 @@ cannot assess your aircraft, currency, or ratings.
 
 Phases 0 to 4 are complete. The API serves stations, observations, advisories, PIREPs and
 the fact bundle; the web app is a dark, glassy map workspace with an icon navbar, a search
-popover, a station card anchored to its dot, and an explanation drawer that opens on ask.
-It also serves the station pages with the 48 hour timeline, the advisory list and the about
-page. The explanation layer is Phase 5, so the drawer currently reports that it is
-unavailable while the facts around it keep working. See [PLAN.md](PLAN.md) for the build
-order and [CHANGELOG.md](CHANGELOG.md) for what has landed so far.
+popover, a station card anchored above the selected dot that carries the full station
+detail, and an explanation drawer that slides in on ask. It also serves the station pages
+with the 48 hour timeline, the advisory list and the about page. The explanation layer is
+Phase 5, so the drawer currently reports that it is unavailable while the facts around it
+keep working. See [PLAN.md](PLAN.md) for the build order and [CHANGELOG.md](CHANGELOG.md)
+for what has landed so far.
 
 ## Stack
 
