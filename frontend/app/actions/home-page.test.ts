@@ -86,7 +86,7 @@ describe('map page', () => {
     assert.match(JSON.stringify(await response.json()), /KSFO/)
   })
 
-  it('proxies the brief the popup reads', async (t) => {
+  it('proxies the brief the card reads', async (t) => {
     mockApi(t, {
       '/api/stations/KSFO/brief': () => Response.json(BRIEF),
     })
@@ -95,6 +95,26 @@ describe('map page', () => {
 
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), BRIEF)
+  })
+
+  it('proxies the detail and history the card reads', async (t) => {
+    let detail = envelope({
+      station: STATION,
+      metar: null,
+      taf: null,
+      advisories: [],
+    })
+    let history = envelope([])
+    mockApi(t, {
+      '/api/stations/KSFO': () => Response.json(detail),
+      '/api/stations/KSFO/observations': () => Response.json(history),
+    })
+
+    assert.equal((await get(routes.detail.href({ icao: 'KSFO' }))).status, 200)
+    assert.equal(
+      (await get(routes.history.href({ icao: 'KSFO' }))).status,
+      200,
+    )
   })
 
   it('answers 502 when a proxy cannot reach the API', async (t) => {
@@ -106,5 +126,13 @@ describe('map page', () => {
       502,
     )
     assert.equal((await get(routes.search.href())).status, 502)
+    assert.equal(
+      (await get(routes.detail.href({ icao: 'KSFO' }))).status,
+      502,
+    )
+    assert.equal(
+      (await get(routes.history.href({ icao: 'KSFO' }))).status,
+      502,
+    )
   })
 })

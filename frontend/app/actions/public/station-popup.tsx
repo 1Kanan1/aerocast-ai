@@ -1,49 +1,52 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import { ageLabel } from '../../lib/format.ts'
+import { ageLabel, timeLabel, windowLabel } from '../../lib/format.ts'
 import {
   ceilingLabel,
+  periodWindLabel,
   temperatureLabel,
   visibilityLabel,
   windLabel,
 } from '../../lib/public/labels.ts'
-import { routes } from '../../routes.ts'
 import { type Anchor, session } from '../../ui/public/session.ts'
+import { Timeline, timelinePoints } from '../../ui/timeline.tsx'
 
-/** The station card, anchored over its dot and clamped to the map area. */
+const CARD_GAP = 16
+const CARD_PAD = 12
+const NAVBAR_FLOOR = 84
+
+/** The station card: every fact the API has, with its composer pinned below. */
 export const StationPopup = clientEntry(
   import.meta.url,
   function StationPopup(handle: Handle) {
     let host: HTMLElement | undefined
-    let lastAnchor: Anchor | null = null
 
     function place(anchor: Anchor | null): void {
-      lastAnchor = anchor
       if (!host || anchor === null || !host.parentElement) return
 
       let bounds = host.parentElement.getBoundingClientRect()
       let width = host.offsetWidth
-      let gap = 16
-      let pad = 10
-      let topLimit = 84
-      let spaceAbove = anchor.y - gap - topLimit
-      let spaceBelow = bounds.height - anchor.y - gap - pad
-      let above = spaceAbove >= Math.max(180, spaceBelow)
-      let space = Math.max(160, above ? spaceAbove : spaceBelow)
+      let roomAbove = anchor.y - CARD_GAP - NAVBAR_FLOOR
+      let roomBelow = bounds.height - anchor.y - CARD_GAP - CARD_PAD
+      // Sit above the dot like a tooltip; only drop below when the dot is so
+      // close to the top that there is no usable card height.
+      let above = roomAbove >= 200
+      let room = above ? roomAbove : roomBelow
 
-      host.style.maxHeight = `${space}px`
+      host.style.maxHeight = `${Math.max(180, room)}px`
+      host.style.left = `${Math.min(
+        Math.max(CARD_PAD, anchor.x - CARD_GAP - width),
+        bounds.width - width - CARD_PAD,
+      )}px`
 
-      let left = Math.min(
-        Math.max(anchor.x, pad + width / 2),
-        bounds.width - pad - width / 2,
-      )
-
-      host.style.left = `${left}px`
-      host.style.top = above ? `${anchor.y - gap}px` : `${anchor.y + gap}px`
-      host.style.transform = above
-        ? 'translate(-50%, -100%)'
-        : 'translate(-50%, 0)'
+      if (above) {
+        host.style.top = 'auto'
+        host.style.bottom = `${bounds.height - anchor.y + CARD_GAP}px`
+      } else {
+        host.style.bottom = 'auto'
+        host.style.top = `${anchor.y + CARD_GAP}px`
+      }
       host.dataset.side = above ? 'above' : 'below'
     }
 
@@ -54,18 +57,17 @@ export const StationPopup = clientEntry(
       'change',
       async () => {
         await handle.update()
-        place(lastAnchor)
+        place(session.anchor)
       },
       { signal: handle.signal },
     )
 
-    handle.queueTask(() => {
-      place(session.anchor)
-    })
+    handle.queueTask(() => place(session.anchor))
 
     return () => {
       let station = session.selected
       let facts = station?.facts ?? null
+      let taf = station?.taf ?? null
 
       return (
         <div
@@ -101,11 +103,26 @@ export const StationPopup = clientEntry(
                     </p>
 
                     <p mix={ageStyle}>
-                      Observed {ageLabel(station.ageSeconds)}
+                      {station.source}
+                      {facts === null
+                        ? ''
+                        : ` · observed ${timeLabel(facts.observed_at)}`}{' '}
+                      · {ageLabel(station.ageSeconds)}
                       {station.stale ? (
                         <span mix={staleStyle}>stale</span>
                       ) : null}
                     </p>
+
+                    {station.parseStatus !== null &&
+                    station.parseStatus !== 'ok' ? (
+                      <p mix={warningStyle}>
+                        Our parser disagrees with AWC on this report
+                        {station.upstreamCategory
+                          ? ` (upstream category ${station.upstreamCategory})`
+                          : ''}
+                        . The difference is kept visible.
+                      </p>
+                    ) : null}
 
                     {facts === null ? (
                       <p mix={mutedStyle}>No observation on file.</p>
@@ -122,29 +139,85 @@ export const StationPopup = clientEntry(
                             label="Temperature"
                             value={temperatureLabel(facts)}
                           />
+                          <Fact
+                            label="Altimeter"
+                            value={
+                              facts.altimeter_in_hg === null
+                                ? 'not reported'
+                                : `${facts.altimeter_in_hg} inHg`
+                            }
+                          />
+                          <Fact
+                            label="Weather"
+                            value={
+                              facts.weather.length === 0
+                                ? 'none'
+                                : facts.weather.join(' ')
+                            }
+                          />
                         </dl>
                         <code mix={rawStyle}>{facts.raw}</code>
                       </>
                     )}
 
-                    <p mix={mutedStyle}>
-                      {station.advisories === 0
-                        ? 'No active advisories within 50 nm.'
-                        : `${station.advisories} active ${
-                            station.advisories === 1 ? 'advisory' : 'advisories'
-                          } within 50 nm.`}
-                    </p>
+                    <h3 mix={sectionStyle}>Forecast</h3>
+                    {taf === null ? (
+                      <p mix={mutedStyle}>No TAF on file.</p>
+                    ) : (
+                      <ul mix={listStyle}>
+                        {taf.periods.map((period) => (
+                          <li key={period.ref}>
+                            <span mix={periodHeadStyle}>
+                              {period.change} ·{' '}
+                              {windowLabel(period.from, period.to)}
+                            </span>
+                            <span mix={periodDetailStyle}>
+                              {periodWindLabel(period)} ·{' '}
+                              {period.visibility_sm === null
+                                ? '—'
+                                : `${period.visibility_sm} SM`}{' '}
+                              ·{' '}
+                              {period.ceiling_ft === null
+                                ? 'no ceiling'
+                                : `${period.ceiling_ft.toLocaleString()} ft`}
+                              {period.weather.length === 0
+                                ? ''
+                                : ` · ${period.weather.join(' ')}`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <h3 mix={sectionStyle}>Last 48 hours</h3>
+                    <Timeline points={timelinePoints(station.history)} />
+
+                    <h3 mix={sectionStyle}>Advisories within 50 nm</h3>
+                    {station.advisories.length === 0 ? (
+                      <p mix={mutedStyle}>None active.</p>
+                    ) : (
+                      <ul mix={listStyle}>
+                        {station.advisories.map((advisory) => (
+                          <li key={advisory.ref}>
+                            <span mix={periodHeadStyle}>
+                              {advisory.hazard} ·{' '}
+                              {advisory.kind.toUpperCase()}
+                            </span>
+                            <span mix={periodDetailStyle}>
+                              {advisory.distance_nm === null
+                                ? ''
+                                : `${advisory.distance_nm.toFixed(0)} nm · `}
+                              until {timeLabel(advisory.valid_to)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </>
                 )}
               </div>
 
               <footer mix={footerStyle}>
-                <a
-                  mix={pageLinkStyle}
-                  href={routes.station.href({ icao: station.icao })}
-                >
-                  Open full page →
-                </a>
                 <form
                   mix={[
                     composerStyle,
@@ -193,9 +266,11 @@ function Fact(handle: Handle<{ label: string; value: string }>) {
 
 const hostStyle = css({
   position: 'absolute',
+  top: '84px',
+  left: '16px',
   zIndex: 3,
-  width: 'min(340px, calc(100% - 24px))',
-  maxHeight: 'calc(100% - 24px)',
+  width: 'min(420px, calc(100vw - 32px))',
+  maxHeight: 'calc(100% - 104px)',
   flexDirection: 'column',
   borderRadius: '20px',
   background: 'var(--glass-strong)',
@@ -203,29 +278,8 @@ const hostStyle = css({
   boxShadow: 'var(--shadow)',
   backdropFilter: 'blur(26px) saturate(1.25)',
   WebkitBackdropFilter: 'blur(26px) saturate(1.25)',
-  overflow: 'visible',
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    left: '50%',
-    bottom: '-5px',
-    width: '10px',
-    height: '10px',
-    marginInlineStart: '-5px',
-    borderRadius: '2px',
-    background: 'var(--glass-strong)',
-    borderInlineEnd: '1px solid var(--glass-border)',
-    borderBlockEnd: '1px solid var(--glass-border)',
-    transform: 'rotate(45deg)',
-  },
-  '&[data-side="below"]::after': {
-    bottom: 'auto',
-    top: '-5px',
-    borderInlineEnd: 0,
-    borderBlockEnd: 0,
-    borderInlineStart: '1px solid var(--glass-border)',
-    borderBlockStart: '1px solid var(--glass-border)',
-  },
+  overflow: 'hidden',
+  animation: 'rmx-card-in 180ms ease-out',
 })
 
 const headerStyle = css({
@@ -282,6 +336,14 @@ const staleStyle = css({
   color: 'var(--accent)',
 })
 
+const warningStyle = css({
+  padding: '7px 9px',
+  borderInlineStart: '2px solid var(--accent)',
+  borderRadius: '6px',
+  background: 'rgba(255, 255, 255, 0.04)',
+  fontSize: '11px',
+})
+
 const factsStyle = css({
   display: 'grid',
   gridTemplateColumns: '1fr 1fr',
@@ -311,21 +373,44 @@ const rawStyle = css({
   overflowWrap: 'anywhere',
 })
 
+const sectionStyle = css({
+  margin: '8px 0 0',
+  fontSize: '10px',
+  fontWeight: 700,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  color: 'var(--ink-3)',
+})
+
+const listStyle = css({
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  '& li': {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1px',
+    paddingBlockEnd: '6px',
+    borderBlockEnd: '1px solid var(--glass-border)',
+  },
+  '& li:last-child': { borderBlockEnd: 0, paddingBlockEnd: 0 },
+})
+
+const periodHeadStyle = css({ fontSize: '11px', fontWeight: 700 })
+
+const periodDetailStyle = css({
+  fontSize: '11px',
+  color: 'var(--ink-2)',
+})
+
 const mutedStyle = css({ fontSize: '12px', color: 'var(--ink-3)' })
 
 const footerStyle = css({
   borderBlockStart: '1px solid var(--glass-border)',
   padding: '10px 14px 12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-})
-
-const pageLinkStyle = css({
-  fontSize: '11px',
-  color: 'var(--ink-2)',
-  textDecoration: 'none',
-  '&:hover': { color: 'var(--ink-0)' },
 })
 
 const composerStyle = css({

@@ -1,16 +1,18 @@
 import { TypedEventTarget } from 'remix/component'
 
 import type { Answer } from '../../lib/answer.ts'
-import type { Bundle, BundleMetar } from '../../lib/api-types.ts'
+import type {
+  Bundle,
+  BundleAdvisory,
+  BundleMetar,
+  BundleTaf,
+  StationDetailResponse,
+  StationHistory,
+} from '../../lib/api-types.ts'
 import { routes } from '../../routes.ts'
 
-/** Same threshold the envelope applies, so the popup can flag a stale report. */
+/** Same threshold the envelope applies, so the card can flag a stale report. */
 const METAR_STALE_SECONDS = 90 * 60
-
-export interface Anchor {
-  x: number
-  y: number
-}
 
 export interface ThreadEntry {
   answer: Answer | null
@@ -20,23 +22,38 @@ export interface ThreadEntry {
   refusal: string | null
 }
 
+export interface Anchor {
+  x: number
+  y: number
+}
+
+export interface HistoryPoint {
+  decoded: Record<string, unknown>
+  obs_time: string
+}
+
 export interface SelectedStation {
-  advisories: number
+  advisories: BundleAdvisory[]
   ageSeconds: number | null
   basis: string | null
   category: string | null
   error: string | null
   facts: BundleMetar | null
+  history: HistoryPoint[]
   icao: string
   loading: boolean
   name: string
+  parseStatus: string | null
   raw: string | null
+  source: string
   stale: boolean
+  taf: BundleTaf | null
   thread: ThreadEntry[]
+  upstreamCategory: string | null
 }
 
 /**
- * The map, the popup and the chat sidebar are separate islands, so the
+ * The map, the station card and the drawer are separate islands, so the
  * selection and the conversation live here rather than in one of them.
  */
 export class StationSession extends TypedEventTarget<{ change: Event }> {
@@ -67,33 +84,57 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.#pending = controller
 
     this.selected = {
-      advisories: 0,
+      advisories: [],
       ageSeconds: null,
       basis: null,
       category: null,
       error: null,
       facts: null,
+      history: [],
       icao,
       loading: true,
       name: icao,
+      parseStatus: null,
       raw: null,
+      source: 'aviationweather.gov',
       stale: false,
+      taf: null,
       thread,
+      upstreamCategory: null,
     }
     this.notify()
 
     try {
-      let response = await fetch(routes.brief.href({ icao }), {
-        headers: { accept: 'application/json' },
-        signal: controller.signal,
-      })
-      if (!response.ok) throw new Error(`brief ${response.status}`)
+      let signal = controller.signal
+      let [detailResponse, briefResponse, historyResponse] = await Promise.all([
+        fetch(routes.detail.href({ icao }), {
+          headers: { accept: 'application/json' },
+          signal,
+        }),
+        fetch(routes.brief.href({ icao }), {
+          headers: { accept: 'application/json' },
+          signal,
+        }),
+        fetch(routes.history.href({ icao }), {
+          headers: { accept: 'application/json' },
+          signal,
+        }),
+      ])
 
-      let envelope = (await response.json()) as { data: Bundle }
-      if (controller.signal.aborted) return
+      if (!detailResponse.ok || !briefResponse.ok) {
+        throw new Error(`station ${detailResponse.status}`)
+      }
+      if (signal.aborted) return
 
-      let station = envelope.data.stations[0]
+      let detail = (await detailResponse.json()) as StationDetailResponse
+      let brief = (await briefResponse.json()) as { data: Bundle }
+      let history = historyResponse.ok
+        ? ((await historyResponse.json()) as StationHistory)
+        : { data: [] }
+
+      let station = brief.data.stations[0]
       let metar = station?.metar ?? null
+      let row = detail.data.metar
       let age = metar?.age_seconds ?? null
 
       this.selected = {
@@ -105,7 +146,12 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
         raw: metar?.raw ?? null,
         ageSeconds: age,
         stale: age !== null && age > METAR_STALE_SECONDS,
-        advisories: station?.advisories.length ?? 0,
+        advisories: station?.advisories ?? [],
+        taf: station?.taf ?? null,
+        history: history.data ?? [],
+        parseStatus: row?.parse_status ?? null,
+        upstreamCategory: row?.upstream_category ?? null,
+        source: detail.meta.source,
         loading: false,
       }
     } catch {
@@ -123,7 +169,11 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   async ask(question: string): Promise<void> {
     let selected = this.selected
     let text = question.trim()
-    if (selected === null || text === '' || selected.thread.some((entry) => entry.pending)) {
+    if (
+      selected === null ||
+      text === '' ||
+      selected.thread.some((entry) => entry.pending)
+    ) {
       return
     }
 
@@ -176,6 +226,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   clear(): void {
     this.#pending?.abort()
     this.selected = null
+    this.setAnchor(null)
     this.notify()
   }
 

@@ -18,7 +18,7 @@ import {
   CATEGORY_SHADES,
 } from '../../lib/public/categories.ts'
 import { routes } from '../../routes.ts'
-import { session } from '../../ui/public/session.ts'
+import { type Anchor, session } from '../../ui/public/session.ts'
 
 const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
@@ -72,7 +72,8 @@ export const MapIsland = clientEntry(
       )
 
       let moveTimer: ReturnType<typeof setTimeout> | undefined
-      let selectedPoint: [number, number] | null = null
+      let points = stationPoints(handle.props.initial)
+      let selectedIcao: string | null = null
 
       // The server text is for a browser without JavaScript; from here it is
       // only a loading note until the first style is ready.
@@ -82,23 +83,38 @@ export const MapIsland = clientEntry(
         if (signal.aborted) return
 
         addAdvisoryLayers(map, handle.props.initial)
-        addStationLayers(map, handle.props.initial, (point) => {
-          selectedPoint = point
-        })
+        addStationLayers(map, handle.props.initial)
         fallback?.remove()
       })
 
-      // Keep the station card over its dot while the map moves under it.
+      // Keep the station card and its highlight over the dot as the map moves.
       map.on('move', () => {
-        if (selectedPoint === null) return
-        let point = map.project(selectedPoint)
-        session.setAnchor({ x: point.x, y: point.y })
+        if (selectedIcao === null) return
+        let point = points.get(selectedIcao)
+        if (!point) return
+        session.setAnchor(project(map, point))
       })
 
+      // The card clears the selection on close. A new selection (from a dot or
+      // from search) sets the highlight and the anchor here, in one place.
       session.addEventListener(
         'change',
         () => {
-          if (session.selected === null) selectedPoint = null
+          let station = session.selected
+          if (station === null) {
+            if (selectedIcao !== null) markSelected(map, selectedIcao, false)
+            selectedIcao = null
+            session.setAnchor(null)
+            return
+          }
+
+          if (station.icao === selectedIcao) return
+          if (selectedIcao !== null) markSelected(map, selectedIcao, false)
+          selectedIcao = station.icao
+          markSelected(map, selectedIcao, true)
+
+          let point = points.get(station.icao)
+          if (point) session.setAnchor(project(map, point))
         },
         { signal: handle.signal },
       )
@@ -106,7 +122,7 @@ export const MapIsland = clientEntry(
       map.on('moveend', () => {
         clearTimeout(moveTimer)
         moveTimer = setTimeout(() => {
-          void refresh(map)
+          void refresh(map, points)
         }, MOVE_DEBOUNCE_MS)
       })
 
@@ -154,12 +170,25 @@ function emptyStyle(): StyleSpecification {
   }
 }
 
-function addStationLayers(
-  map: MapLibreMap,
-  data: IslandLayers,
-  select: (point: [number, number] | null) => void,
-): void {
-  map.addSource('stations', { type: 'geojson', data: stationsOf(data) })
+function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
+  map.addSource('stations', {
+    type: 'geojson',
+    data: stationsOf(data),
+    promoteId: 'icao',
+  })
+
+  map.addLayer({
+    id: 'stations-halo',
+    type: 'circle',
+    source: 'stations',
+    filter: ['boolean', ['feature-state', 'selected'], false],
+    paint: {
+      'circle-radius': 11,
+      'circle-color': 'rgba(224, 96, 63, 0)',
+      'circle-stroke-color': ACCENT,
+      'circle-stroke-width': 2,
+    },
+  })
 
   map.addLayer({
     id: 'stations-dots',
@@ -180,8 +209,18 @@ function addStationLayers(
         CATEGORY_SHADES.LIFR,
         '#9a9a9a',
       ],
-      'circle-stroke-color': PAPER,
-      'circle-stroke-width': 1.5,
+      'circle-stroke-color': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        ACCENT,
+        PAPER,
+      ],
+      'circle-stroke-width': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        2.5,
+        1.5,
+      ],
     },
   })
 
@@ -205,24 +244,11 @@ function addStationLayers(
   }
 
   map.on('click', 'stations-dots', (event) => {
-    let feature = event.features?.[0]
-    let icao = feature?.properties?.icao
-    if (typeof icao !== 'string') return
+    // One station at a time: the card must be closed before another is picked.
+    if (session.selected !== null) return
 
-    let geometry = feature?.geometry
-    let point: [number, number] | null =
-      geometry?.type === 'Point' &&
-      Array.isArray(geometry.coordinates) &&
-      typeof geometry.coordinates[0] === 'number'
-        ? [geometry.coordinates[0], geometry.coordinates[1]]
-        : null
-
-    select(point)
-    session.setAnchor({
-      x: event.point.x,
-      y: event.point.y,
-    })
-    void session.select(icao)
+    let icao = event.features?.[0]?.properties?.icao
+    if (typeof icao === 'string') void session.select(icao)
   })
   map.on('mouseenter', 'stations-dots', () => {
     map.getCanvas().style.cursor = 'pointer'
@@ -252,7 +278,10 @@ function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {
   })
 }
 
-async function refresh(map: MapLibreMap): Promise<void> {
+async function refresh(
+  map: MapLibreMap,
+  points: Map<string, [number, number]>,
+): Promise<void> {
   let bounds = map.getBounds()
   let bbox = [
     bounds.getWest(),
@@ -277,8 +306,37 @@ async function refresh(map: MapLibreMap): Promise<void> {
     let advisories = map.getSource('advisories') as GeoJSONSource | undefined
     stations?.setData(stationsOf(data))
     advisories?.setData(advisoriesOf(data))
+
+    for (let [icao, point] of stationPoints(data)) points.set(icao, point)
   } catch {
     // A failed viewport fetch leaves the last drawn layer in place.
+  }
+}
+
+function stationPoints(
+  data: IslandLayers,
+): Map<string, [number, number]> {
+  let points = new Map<string, [number, number]>()
+  for (let station of data.stations) {
+    points.set(station.icao, [station.lon, station.lat])
+  }
+  return points
+}
+
+function project(map: MapLibreMap, point: [number, number]): Anchor {
+  let projected = map.project(point)
+  return { x: projected.x, y: projected.y }
+}
+
+function markSelected(
+  map: MapLibreMap,
+  icao: string,
+  selected: boolean,
+): void {
+  try {
+    map.setFeatureState({ source: 'stations', id: icao }, { selected })
+  } catch {
+    // The source is rebuilt on viewport refresh; a missing id is harmless.
   }
 }
 

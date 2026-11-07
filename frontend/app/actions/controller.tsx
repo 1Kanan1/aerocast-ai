@@ -147,6 +147,43 @@ export default createController(routes, {
       })
     },
 
+    async detail(context) {
+      let result = await apiGetStation(
+        context.params.icao.toUpperCase(),
+        context.request.signal,
+      )
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'station is unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    },
+
+    async history(context) {
+      let result = await apiGetHistory(
+        context.params.icao.toUpperCase(),
+        48,
+        context.request.signal,
+      )
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'station history is unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    },
+
     async ask(context) {
       let icao = context.params.icao.toUpperCase()
       let form = await context.request.formData()

@@ -5,23 +5,45 @@ import { describe, it } from 'remix/test'
 import { StationSession } from './session.ts'
 import type { Anchor } from './session.ts'
 
+const METAR = {
+  raw: 'METAR KSFO 052156Z 03003KT 10SM SCT200 18/13 A3008',
+  observed_at: '2026-11-05T21:56:00Z',
+  age_seconds: 240,
+  flight_category: {
+    value: 'VFR',
+    basis: 'no ceiling, visibility 10 SM',
+  },
+}
+
 const BRIEF = {
   data: {
     stations: [
       {
         name: 'San Francisco Intl',
-        metar: {
-          raw: 'METAR KSFO 052156Z 03003KT 10SM SCT200 18/13 A3008',
-          age_seconds: 240,
-          flight_category: {
-            value: 'VFR',
-            basis: 'no ceiling, visibility 10 SM',
-          },
-        },
+        metar: METAR,
+        taf: null,
         advisories: [{ hazard: 'IFR' }, { hazard: 'TURB' }],
       },
     ],
   },
+}
+
+const DETAIL = {
+  data: {
+    metar: { parse_status: 'ok', upstream_category: 'VFR' },
+  },
+  meta: { source: 'aviationweather.gov' },
+}
+
+const HISTORY = {
+  data: [{ obs_time: '2026-11-05T21:56:00Z', decoded: {} }],
+  meta: {},
+}
+
+function stationApi(path: string): Response {
+  if (path.includes('/observations')) return Response.json(HISTORY)
+  if (path.includes('/brief')) return Response.json(BRIEF)
+  return Response.json(DETAIL)
 }
 
 function mockFetch(
@@ -40,38 +62,36 @@ function mockFetch(
 }
 
 describe('station session', () => {
-  it('loads the selected station from the brief proxy', async (t) => {
-    mockFetch(t, (path) => {
-      assert.match(path, /\/api\/stations\/KSFO\/brief/)
-      return Response.json(BRIEF)
-    })
+  it('loads facts, forecast and history for the selected station', async (t) => {
+    mockFetch(t, stationApi)
     let session = new StationSession()
 
     await session.select('KSFO')
 
     assert.equal(session.selected?.name, 'San Francisco Intl')
     assert.equal(session.selected?.category, 'VFR')
-    assert.equal(session.selected?.facts?.raw, BRIEF.data.stations[0].metar.raw)
-    assert.equal(session.selected?.advisories, 2)
+    assert.equal(session.selected?.facts?.raw, METAR.raw)
+    assert.equal(session.selected?.advisories.length, 2)
+    assert.equal(session.selected?.history.length, 1)
+    assert.equal(session.selected?.source, 'aviationweather.gov')
+    assert.equal(session.selected?.parseStatus, 'ok')
     assert.equal(session.selected?.loading, false)
   })
 
   it('flags an old observation as stale', async (t) => {
-    mockFetch(t, () =>
-      Response.json({
-        data: {
-          stations: [
-            {
-              name: 'San Francisco Intl',
-              metar: {
-                ...BRIEF.data.stations[0].metar,
-                age_seconds: 7200,
-              },
-              advisories: [],
+    mockFetch(t, (path) =>
+      path.includes('/brief')
+        ? Response.json({
+            data: {
+              stations: [
+                {
+                  ...BRIEF.data.stations[0],
+                  metar: { ...METAR, age_seconds: 7200 },
+                },
+              ],
             },
-          ],
-        },
-      }),
+          })
+        : stationApi(path),
     )
     let session = new StationSession()
 
@@ -80,7 +100,7 @@ describe('station session', () => {
     assert.equal(session.selected?.stale, true)
   })
 
-  it('reports a failed brief instead of an empty panel', async (t) => {
+  it('reports a failed station instead of an empty card', async (t) => {
     mockFetch(t, () => new Response('nope', { status: 502 }))
     let session = new StationSession()
 
@@ -91,7 +111,7 @@ describe('station session', () => {
   })
 
   it('keeps the thread with the station it belongs to', async (t) => {
-    mockFetch(t, () => Response.json(BRIEF))
+    mockFetch(t, stationApi)
     let session = new StationSession()
 
     await session.select('KSFO')
@@ -105,10 +125,11 @@ describe('station session', () => {
   })
 
   it('records an unavailable explanation on the entry', async (t) => {
-    mockFetch(t, (path) => {
-      if (path.includes('/brief')) return Response.json(BRIEF)
-      return Response.json({ error: 'not available' }, { status: 503 })
-    })
+    mockFetch(t, (path) =>
+      path.includes('/ask')
+        ? Response.json({ error: 'not available' }, { status: 503 })
+        : stationApi(path),
+    )
     let session = new StationSession()
     await session.select('KSFO')
 
@@ -121,15 +142,21 @@ describe('station session', () => {
   })
 
   it('records a validated answer when one arrives', async (t) => {
-    mockFetch(t, (path) => {
-      if (path.includes('/brief')) return Response.json(BRIEF)
-      return Response.json({
-        summary: 'KSFO is VFR.',
-        claims: [{ text: 'Visibility is 10 SM.', refs: ['metar.KSFO.visibility'] }],
-        caveats: [],
-        refusal: null,
-      })
-    })
+    mockFetch(t, (path) =>
+      path.includes('/ask')
+        ? Response.json({
+            summary: 'KSFO is VFR.',
+            claims: [
+              {
+                text: 'Visibility is 10 SM.',
+                refs: ['metar.KSFO.visibility'],
+              },
+            ],
+            caveats: [],
+            refusal: null,
+          })
+        : stationApi(path),
+    )
     let session = new StationSession()
     await session.select('KSFO')
 
@@ -141,7 +168,7 @@ describe('station session', () => {
   })
 
   it('ignores an empty question and clears the selection', async (t) => {
-    mockFetch(t, () => Response.json(BRIEF))
+    mockFetch(t, stationApi)
     let session = new StationSession()
     await session.select('KSFO')
 
@@ -163,5 +190,16 @@ describe('station session', () => {
 
     assert.deepEqual(seen, [{ x: 10, y: 20 }, null])
     assert.deepEqual(session.anchor, { x: 30, y: 40 })
+  })
+
+  it('drops the anchor when the card is cleared', async (t) => {
+    mockFetch(t, stationApi)
+    let session = new StationSession()
+    await session.select('KSFO')
+    session.setAnchor({ x: 10, y: 20 })
+
+    session.clear()
+
+    assert.equal(session.anchor, null)
   })
 })

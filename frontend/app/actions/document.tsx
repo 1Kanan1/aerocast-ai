@@ -25,6 +25,12 @@ export function Document(handle: Handle<DocumentProps>) {
           <meta name="color-scheme" content="dark" />
           <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
           <link rel="stylesheet" href="/vendor/maplibre/maplibre-gl.css" />
+          <style>
+            {`@keyframes rmx-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}`}
+          </style>
           <title>{title}</title>
           {head}
           <ImportMap value={importMap} />

@@ -11,6 +11,8 @@ export const routes = route({
   search: get('/api/stations'),
   /** Same-origin JSON proxy for the map island. */
   layers: get('/api/map/layers'),
-  /** Same-origin JSON proxy for the station popup. */
+  /** Same-origin JSON proxy for the station card. */
+  detail: get('/api/stations/:icao'),
+  history: get('/api/stations/:icao/observations'),
   brief: get('/api/stations/:icao/brief'),
 })
