@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app.config import Settings
+from app.config import Settings, Target
 
 
 def make_settings(**overrides: Any) -> Settings:
@@ -50,21 +50,33 @@ def test_database_url_rejects_anything_not_postgres(url: str) -> None:
 @pytest.mark.parametrize(
     ("chain", "expected"),
     [
-        ("zai,gemini,mlx", ("zai", "gemini", "mlx")),
-        (" zai , omlx ", ("zai", "omlx")),
-        ("mlx", ("mlx",)),
+        ("zai,gemini,mlx", ("zai", "gemini", "local")),
+        (" zai , omlx ", ("zai", "local")),
+        (
+            "gemini/gemini-3.5-flash-lite,zai/glm-4.5-flash",
+            ("gemini/gemini-3.5-flash-lite", "zai/glm-4.5-flash"),
+        ),
         ("zai,,gemini", ("zai", "gemini")),
     ],
 )
-def test_llm_chain_is_parsed_in_order(
+def test_pool_is_parsed_in_order(
     chain: str, expected: tuple[str, ...]
 ) -> None:
-    assert make_settings(llm_chain=chain).llm_providers == expected
+    targets = make_settings(llm_chain=chain).llm_targets
+    assert (
+        tuple(
+            f"{target.provider}/{target.model}"
+            if target.model
+            else target.provider
+            for target in targets
+        )
+        == expected
+    )
 
 
-def test_unknown_providers_are_dropped_from_the_chain() -> None:
-    assert make_settings(llm_chain="zai,openai,gpt4all").llm_providers == (
-        "zai",
+def test_unknown_providers_are_dropped_from_the_pool() -> None:
+    assert make_settings(llm_chain="zai,openai,gpt4all").llm_targets == (
+        Target("zai", None),
     )
 
 
@@ -93,8 +105,9 @@ def test_no_provider_uses_a_moving_model_alias() -> None:
     """`-latest` aliases drift without a commit. Pinned ids only."""
     settings = make_settings()
     for model in (
-        settings.zai_model,
+        *settings.zai_model_list,
         *settings.gemini_model_list,
+        *(target.model for target in settings.llm_targets if target.model),
         settings.local_model,
     ):
         assert not model.endswith("-latest"), model

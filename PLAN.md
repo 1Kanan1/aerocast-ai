@@ -43,7 +43,7 @@ accounts, no go/no-go anything.
 | Frontend runtime | Node 26.13.0 LTS, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running. Pinned in the Docker base image, CI and `.node-version` |
 | Map | MapLibre GL JS v6 | ESM only, WebGL2, no Mapbox account |
 | Basemap | OpenFreeMap `positron`, restyled monochrome | no key, no rate limit, MIT-ish terms, good enough to desaturate |
-| AI | Z.ai GLM-4.7-Flash, Gemini Flash, local Gemma 4 E2B via oMLX, template floor | free tiers plus an offline rung; one OpenAI-compatible client for all of them |
+| AI | Z.ai GLM-4.7/4.5-Flash, Gemini Flash, local Gemma 4 E2B via oMLX, template floor | free tiers plus an offline rung; one OpenAI-compatible client for all of them |
 | Deploy | Hetzner + Coolify + Caddy, `docker compose` underneath | ~EUR 4/mo, real TLS, git-push deploys |
 
 Remix never touches Postgres. FastAPI owns the database, the parsers, ingestion, and
@@ -630,7 +630,7 @@ allowed to know arrives as a fact bundle; everything it says has to point at a r
 question
   -> pre-check: does it ask for a decision? (regex)  -> fixed refusal, no model call
   -> cache: sha256(brief_hash + normalized_question + prompt_version)
-  -> provider chain: LLM_CHAIN order, default zai -> gemini -> local -> template
+  -> pool: LLM_CHAIN order, fastest model first, then the template floor
   -> validate
   -> store in ai_answers
   -> respond
@@ -714,13 +714,14 @@ into the same provider.
 
 ### Model pinning
 
-Every provider names an exact model id: `glm-4.7-flash`, `gemini-3.8-flash`,
-`mlx-community/gemma-4-e2b-it-4bit`. No `-latest` aliases anywhere.
+Every provider names an exact model id: `glm-4.7-flash`, `glm-4.5-flash`,
+`gemini-3.8-flash`, `mlx-community/gemma-4-e2b-it-4bit`. No `-latest` aliases anywhere.
 
 Gemini is a ladder rather than a single id. `GEMINI_MODELS` lists the models tried in order
 behind one endpoint, because one provider can hold several usable models and the only
 difference that matters between them is latency. Each entry is still pinned; only the
-ordering is configuration.
+ordering is configuration. ZAI gets the same treatment with `ZAI_MODELS`: 4.7 first, and
+the free 4.5 behind it for the days when 4.7 answers 1305.
 
 An alias that rolls forward is worse than one that expires. The thing it silently changes
 is the output of a system validated by a frozen eval fixture and a versioned prompt, so a
@@ -732,6 +733,24 @@ and other providers vary, so a pinned id will break eventually. That is a schedu
 visible failure with a published replacement, which is the failure mode you want. The
 commit that bumps an id should name the replacement and rerun `make eval` so the delta is
 recorded.
+
+### One pool, ordered by latency
+
+Provider-major order was the wrong shape. Measured on the same brief, Gemini 3.5-flash-lite
+answers in ~1.5s and GLM-4.5-flash in ~20s, so a chain that tries ZAI first pays 16s before
+reaching the model that actually answers quickly. `LLM_CHAIN` is therefore a single pool of
+`provider/model` entries in speed order, and a bare provider name expands to its ladder in
+place:
+
+```dotenv
+LLM_CHAIN=gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
+```
+
+The order is hand-tuned from measurement, not learned. A model that is fast today can be
+slow tomorrow — ZAI's free tier returned 1305 instantly at one point and took 23s an hour
+later — so the list is one line to reorder when a provider shifts. What stays automatic is
+failure handling: any rung that times out or returns 429 sits out for 60s, so a slow or
+overloaded provider is demoted without an edit.
 
 `ai_answers.model` stores the id that produced each answer, so results stay attributable
 after a bump.
@@ -805,9 +824,10 @@ with seven downloads, so even that choice was the wrong URL.)
 
 Three honest caveats:
 
-1. **It is the last rung by default.** A 4 bit, 2B effective model follows the citation
+1. **It is last in the pool by default.** A 4 bit, 2B effective model follows the citation
    contract less reliably than GLM or Gemini, so putting it first would make the product
-   look worse for no gain. `LLM_CHAIN=local,zai,gemini` flips it for an offline demo.
+   look worse for no gain. Adding `local` to the front of `LLM_CHAIN` flips it for an
+   offline demo.
 2. **Expect more rejections, not worse answers.** The validator drops unsupported claims
    and falls through. That is the design working, and the eval fixture should report pass
    rates per provider so the difference is measured rather than assumed.
@@ -835,10 +855,10 @@ single most persuasive artifact in the repo and it costs about half a day.
 the brief endpoint, and returns the answer contract. The request path is:
 
 1. Verdict regex. A match returns fixed refusal copy without a provider call.
-2. Provider chain from `LLM_CHAIN`. One attempt per rung, pinned model ids, per-provider
-   timeouts, a 20s request budget and an 8s cap per rung. Gemini uses the JSON schema
-   response format; the others ask for JSON. A rung that times out or returns 429 is
-   skipped for 60s.
+2. Pool from `LLM_CHAIN`, fastest model first. One attempt per rung, pinned model ids,
+   per-provider timeouts, a 20s request budget and an 8s cap per rung. Gemini uses the
+   JSON schema response format; the others ask for JSON. A rung that times out or returns
+   429 is skipped for 60s.
 3. Parse and validate. Unknown refs, invented numbers, verdict language, too many claims
    or a refusal that carries claims all reject the draft.
 4. On rejection or an unreachable chain, the deterministic template and its notice.
@@ -1037,14 +1057,14 @@ Two owners, two sets of variables. They never mix.
 AEROCAST_ENV=local
 DATABASE_URL=postgresql+asyncpg://aerocast@localhost:5432/aerocast
 
-LLM_CHAIN=zai,gemini,local
+LLM_CHAIN=gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
 LLM_TIMEOUT_SECONDS=20
 
 ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
-ZAI_MODEL=glm-4.7-flash
+ZAI_MODELS=glm-4.7-flash,glm-4.5-flash
 GEMINI_API_KEY=
-GEMINI_MODELS=gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite
+GEMINI_MODELS=gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.8-flash
 
 LOCAL_BASE_URL=http://127.0.0.1:8080/v1
 LOCAL_MODEL=mlx-community/gemma-4-e2b-it-4bit

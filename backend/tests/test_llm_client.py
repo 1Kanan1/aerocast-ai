@@ -54,12 +54,26 @@ def test_rungs_follow_the_chain_and_skip_unconfigured_providers():
             gemini_api_key=None,
             local_base_url="http://127.0.0.1:8080/v1",
             llm_chain="zai,gemini,local",
+            zai_models="glm-a,glm-b",
         )
     )
 
-    assert [rung.name for rung in chain] == ["zai", "local"]
+    assert [rung.name for rung in chain] == ["zai", "zai", "local"]
+    assert [rung.model for rung in chain[:2]] == ["glm-a", "glm-b"]
     assert chain[0].response_format == "json"
-    assert chain[1].response_format == "none"
+    assert chain[2].response_format == "none"
+
+
+def test_zai_expands_to_its_ladder():
+    chain = rungs(
+        settings(
+            gemini_api_key=None,
+            zai_models="zai-a,zai-b",
+        )
+    )
+
+    assert [rung.model for rung in chain] == ["zai-a", "zai-b"]
+    assert all(rung.name == "zai" for rung in chain)
 
 
 def test_gemini_expands_to_its_ladder():
@@ -72,6 +86,25 @@ def test_gemini_expands_to_its_ladder():
 
     assert [rung.model for rung in chain] == ["gemini-a", "gemini-b"]
     assert all(rung.name == "gemini" for rung in chain)
+
+
+def test_pool_pins_models_and_interleaves_providers():
+    chain = rungs(
+        settings(
+            local_base_url="",
+            gemini_models="gemini-a,gemini-b",
+            zai_models="zai-a,zai-b",
+            llm_chain="gemini/gemini-b,zai,gemini",
+        )
+    )
+
+    assert [(rung.name, rung.model) for rung in chain] == [
+        ("gemini", "gemini-b"),
+        ("zai", "zai-a"),
+        ("zai", "zai-b"),
+        ("gemini", "gemini-a"),
+        ("gemini", "gemini-b"),
+    ]
 
 
 async def test_complete_falls_through_to_the_next_provider(monkeypatch):
@@ -96,7 +129,7 @@ async def test_complete_falls_through_to_the_next_provider(monkeypatch):
     assert completion.provider == "gemini"
     assert isinstance(completion.payload, dict)
     assert completion.payload["summary"] == "KSFO is VFR."
-    assert len(attempts) == 2
+    assert len(attempts) == 3
 
 
 async def test_complete_returns_none_when_every_rung_fails(monkeypatch):
@@ -137,7 +170,7 @@ async def test_complete_falls_through_a_timeout(monkeypatch):
 
     assert completion is not None
     assert completion.provider == "gemini"
-    assert len(attempts) == 2
+    assert len(attempts) == 3
 
 
 async def test_a_failed_rung_is_skipped_during_its_cooldown(monkeypatch):
@@ -159,7 +192,7 @@ async def test_a_failed_rung_is_skipped_during_its_cooldown(monkeypatch):
     await complete(settings(), [], {})
     await complete(settings(), [], {})
 
-    assert len([url for url in attempts if "z.ai" in url]) == 1
+    assert len([url for url in attempts if "z.ai" in url]) == 2
 
 
 async def test_complete_accepts_a_fenced_json_answer(monkeypatch):

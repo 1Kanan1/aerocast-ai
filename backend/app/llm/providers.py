@@ -9,7 +9,7 @@ from typing import Literal
 
 import httpx
 
-from app.config import Settings
+from app.config import Settings, Target
 
 logger = logging.getLogger(__name__)
 
@@ -31,18 +31,19 @@ class ProviderStatus:
         return asdict(self)
 
 
-def _resolve(settings: Settings, name: str) -> list[ProviderStatus]:
-    """One chain entry can expand to several rungs, e.g. Gemini."""
-    match name:
+def _resolve(settings: Settings, target: Target) -> list[ProviderStatus]:
+    """One pool entry can expand to several rungs, e.g. a bare name."""
+    match target.provider:
         case "zai":
             return [
                 ProviderStatus(
                     name="zai",
-                    model=settings.zai_model,
+                    model=model,
                     kind="remote",
                     configured=settings.zai_configured,
                     reachable=None,
                 )
+                for model in target.models(settings.zai_model_list)
             ]
         case "gemini":
             return [
@@ -53,17 +54,18 @@ def _resolve(settings: Settings, name: str) -> list[ProviderStatus]:
                     configured=settings.gemini_configured,
                     reachable=None,
                 )
-                for model in settings.gemini_model_list
+                for model in target.models(settings.gemini_model_list)
             ]
-        case "local" | "mlx" | "omlx":
+        case "local":
             return [
                 ProviderStatus(
                     name="local",
-                    model=settings.local_model,
+                    model=model,
                     kind="local",
                     configured=settings.local_configured,
                     reachable=None,
                 )
+                for model in target.models((settings.local_model,))
             ]
     return []
 
@@ -90,10 +92,10 @@ async def statuses(settings: Settings) -> list[dict[str, object]]:
     described: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
 
-    for name in settings.llm_providers:
-        resolved = _resolve(settings, name)
+    for target in settings.llm_targets:
+        resolved = _resolve(settings, target)
         if not resolved:
-            logger.warning("provider in LLM_CHAIN has no models: %s", name)
+            logger.warning("pool entry has no models: %s", target)
             continue
 
         for status in resolved:

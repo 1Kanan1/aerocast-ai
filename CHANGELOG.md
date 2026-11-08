@@ -128,6 +128,9 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   grounded answer or the deterministic template with its notice.
 - Provider client: OpenAI-compatible chat completions, pinned model ids, one attempt per
   rung, JSON schema for Gemini and JSON mode elsewhere, and a fenced-response reader.
+- `LLM_CHAIN` is one pool ordered by latency, not a provider list. Each entry is either
+  `provider/model` or a bare provider name that expands to its ladder in place, so the
+  fastest model answers first while ZAI keeps 4.7 ahead of the free 4.5 behind it.
 - Interactive answer budget: 20s for the whole chain, 8s for any rung, and a 60s cooldown
   after a timeout or 429. The fast Gemini model is first by default, so a thinking model
   cannot hold the drawer for a minute.

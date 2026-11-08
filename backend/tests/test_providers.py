@@ -53,11 +53,47 @@ async def test_chain_order_is_preserved() -> None:
     assert [provider["name"] for provider in described] == [
         "local",
         "zai",
+        "zai",
         "gemini",
         "gemini",
         "gemini",
     ]
-    assert described[2]["model"] == "gemini-3.5-flash-lite"
+    assert described[3]["model"] == "gemini-3.5-flash-lite"
+
+
+async def test_zai_expands_into_its_model_ladder() -> None:
+    settings = make_settings(
+        llm_chain="zai",
+        zai_api_key="secret",
+        zai_models="glm-a, glm-b",
+        local_base_url="",
+    )
+
+    described = await statuses(settings)
+
+    assert [provider["model"] for provider in described] == [
+        "glm-a",
+        "glm-b",
+    ]
+    assert all(provider["name"] == "zai" for provider in described)
+
+
+async def test_pool_pins_models_across_providers() -> None:
+    settings = make_settings(
+        llm_chain="gemini/gemini-b,zai/glm-a",
+        gemini_api_key="secret",
+        zai_api_key="secret",
+        local_base_url="",
+    )
+
+    described = await statuses(settings)
+
+    assert [
+        (provider["name"], provider["model"]) for provider in described
+    ] == [
+        ("gemini", "gemini-b"),
+        ("zai", "glm-a"),
+    ]
 
 
 async def test_gemini_expands_into_its_model_ladder() -> None:

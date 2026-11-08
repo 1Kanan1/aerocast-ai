@@ -27,7 +27,12 @@ async def health(response: Response) -> dict[str, object]:
         "env": settings.aerocast_env,
         "database": {"ok": database_ok, "error": database_error},
         "llm": {
-            "chain": list(settings.llm_providers),
+            "chain": [
+                f"{target.provider}/{target.model}"
+                if target.model
+                else target.provider
+                for target in settings.llm_targets
+            ],
             "providers": await provider_statuses(settings),
         },
     }

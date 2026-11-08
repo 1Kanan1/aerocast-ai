@@ -48,45 +48,48 @@ class Rung:
 
 
 def rungs(settings: Settings) -> list[Rung]:
-    """Configured rungs in the order the chain names them."""
+    """The pool in `LLM_CHAIN` order. A bare provider expands in place."""
     found: list[Rung] = []
 
-    for name in settings.llm_providers:
-        if name == "zai" and settings.zai_configured:
-            found.append(
-                Rung(
-                    name="zai",
-                    model=settings.zai_model,
-                    base_url=settings.zai_base_url,
-                    api_key=_secret(settings.zai_api_key),
-                    timeout=settings.llm_timeout_seconds,
-                    response_format="json",
-                )
-            )
-        elif name == "gemini" and settings.gemini_configured:
-            for model in settings.gemini_model_list:
-                found.append(
-                    Rung(
-                        name="gemini",
-                        model=model,
-                        base_url=settings.gemini_base_url,
-                        api_key=_secret(settings.gemini_api_key),
-                        timeout=settings.llm_thinking_timeout_seconds,
-                        response_format="schema",
-                        reasoning_effort=settings.gemini_reasoning_effort,
+    for target in settings.llm_targets:
+        match target.provider:
+            case "zai" if settings.zai_configured:
+                for model in target.models(settings.zai_model_list):
+                    found.append(
+                        Rung(
+                            name="zai",
+                            model=model,
+                            base_url=settings.zai_base_url,
+                            api_key=_secret(settings.zai_api_key),
+                            timeout=settings.llm_timeout_seconds,
+                            response_format="json",
+                        )
                     )
-                )
-        elif name == "local" and settings.local_configured:
-            found.append(
-                Rung(
-                    name="local",
-                    model=settings.local_model,
-                    base_url=settings.local_base_url or "",
-                    api_key=None,
-                    timeout=settings.llm_timeout_seconds,
-                    response_format="none",
-                )
-            )
+            case "gemini" if settings.gemini_configured:
+                for model in target.models(settings.gemini_model_list):
+                    found.append(
+                        Rung(
+                            name="gemini",
+                            model=model,
+                            base_url=settings.gemini_base_url,
+                            api_key=_secret(settings.gemini_api_key),
+                            timeout=settings.llm_thinking_timeout_seconds,
+                            response_format="schema",
+                            reasoning_effort=settings.gemini_reasoning_effort,
+                        )
+                    )
+            case "local" if settings.local_configured:
+                for model in target.models((settings.local_model,)):
+                    found.append(
+                        Rung(
+                            name="local",
+                            model=model,
+                            base_url=settings.local_base_url or "",
+                            api_key=None,
+                            timeout=settings.llm_timeout_seconds,
+                            response_format="none",
+                        )
+                    )
 
     return found
 
