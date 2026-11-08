@@ -117,64 +117,6 @@ signature. Rationale, history and measurements belong in this file and in `CHANG
 Python: PEP 8, enforced by ruff at 79 columns with pycodestyle warnings and naming checks,
 `ruff format` for layout, and ty for types. TypeScript: strict, `tsc --noEmit`.
 
-**Commit messages.** Conventional Commits, checked by `scripts/commit-msg`: an allowed
-type, an optional scope, an imperative subject inside 72 characters, and body lines at
-the same width, so a commit reads the same in a terminal, in `git log --oneline`, and in
-a forge.
-
-```
-<type>(<scope>): <imperative summary>
-
-<Why the change was needed: the failure, the gap, the constraint.>
-
-<The design decision, why it won, and what it commits the code to.>
-
-<Trade-offs, wire or schema changes, compatibility, what now depends on it.>
-```
-
-Those three paragraphs are the shape when the change has all three. A small change may
-need only the first, or the first and second; padding to three is worse than a short
-body, because a slot filled with "this is cleaner" costs attention and says nothing.
-
-Nothing in the subject or body points at the build plan. No phase numbers, no task
-names, no "see PLAN.md": the plan is a working document that can be rewritten or dropped
-while the log stays, so a commit that borrows its vocabulary starts decaying as soon as
-the plan moves. Describe the work in the project's own terms instead.
-
-What the body never does is list files, summarize what each module now does, or repeat a
-diff. The reviewer reads the diff; the commit is the only place the reasoning survives,
-so spending the body on a file list throws away the one thing that could not be
-generated from the patch. The hook enforces the shape and cannot judge the content, so
-that part is on the author.
-
-Good, a fix whose failure mode is invisible in the patch:
-
-```
-fix(api): cast nullable filters before asyncpg binds them
-
-An unfiltered /api/advisories request failed with a type error while
-every filtered request worked, because asyncpg cannot infer a type for
-a bare None parameter.
-
-Casting :kind in the query keeps one statement for both cases. Building
-the WHERE clause conditionally would give the unfiltered path a second
-statement that nothing else exercises.
-```
-
-Two paragraphs: the rationale is the whole point, and no downstream contract moved.
-
-Bad, the same change restated as an inventory:
-
-```
-update files
-
-- app/api/weather.py: added cast(:kind as text)
-- tests: updated
-```
-
-The second version is recoverable from `git show` in ten seconds and loses the reason the
-line exists at all.
-
 ## 4. Data source
 
 **AWC only. Open-Meteo is out of scope.** Recorded as a decision because it will come
