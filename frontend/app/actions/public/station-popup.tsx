@@ -246,8 +246,7 @@ export const StationPopup = clientEntry(
                         {station.advisories.map((advisory) => (
                           <li key={advisory.ref}>
                             <span mix={periodHeadStyle}>
-                              {advisory.hazard} ·{' '}
-                              {advisory.kind.toUpperCase()}
+                              {advisory.hazard} · {advisory.kind.toUpperCase()}
                             </span>
                             <span mix={periodDetailStyle}>
                               {advisory.distance_nm === null

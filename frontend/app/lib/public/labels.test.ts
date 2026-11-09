@@ -66,11 +66,15 @@ describe('fact labels', () => {
 
   it('keeps the floor and ceiling qualifiers on visibility', () => {
     assert.equal(
-      visibilityLabel(metar({ visibility: { statute_miles: 10, is_greater_than: true } })),
+      visibilityLabel(
+        metar({ visibility: { statute_miles: 10, is_greater_than: true } }),
+      ),
       'more than 10 SM',
     )
     assert.equal(
-      visibilityLabel(metar({ visibility: { statute_miles: 0.25, is_less_than: true } })),
+      visibilityLabel(
+        metar({ visibility: { statute_miles: 0.25, is_less_than: true } }),
+      ),
       'less than 0.25 SM',
     )
   })
@@ -83,7 +87,9 @@ describe('fact labels', () => {
   it('includes the spread only when the dewpoint is known', () => {
     assert.equal(
       temperatureLabel(
-        metar({ temperature: { c: 12.2, dewpoint_c: 10, dewpoint_spread_c: 2.2 } }),
+        metar({
+          temperature: { c: 12.2, dewpoint_c: 10, dewpoint_spread_c: 2.2 },
+        }),
       ),
       '12.2 °C / dewpoint 10 °C, spread 2.2 °C',
     )
@@ -93,7 +99,9 @@ describe('fact labels', () => {
   it('labels a forecast period wind, or a dash when absent', () => {
     assert.equal(periodWindLabel(period({})), '—')
     assert.equal(
-      periodWindLabel(period({ wind: { direction_deg: 300, speed_kt: 5, gust_kt: null } })),
+      periodWindLabel(
+        period({ wind: { direction_deg: 300, speed_kt: 5, gust_kt: null } }),
+      ),
       '300° at 5 kt',
     )
   })

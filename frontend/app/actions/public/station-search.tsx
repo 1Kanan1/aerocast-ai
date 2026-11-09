@@ -5,11 +5,7 @@ import type { Station } from '#app/lib/api-types.ts'
 import { routes } from '#app/routes.ts'
 import { session } from '#app/ui/public/session.ts'
 import { closePopover, onPopoverDismiss } from '#app/ui/public/popover.ts'
-import {
-  ArrowIcon,
-  CloseIcon,
-  SearchIcon,
-} from '#app/ui/public/icons.tsx'
+import { ArrowIcon, CloseIcon, SearchIcon } from '#app/ui/public/icons.tsx'
 
 interface StationSearchProps {
   initial: Station[]
@@ -95,9 +91,7 @@ export const StationSearch = clientEntry(
               event.preventDefault()
               clearTimeout(debounce)
               void run(
-                String(
-                  new FormData(event.currentTarget).get('q') ?? '',
-                ).trim(),
+                String(new FormData(event.currentTarget).get('q') ?? '').trim(),
               )
             }),
           ]}

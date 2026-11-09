@@ -10,10 +10,7 @@ import type {
 } from '#app/lib/api-types.ts'
 import type { ApiResult } from '#app/lib/api.ts'
 import { ageLabel, timeLabel, windowLabel } from '#app/lib/format.ts'
-import {
-  CATEGORY_SHADES,
-  categoryInk,
-} from '#app/lib/public/categories.ts'
+import { CATEGORY_SHADES, categoryInk } from '#app/lib/public/categories.ts'
 import {
   ceilingLabel,
   periodWindLabel,
@@ -22,7 +19,13 @@ import {
   windLabel,
 } from '#app/lib/public/labels.ts'
 import { routes } from '#app/routes.ts'
-import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '#app/ui/layout.tsx'
+import {
+  cardStyle,
+  headingStyle,
+  mutedStyle,
+  Page,
+  subheadingStyle,
+} from '#app/ui/layout.tsx'
 import { Timeline, timelinePoints } from '#app/ui/timeline.tsx'
 import { AskPanel } from './public/ask-panel.tsx'
 
@@ -89,9 +92,7 @@ export function StationPage(handle: Handle<StationPageProps>) {
                 METAR from {detail.meta.source} · observed{' '}
                 {timeLabel(detail.meta.observed_at)} ·{' '}
                 {ageLabel(detail.meta.age_seconds)}
-                {detail.meta.stale ? (
-                  <span mix={staleStyle}>stale</span>
-                ) : null}
+                {detail.meta.stale ? <span mix={staleStyle}>stale</span> : null}
               </p>
             </>
           )}
@@ -216,7 +217,9 @@ function Facts(handle: Handle<{ facts: BundleMetar }>) {
           />
           <Fact
             label="Weather"
-            value={facts.weather.length === 0 ? 'none' : facts.weather.join(' ')}
+            value={
+              facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
+            }
           />
           <Fact
             label="Clouds"

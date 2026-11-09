@@ -52,7 +52,9 @@ export function Page(handle: Handle<PageProps>) {
                 Educational tool. Not for flight planning. Obtain an official
                 briefing from Flight Service (1-800-WX-BRIEF) before you fly.
               </p>
-              <p>Weather data: aviationweather.gov, US Government public domain.</p>
+              <p>
+                Weather data: aviationweather.gov, US Government public domain.
+              </p>
             </footer>
           </div>
         </main>
@@ -92,7 +94,8 @@ export const pageStyle = css({
   padding: 'clamp(28px, 6vw, 72px) 24px',
   background: 'var(--paper)',
   color: 'var(--ink-0)',
-  fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+  fontFamily:
+    "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
   fontSize: '14px',
   lineHeight: 1.6,
   WebkitFontSmoothing: 'antialiased',

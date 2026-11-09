@@ -144,7 +144,9 @@ export function Timeline(handle: Handle<{ points: TimelinePoint[] }>) {
               <text
                 key={fraction}
                 mix={tickStyle}
-                text-anchor={fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle'}
+                text-anchor={
+                  fraction === 0 ? 'start' : fraction === 1 ? 'end' : 'middle'
+                }
                 x={LEFT + width * fraction}
                 y={HEIGHT - 4}
               >

@@ -196,9 +196,9 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
         body: form,
         headers: { accept: 'application/json' },
       })
-      let payload = (await response
-        .json()
-        .catch(() => null)) as (Partial<Answer> & { error?: string }) | null
+      let payload = (await response.json().catch(() => null)) as
+        | (Partial<Answer> & { error?: string })
+        | null
 
       if (!response.ok || payload === null) {
         entry.problem =

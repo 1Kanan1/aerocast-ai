@@ -35,7 +35,11 @@ async function request<T>(
   try {
     url = new URL(path, API_BASE_URL).toString()
   } catch {
-    return { ok: false, status: 0, error: `Invalid API_BASE_URL: ${API_BASE_URL}` }
+    return {
+      ok: false,
+      status: 0,
+      error: `Invalid API_BASE_URL: ${API_BASE_URL}`,
+    }
   }
 
   let combined = signal
@@ -52,13 +56,25 @@ async function request<T>(
     })
 
     if (!acceptStatus(response.status)) {
-      return { ok: false, status: response.status, error: `API responded ${response.status}` }
+      return {
+        ok: false,
+        status: response.status,
+        error: `API responded ${response.status}`,
+      }
     }
 
-    return { ok: true, status: response.status, data: (await response.json()) as T }
+    return {
+      ok: true,
+      status: response.status,
+      data: (await response.json()) as T,
+    }
   } catch (error) {
     if (error instanceof Error && error.name === 'TimeoutError') {
-      return { ok: false, status: 0, error: `API timed out after ${timeoutMs}ms` }
+      return {
+        ok: false,
+        status: 0,
+        error: `API timed out after ${timeoutMs}ms`,
+      }
     }
     return {
       ok: false,
@@ -68,27 +84,40 @@ async function request<T>(
   }
 }
 
-export function apiGet<T>(path: string, signal?: AbortSignal): Promise<ApiResult<T>> {
+export function apiGet<T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<T>> {
   return request<T>(path, signal, (status) => status >= 200 && status < 300)
 }
 
 /** Health answers 503 when the database is down, and that body is worth rendering. */
 export function apiGetHealth(signal?: AbortSignal): Promise<ApiResult<Health>> {
-  return request<Health>('/api/health', signal, (status) => status === 200 || status === 503)
+  return request<Health>(
+    '/api/health',
+    signal,
+    (status) => status === 200 || status === 503,
+  )
 }
 
 export function apiGetStations(
   query: string,
   signal?: AbortSignal,
 ): Promise<ApiResult<StationList>> {
-  return apiGet<StationList>(`/api/stations?q=${encodeURIComponent(query)}`, signal)
+  return apiGet<StationList>(
+    `/api/stations?q=${encodeURIComponent(query)}`,
+    signal,
+  )
 }
 
 export function apiGetStation(
   icao: string,
   signal?: AbortSignal,
 ): Promise<ApiResult<StationDetailResponse>> {
-  return apiGet<StationDetailResponse>(`/api/stations/${encodeURIComponent(icao)}`, signal)
+  return apiGet<StationDetailResponse>(
+    `/api/stations/${encodeURIComponent(icao)}`,
+    signal,
+  )
 }
 
 export function apiGetHistory(
@@ -106,7 +135,10 @@ export function apiGetBrief(
   icao: string,
   signal?: AbortSignal,
 ): Promise<ApiResult<StationBrief>> {
-  return apiGet<StationBrief>(`/api/stations/${encodeURIComponent(icao)}/brief`, signal)
+  return apiGet<StationBrief>(
+    `/api/stations/${encodeURIComponent(icao)}/brief`,
+    signal,
+  )
 }
 
 export function apiGetMapLayers(
@@ -117,7 +149,9 @@ export function apiGetMapLayers(
   return apiGet<MapLayersResponse>(`/api/map/layers${query}`, signal)
 }
 
-export function apiGetAdvisories(signal?: AbortSignal): Promise<ApiResult<AdvisoryList>> {
+export function apiGetAdvisories(
+  signal?: AbortSignal,
+): Promise<ApiResult<AdvisoryList>> {
   return apiGet<AdvisoryList>('/api/advisories', signal)
 }
 

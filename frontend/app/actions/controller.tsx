@@ -28,7 +28,10 @@ const CONUS_BBOX = '-125,24,-66,50'
 export default createController(routes, {
   actions: {
     async assets(context) {
-      return (await assets.fetch(context.request)) ?? new Response('Not Found', { status: 404 })
+      return (
+        (await assets.fetch(context.request)) ??
+        new Response('Not Found', { status: 404 })
+      )
     },
 
     async home(context) {
@@ -194,7 +197,10 @@ export default createController(routes, {
 
       if (question === '') {
         if (wantsJson) {
-          return Response.json({ error: 'Ask a question first.' }, { status: 400 })
+          return Response.json(
+            { error: 'Ask a question first.' },
+            { status: 400 },
+          )
         }
 
         return context.render(

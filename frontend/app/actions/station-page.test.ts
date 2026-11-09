@@ -108,7 +108,12 @@ function stationHandlers(): Record<string, () => Response> {
   return {
     '/api/stations/KSFO': () =>
       Response.json(
-        envelope({ station: STATION, metar: METAR_ROW, taf: null, advisories: [] }),
+        envelope({
+          station: STATION,
+          metar: METAR_ROW,
+          taf: null,
+          advisories: [],
+        }),
       ),
     '/api/stations/KSFO/brief': () => Response.json(envelope(BUNDLE)),
     '/api/stations/KSFO/observations': () =>

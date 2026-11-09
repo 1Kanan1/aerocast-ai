@@ -29,7 +29,8 @@ export const assets = createAssetServer({
   watch: isDevelopment,
   hmr: isHmr
     ? {
-        channel: async () => (await import('remix/node-hmr/runtime')).createBrowserHmrChannel(),
+        channel: async () =>
+          (await import('remix/node-hmr/runtime')).createBrowserHmrChannel(),
         moduleImporter: 'remix/multiple-import-maps-polyfill',
       }
     : undefined,

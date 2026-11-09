@@ -8,15 +8,9 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
 import type { MapLayers } from '#app/lib/api-types.ts'
-import {
-  type IslandLayers,
-  islandLayers,
-} from '#app/lib/map-data.ts'
+import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
-import {
-  CATEGORY_BADGES,
-  CATEGORY_SHADES,
-} from '#app/lib/public/categories.ts'
+import { CATEGORY_BADGES, CATEGORY_SHADES } from '#app/lib/public/categories.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 
@@ -307,9 +301,7 @@ async function refresh(
   }
 }
 
-function stationPoints(
-  data: IslandLayers,
-): Map<string, [number, number]> {
+function stationPoints(data: IslandLayers): Map<string, [number, number]> {
   let points = new Map<string, [number, number]>()
   for (let station of data.stations) {
     points.set(station.icao, [station.lon, station.lat])
@@ -322,10 +314,7 @@ function project(map: MapLibreMap, point: [number, number]): Anchor {
   return { x: projected.x, y: projected.y }
 }
 
-function showSelection(
-  map: MapLibreMap,
-  point: [number, number] | null,
-): void {
+function showSelection(map: MapLibreMap, point: [number, number] | null): void {
   let source = map.getSource('selection') as GeoJSONSource | undefined
   source?.setData({
     type: 'FeatureCollection',

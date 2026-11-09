@@ -3,7 +3,13 @@ import { css } from 'remix/component'
 
 import type { Health } from '#app/lib/api-types.ts'
 import type { ApiResult } from '#app/lib/api.ts'
-import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '#app/ui/layout.tsx'
+import {
+  cardStyle,
+  headingStyle,
+  mutedStyle,
+  Page,
+  subheadingStyle,
+} from '#app/ui/layout.tsx'
 
 export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
   return () => {
@@ -12,7 +18,8 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
     let databaseOk = body?.database.ok ?? false
     let providers = body?.llm.providers ?? []
     let provider = providers.find(
-      (item) => item.configured && (item.kind === 'remote' || item.reachable === true),
+      (item) =>
+        item.configured && (item.kind === 'remote' || item.reachable === true),
     )
 
     return (
@@ -38,8 +45,8 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
           </p>
           <p mix={paragraphStyle}>
             AWC keeps 30 days of history. AeroCast ingests the bulk cache files,
-            stores what it sees, and serves the last known good copy with its age
-            attached when upstream is late or down.
+            stores what it sees, and serves the last known good copy with its
+            age attached when upstream is late or down.
           </p>
         </section>
 
@@ -52,8 +59,8 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
             own decoder on every report in the national cache. The last run
             compared 2,545 METARs and 817 TAFs: wind, visibility, cloud layers,
             altimeter and temperature agreed on every report that carried the
-            field. Two reported divergences remain, both adjudicated in favour of
-            the FAA definition and both pinned by tests.
+            field. Two reported divergences remain, both adjudicated in favour
+            of the FAA definition and both pinned by tests.
           </p>
           <p mix={paragraphStyle}>
             Where the parsers do disagree with upstream, the station page says
@@ -84,18 +91,28 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
             Status
           </h2>
           <StatusRow
-            detail={health.ok ? `v${body?.version ?? '?'}` : (health.error ?? 'unreachable')}
+            detail={
+              health.ok
+                ? `v${body?.version ?? '?'}`
+                : (health.error ?? 'unreachable')
+            }
             label="API"
             ok={health.ok}
           />
           <StatusRow
-            detail={databaseOk ? 'connected' : (body?.database.error ?? 'not connected')}
+            detail={
+              databaseOk
+                ? 'connected'
+                : (body?.database.error ?? 'not connected')
+            }
             label="Database"
             ok={databaseOk}
           />
           <StatusRow
             detail={
-              provider ? `${provider.name} · ${provider.model}` : 'not configured'
+              provider
+                ? `${provider.name} · ${provider.model}`
+                : 'not configured'
             }
             label="Explanations"
             ok={provider !== undefined}
@@ -112,7 +129,9 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
   }
 }
 
-function StatusRow(handle: Handle<{ detail: string; label: string; ok: boolean }>) {
+function StatusRow(
+  handle: Handle<{ detail: string; label: string; ok: boolean }>,
+) {
   return () => {
     let { detail, label, ok } = handle.props
 

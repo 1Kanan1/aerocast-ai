@@ -84,7 +84,10 @@ export const ChatSidebar = clientEntry(
                   </p>
                 ) : (
                   station.thread.map((entry, index) => (
-                    <Exchange entry={entry} key={`${entry.question}-${index}`} />
+                    <Exchange
+                      entry={entry}
+                      key={`${entry.question}-${index}`}
+                    />
                   ))
                 )}
               </>
@@ -110,11 +113,7 @@ export const ChatSidebar = clientEntry(
               rows={2}
               disabled={station === null}
             />
-            <button
-              disabled={station === null}
-              mix={askStyle}
-              type="submit"
-            >
+            <button disabled={station === null} mix={askStyle} type="submit">
               Ask
             </button>
           </form>

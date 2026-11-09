@@ -35,11 +35,13 @@ export function islandLayers(layers: MapLayers): IslandLayers {
       lat,
       lon,
     })),
-    advisories: layers.advisories.map(({ geometry, hazard, kind, source_id }) => ({
-      geometry: geometry as unknown as IslandGeometry,
-      hazard,
-      kind,
-      source_id,
-    })),
+    advisories: layers.advisories.map(
+      ({ geometry, hazard, kind, source_id }) => ({
+        geometry: geometry as unknown as IslandGeometry,
+        hazard,
+        kind,
+        source_id,
+      }),
+    ),
   }
 }

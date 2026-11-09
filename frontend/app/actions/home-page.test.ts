@@ -111,28 +111,16 @@ describe('map page', () => {
     })
 
     assert.equal((await get(routes.detail.href({ icao: 'KSFO' }))).status, 200)
-    assert.equal(
-      (await get(routes.history.href({ icao: 'KSFO' }))).status,
-      200,
-    )
+    assert.equal((await get(routes.history.href({ icao: 'KSFO' }))).status, 200)
   })
 
   it('answers 502 when a proxy cannot reach the API', async (t) => {
     mockApiDown(t)
 
     assert.equal((await get(routes.layers.href())).status, 502)
-    assert.equal(
-      (await get(routes.brief.href({ icao: 'KSFO' }))).status,
-      502,
-    )
+    assert.equal((await get(routes.brief.href({ icao: 'KSFO' }))).status, 502)
     assert.equal((await get(routes.search.href())).status, 502)
-    assert.equal(
-      (await get(routes.detail.href({ icao: 'KSFO' }))).status,
-      502,
-    )
-    assert.equal(
-      (await get(routes.history.href({ icao: 'KSFO' }))).status,
-      502,
-    )
+    assert.equal((await get(routes.detail.href({ icao: 'KSFO' }))).status, 502)
+    assert.equal((await get(routes.history.href({ icao: 'KSFO' }))).status, 502)
   })
 })

@@ -4,7 +4,13 @@ import { css } from 'remix/component'
 import type { Advisory, AdvisoryList } from '#app/lib/api-types.ts'
 import type { ApiResult } from '#app/lib/api.ts'
 import { timeLabel, windowLabel } from '#app/lib/format.ts'
-import { cardStyle, headingStyle, mutedStyle, Page, subheadingStyle } from '#app/ui/layout.tsx'
+import {
+  cardStyle,
+  headingStyle,
+  mutedStyle,
+  Page,
+  subheadingStyle,
+} from '#app/ui/layout.tsx'
 
 export function AdvisoriesPage(
   handle: Handle<{ advisories: ApiResult<AdvisoryList> }>,
@@ -97,7 +103,11 @@ function groupByHazard(rows: Advisory[]): Map<string, Advisory[]> {
   return new Map([...groups.entries()].sort(([a], [b]) => a.localeCompare(b)))
 }
 
-const ledeStyle = css({ margin: '0 0 8px', maxWidth: '62ch', color: 'var(--ink-2)' })
+const ledeStyle = css({
+  margin: '0 0 8px',
+  maxWidth: '62ch',
+  color: 'var(--ink-2)',
+})
 
 const listStyle = css({
   listStyle: 'none',

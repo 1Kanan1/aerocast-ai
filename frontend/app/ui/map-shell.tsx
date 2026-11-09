@@ -13,12 +13,7 @@ import { ChatSidebar } from '#app/actions/public/chat-sidebar.tsx'
 import { MapIsland } from '#app/actions/public/map-island.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
 import { StationSearch } from '#app/actions/public/station-search.tsx'
-import {
-  AlertIcon,
-  InfoIcon,
-  SearchIcon,
-  SparkIcon,
-} from './public/icons.tsx'
+import { AlertIcon, InfoIcon, SearchIcon, SparkIcon } from './public/icons.tsx'
 import { glassStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
 
 interface MapShellProps {
@@ -106,7 +101,8 @@ const shellStyle = css({
   overflow: 'hidden',
   background: 'var(--paper)',
   color: 'var(--ink-0)',
-  fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+  fontFamily:
+    "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
   fontSize: '14px',
   lineHeight: 1.6,
   WebkitFontSmoothing: 'antialiased',
