@@ -413,9 +413,6 @@ const answerFooterStyle = css({
   display: 'flex',
   alignItems: 'center',
   marginBlockStart: '-10px',
-  '& > button': { opacity: 0 },
-  '&:hover > button, &:focus-within > button': { opacity: 1 },
-  '@media (hover: none)': { '& > button': { opacity: 1 } },
 })
 
 const copyButtonStyle = css({
