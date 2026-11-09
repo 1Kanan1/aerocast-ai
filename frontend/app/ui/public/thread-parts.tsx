@@ -1,5 +1,5 @@
 import type { Handle } from 'remix/component'
-import { css, on } from 'remix/component'
+import { css, on, ref } from 'remix/component'
 
 import type { ThreadEntry } from '#app/ui/public/session.ts'
 import {
@@ -62,24 +62,112 @@ export function ThreadWelcome(handle: Handle<WelcomeProps>) {
   }
 }
 
-/** A user turn: right aligned, compact, with an edit action on the last one. */
+/** A user turn: right aligned, compact, editable in place on the last one. */
 export function UserTurn(
-  handle: Handle<{ question: string; onEdit?: () => void }>,
+  handle: Handle<{ question: string; onEdit?: (next: string) => void }>,
 ) {
-  return () => (
-    <div mix={userRowStyle}>
-      {handle.props.onEdit === undefined ? null : (
-        <button
-          aria-label="Edit last question"
-          mix={[editButtonStyle, on('click', () => handle.props.onEdit?.())]}
-          type="button"
-        >
-          <PencilIcon />
-        </button>
-      )}
-      <p mix={[userBubbleStyle, turnInStyle]}>{handle.props.question}</p>
-    </div>
-  )
+  let editing = false
+  let draft = ''
+  let field: HTMLTextAreaElement | undefined
+
+  function startEdit(): void {
+    draft = handle.props.question
+    editing = true
+    handle.update()
+    handle.queueTask(() => {
+      if (field === undefined) return
+      field.value = draft
+      field.style.height = 'auto'
+      field.style.height = `${Math.min(field.scrollHeight, 132)}px`
+      field.focus()
+      field.select()
+    })
+  }
+
+  function stopEdit(): void {
+    editing = false
+    handle.update()
+  }
+
+  function submit(): void {
+    let next = draft.trim()
+    if (next === '' || next === handle.props.question) {
+      stopEdit()
+      return
+    }
+    editing = false
+    handle.props.onEdit?.(next)
+  }
+
+  return () => {
+    return (
+      <div mix={[userRowStyle, turnInStyle]}>
+        {editing || handle.props.onEdit === undefined ? null : (
+          <button
+            aria-label="Edit last question"
+            mix={[editButtonStyle, on('click', startEdit)]}
+            type="button"
+          >
+            <PencilIcon />
+          </button>
+        )}
+        {editing ? (
+          <form
+            mix={[
+              userEditStyle,
+              on('submit', (event) => {
+                event.preventDefault()
+                submit()
+              }),
+            ]}
+          >
+            <textarea
+              aria-label="Edit question"
+              maxLength={400}
+              mix={[
+                ref((node) => (field = node)),
+                on('input', (event) => {
+                  draft = event.currentTarget.value
+                  let node = event.currentTarget
+                  node.style.height = 'auto'
+                  node.style.height = `${Math.min(node.scrollHeight, 132)}px`
+                  handle.update()
+                }),
+                on('keydown', (event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    stopEdit()
+                    return
+                  }
+                  if (event.key !== 'Enter' || event.shiftKey) return
+                  event.preventDefault()
+                  submit()
+                }),
+              ]}
+              rows={1}
+            />
+            <div mix={userEditActionsStyle}>
+              <button
+                mix={[cancelEditStyle, on('click', stopEdit)]}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={draft.trim() === ''}
+                mix={saveEditStyle}
+                type="submit"
+              >
+                Send
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p mix={userBubbleStyle}>{handle.props.question}</p>
+        )}
+      </div>
+    )
+  }
 }
 
 /** An assistant turn: plain text, citations and any fallback notice. */
@@ -321,6 +409,65 @@ const userBubbleStyle = css({
   lineHeight: 1.55,
   color: 'var(--ink-0)',
   overflowWrap: 'anywhere',
+})
+
+const userEditStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  width: '86%',
+  padding: '8px 10px 6px',
+  border: '1px solid rgba(255, 255, 255, 0.2)',
+  borderRadius: '16px',
+  background: 'rgba(255, 255, 255, 0.06)',
+  '& textarea': {
+    width: '100%',
+    minHeight: '34px',
+    maxHeight: '132px',
+    padding: '1px 2px 0',
+    border: 0,
+    outline: 'none',
+    background: 'transparent',
+    color: 'var(--ink-0)',
+    font: 'inherit',
+    fontSize: '13px',
+    lineHeight: 1.55,
+    resize: 'none',
+    overflowY: 'auto',
+  },
+})
+
+const userEditActionsStyle = css({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+  gap: '4px',
+})
+
+const cancelEditStyle = css({
+  border: 0,
+  borderRadius: '999px',
+  padding: '4px 8px',
+  background: 'none',
+  color: 'var(--ink-3)',
+  font: 'inherit',
+  fontSize: '11px',
+  cursor: 'pointer',
+  '&:hover': { color: 'var(--ink-1)' },
+})
+
+const saveEditStyle = css({
+  border: 0,
+  borderRadius: '999px',
+  padding: '4px 10px',
+  background: 'var(--ink-0)',
+  color: 'var(--paper)',
+  font: 'inherit',
+  fontSize: '11px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  '&:hover': { opacity: 0.9 },
+  '&:disabled': { opacity: 0.3, cursor: 'not-allowed' },
 })
 
 const assistantStyle = css({

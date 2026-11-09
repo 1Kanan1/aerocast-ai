@@ -27,7 +27,6 @@ export const ChatSidebar = clientEntry(
   function ChatSidebar(handle: Handle) {
     let root: HTMLElement | undefined
     let scroller: HTMLElement | undefined
-    let composer: HTMLTextAreaElement | undefined
     let draft = ''
 
     function drawer(): HTMLElement | null {
@@ -39,18 +38,9 @@ export const ChatSidebar = clientEntry(
       if (scroller) scroller.scrollTop = scroller.scrollHeight
     }
 
-    function editLast(): void {
-      let question = session.rewindLast()
-      if (question === null) return
-
-      draft = question
-      handle.update()
-      if (composer) {
-        composer.value = question
-        composer.style.height = 'auto'
-        composer.style.height = `${Math.min(composer.scrollHeight, 132)}px`
-        composer.focus()
-      }
+    function editLast(question: string): void {
+      if (session.rewindLast() === null) return
+      void session.ask(question)
     }
 
     handle.queueTask(() => {
@@ -176,7 +166,6 @@ export const ChatSidebar = clientEntry(
                 disabled={!canAsk}
                 maxLength={400}
                 mix={[
-                  ref((node) => (composer = node)),
                   on('input', (event) => {
                     draft = event.currentTarget.value
                     let field = event.currentTarget
