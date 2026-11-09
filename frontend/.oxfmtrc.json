@@ -1,0 +1,7 @@
+{
+  "printWidth": 80,
+  "semi": false,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "ignorePatterns": ["app/lib/api-types.ts", "public/vendor/**"]
+}
