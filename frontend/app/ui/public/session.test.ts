@@ -237,7 +237,7 @@ describe('station session', () => {
     assert.equal(entry?.stopped, true)
   })
 
-  it('rewinds the last question for editing', async (t) => {
+  it('discards a turn and everything after it', async (t) => {
     mockFetch(t, (path) =>
       path.includes('/ask')
         ? Response.json({ error: 'not available' }, { status: 503 })
@@ -246,11 +246,15 @@ describe('station session', () => {
     let session = new StationSession()
     await session.select('KSFO')
     await session.ask('How is the visibility?')
+    await session.ask('What is the ceiling?')
+    await session.ask('What is the wind doing?')
 
-    let question = session.rewindLast()
+    session.discardFrom(1)
 
-    assert.equal(question, 'How is the visibility?')
-    assert.equal(session.selected?.thread.length, 0)
+    assert.deepEqual(
+      session.selected?.thread.map((entry) => entry.question),
+      ['How is the visibility?'],
+    )
   })
 
   it('reports the dot anchor until the listener unsubscribes', () => {

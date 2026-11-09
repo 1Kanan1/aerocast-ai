@@ -257,16 +257,17 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.notify()
   }
 
-  /** Remove the last question and hand it back for editing. */
-  rewindLast(): string | null {
+  /** Drop the turn at `index` and every turn after it. */
+  discardFrom(index: number): void {
     let selected = this.selected
-    if (selected === null || selected.thread.length === 0) return null
+    if (selected === null || index < 0 || index >= selected.thread.length) {
+      return
+    }
 
     this.#ask?.abort()
     this.#ask = null
-    let entry = selected.thread.pop()
+    selected.thread.splice(index)
     this.notify()
-    return entry?.question ?? null
   }
 
   clear(): void {

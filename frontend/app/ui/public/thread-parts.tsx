@@ -6,6 +6,7 @@ import {
   CheckIcon,
   CopyIcon,
   PencilIcon,
+  RefreshIcon,
   SparkIcon,
 } from '#app/ui/public/icons.tsx'
 
@@ -91,7 +92,7 @@ export function UserTurn(
 
   function submit(): void {
     let next = draft.trim()
-    if (next === '' || next === handle.props.question) {
+    if (next === '') {
       stopEdit()
       return
     }
@@ -104,7 +105,7 @@ export function UserTurn(
       <div mix={[userRowStyle, turnInStyle]}>
         {editing || handle.props.onEdit === undefined ? null : (
           <button
-            aria-label="Edit last question"
+            aria-label="Edit question"
             mix={[editButtonStyle, on('click', startEdit)]}
             type="button"
           >
@@ -124,6 +125,7 @@ export function UserTurn(
             <textarea
               aria-label="Edit question"
               maxLength={400}
+              name="question"
               mix={[
                 ref((node) => (field = node)),
                 on('input', (event) => {
@@ -171,7 +173,9 @@ export function UserTurn(
 }
 
 /** An assistant turn: plain text, citations and any fallback notice. */
-export function AssistantTurn(handle: Handle<{ entry: ThreadEntry }>) {
+export function AssistantTurn(
+  handle: Handle<{ entry: ThreadEntry; onRegenerate?: () => void }>,
+) {
   let copied = false
   let copiedTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -245,16 +249,33 @@ export function AssistantTurn(handle: Handle<{ entry: ThreadEntry }>) {
                 ))}
               </ul>
             )}
-            <div mix={answerFooterStyle}>
+          </div>
+        )}
+
+        {entry.pending ? null : (
+          <div mix={answerFooterStyle}>
+            {entry.answer === null ? null : (
               <button
                 aria-label={copied ? 'Copied' : 'Copy answer'}
                 data-copy="true"
-                mix={[copyButtonStyle, on('click', copy)]}
+                mix={[turnActionStyle, on('click', copy)]}
                 type="button"
               >
                 {copied ? <CheckIcon /> : <CopyIcon />}
               </button>
-            </div>
+            )}
+            {handle.props.onRegenerate === undefined ? null : (
+              <button
+                aria-label="Regenerate response"
+                mix={[
+                  turnActionStyle,
+                  on('click', () => handle.props.onRegenerate?.()),
+                ]}
+                type="button"
+              >
+                <RefreshIcon />
+              </button>
+            )}
           </div>
         )}
       </article>
@@ -559,10 +580,11 @@ const stoppedStyle = css({
 const answerFooterStyle = css({
   display: 'flex',
   alignItems: 'center',
-  marginBlockStart: '-10px',
+  gap: '2px',
+  marginBlockStart: '-6px',
 })
 
-const copyButtonStyle = css({
+const turnActionStyle = css({
   display: 'grid',
   placeItems: 'center',
   width: '22px',

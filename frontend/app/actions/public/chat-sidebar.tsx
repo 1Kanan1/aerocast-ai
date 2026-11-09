@@ -38,9 +38,17 @@ export const ChatSidebar = clientEntry(
       if (scroller) scroller.scrollTop = scroller.scrollHeight
     }
 
-    function editLast(question: string): void {
-      if (session.rewindLast() === null) return
-      void session.ask(question)
+    function restartFrom(index: number, question: string): void {
+      let text = question.trim()
+      if (text === '') return
+      session.discardFrom(index)
+      void session.ask(text)
+    }
+
+    function regenerate(index: number): void {
+      let question = session.selected?.thread[index]?.question
+      if (question === undefined) return
+      restartFrom(index, question)
     }
 
     handle.queueTask(() => {
@@ -129,14 +137,13 @@ export const ChatSidebar = clientEntry(
               station.thread.map((entry, index) => (
                 <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
                   <UserTurn
-                    onEdit={
-                      index === station.thread.length - 1 && !entry.pending
-                        ? editLast
-                        : undefined
-                    }
+                    onEdit={(next) => restartFrom(index, next)}
                     question={entry.question}
                   />
-                  <AssistantTurn entry={entry} />
+                  <AssistantTurn
+                    entry={entry}
+                    onRegenerate={() => regenerate(index)}
+                  />
                 </div>
               ))
             )}
