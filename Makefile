@@ -45,14 +45,17 @@ lint: ## lint, format check, types
 	cd backend && uv run ruff check .
 	cd backend && uv run ruff format --check .
 	cd backend && uv run ty check
+	cd frontend && bun run lint
+	cd frontend && bun run format:check
 	cd frontend && bun run typecheck
 
 crosscheck: ## compare parsers against AWC's decoder (needs network)
 	cd backend && uv run python -m app.tools.crosscheck_metar
 	cd backend && uv run python -m app.tools.crosscheck_taf
 
-fmt: ## format the backend
+fmt: ## format the backend and frontend
 	cd backend && uv run ruff format .
+	cd frontend && bun run format
 
 types: ## regenerate frontend/app/lib/api-types.ts from the schema
 	cd backend && uv run python -m app.tools.openapi_types \
