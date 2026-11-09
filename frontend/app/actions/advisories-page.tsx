@@ -28,10 +28,7 @@ export function AdvisoriesPage(
             G-AIRMETs and SIGMETs currently in force over the United States.
             Advisories past their end time are not listed.
           </p>
-          <p mix={mutedStyle}>
-            Source {advisories.data?.meta.source ?? 'aviationweather.gov'} ·{' '}
-            {rows.length} active
-          </p>
+          <p mix={mutedStyle}>{rows.length} active · aviationweather.gov</p>
         </section>
 
         {!advisories.ok ? (
@@ -126,6 +123,6 @@ const rowHeaderStyle = css({
   alignItems: 'baseline',
 })
 
-const kindStyle = css({ fontWeight: 700, letterSpacing: '0.04em' })
+const kindStyle = css({ fontWeight: 700 })
 
 const detailStyle = css({ margin: '8px 0 4px' })

@@ -175,4 +175,4 @@ const dotStyle = css({
   border: '1px solid var(--ink-0)',
 })
 
-const statusLabelStyle = css({ fontWeight: 700 })
+const statusLabelStyle = css({ fontSize: '13px' })

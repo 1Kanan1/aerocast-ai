@@ -174,7 +174,11 @@ export function UserTurn(
 
 /** An assistant turn: plain text, citations and any fallback notice. */
 export function AssistantTurn(
-  handle: Handle<{ entry: ThreadEntry; onRegenerate?: () => void }>,
+  handle: Handle<{
+    entry: ThreadEntry
+    onRegenerate?: () => void
+    showName?: boolean
+  }>,
 ) {
   let copied = false
   let copiedTimer: ReturnType<typeof setTimeout> | undefined
@@ -212,12 +216,14 @@ export function AssistantTurn(
 
     return (
       <article mix={assistantStyle}>
-        <header mix={[assistantMetaStyle, turnInStyle]}>
-          <span mix={assistantIconStyle}>
-            <SparkIcon />
-          </span>
-          AeroCast
-        </header>
+        {handle.props.showName === false ? null : (
+          <header mix={[assistantMetaStyle, turnInStyle]}>
+            <span mix={assistantIconStyle}>
+              <SparkIcon />
+            </span>
+            AeroCast
+          </header>
+        )}
 
         {entry.pending ? (
           <p aria-live="polite" mix={pendingStyle} role="status">
@@ -323,7 +329,7 @@ const turnInStyle = css({
 const welcomeStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '18px',
+  gap: '20px',
   marginBlock: 'auto',
   paddingBlock: '12px',
 })
@@ -331,22 +337,19 @@ const welcomeStyle = css({
 const welcomeHeadStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '6px',
+  gap: '8px',
 })
 
 const welcomeKickerStyle = css({
   margin: 0,
-  fontSize: '10px',
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  color: 'var(--accent)',
+  fontSize: '11px',
+  color: 'var(--ink-3)',
 })
 
 const welcomeTitleStyle = css({
   margin: 0,
-  fontSize: '21px',
-  fontWeight: 600,
-  letterSpacing: '-0.01em',
+  fontSize: '20px',
+  fontWeight: 400,
   color: 'var(--ink-0)',
 })
 
@@ -360,13 +363,13 @@ const welcomeSubStyle = css({
 const suggestionListStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '7px',
+  gap: '8px',
 })
 
 const suggestionStyle = css({
   display: 'grid',
-  gridTemplateColumns: '14px 1fr',
-  columnGap: '9px',
+  gridTemplateColumns: '16px 1fr',
+  columnGap: '8px',
   alignItems: 'center',
   width: '100%',
   padding: '10px 12px',
@@ -399,14 +402,14 @@ const userRowStyle = css({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-end',
-  gap: '6px',
+  gap: '8px',
 })
 
 const editButtonStyle = css({
   display: 'grid',
   placeItems: 'center',
-  width: '26px',
-  height: '26px',
+  width: '28px',
+  height: '28px',
   flexShrink: 0,
   border: 0,
   borderRadius: '999px',
@@ -479,13 +482,12 @@ const cancelEditStyle = css({
 
 const saveEditStyle = css({
   border: 0,
-  borderRadius: '999px',
+  borderRadius: '8px',
   padding: '4px 10px',
   background: 'var(--ink-0)',
   color: 'var(--paper)',
   font: 'inherit',
   fontSize: '11px',
-  fontWeight: 600,
   cursor: 'pointer',
   '&:hover': { opacity: 0.9 },
   '&:disabled': { opacity: 0.3, cursor: 'not-allowed' },
@@ -501,16 +503,14 @@ const assistantMetaStyle = css({
   display: 'flex',
   alignItems: 'center',
   gap: '6px',
-  fontSize: '10px',
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase',
+  fontSize: '11px',
   color: 'var(--ink-3)',
 })
 
 const assistantIconStyle = css({
   display: 'grid',
   placeItems: 'center',
-  color: 'var(--accent)',
+  color: 'var(--ink-3)',
   '& svg': { width: '12px', height: '12px' },
 })
 

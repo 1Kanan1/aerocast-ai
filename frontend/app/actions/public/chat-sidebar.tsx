@@ -143,6 +143,7 @@ export const ChatSidebar = clientEntry(
                   <AssistantTurn
                     entry={entry}
                     onRegenerate={() => regenerate(index)}
+                    showName={index === 0}
                   />
                 </div>
               ))
@@ -259,11 +260,8 @@ const headingStyle = css({
 })
 
 const titleStyle = css({
-  fontSize: '10px',
-  fontWeight: 700,
-  letterSpacing: '0.16em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-3)',
+  fontSize: '12px',
+  color: 'var(--ink-2)',
 })
 
 const stationLineStyle = css({
@@ -313,8 +311,8 @@ const threadStyle = css({
   overflowX: 'hidden',
   display: 'flex',
   flexDirection: 'column',
-  gap: '22px',
-  padding: '16px 20px 8px',
+  gap: '24px',
+  padding: '16px 20px 12px',
   scrollBehavior: 'smooth',
 })
 
@@ -334,10 +332,8 @@ const emptyStyle = css({
 
 const kickerStyle = css({
   margin: 0,
-  fontSize: '10px',
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  color: 'var(--accent)',
+  fontSize: '11px',
+  color: 'var(--ink-3)',
 })
 
 const emptyTitleStyle = css({
@@ -373,7 +369,7 @@ const composerShellStyle = css({
     width: '100%',
     minHeight: '40px',
     maxHeight: '132px',
-    padding: '5px 6px 3px',
+    padding: '4px 6px',
     border: 0,
     outline: 'none',
     background: 'transparent',
@@ -397,7 +393,7 @@ const composerRowStyle = css({
 })
 
 const hintStyle = css({
-  fontSize: '10px',
+  fontSize: '11px',
   color: 'var(--ink-3)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',

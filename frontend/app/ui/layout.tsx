@@ -124,9 +124,13 @@ const mastheadStyle = css({
 export const wordmarkStyle = css({
   fontSize: '13px',
   fontWeight: 700,
-  letterSpacing: '0.22em',
+  letterSpacing: '0.08em',
   color: 'var(--ink-0)',
   textDecoration: 'none',
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '4px',
+  },
 })
 
 export const navStyle = css({
@@ -134,11 +138,15 @@ export const navStyle = css({
   gap: '18px',
   '& a': { color: 'var(--ink-3)', textDecoration: 'none' },
   '& a:hover': { color: 'var(--ink-1)' },
+  '& a:focus-visible': {
+    color: 'var(--ink-0)',
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '4px',
+  },
   '& a[aria-current="page"]': {
     color: 'var(--ink-0)',
-    fontWeight: 700,
     textDecoration: 'underline',
-    textUnderlineOffset: '4px',
+    textUnderlineOffset: '6px',
   },
 })
 
@@ -153,28 +161,24 @@ const footerStyle = css({
 
 export const headingStyle = css({
   margin: '0 0 4px',
-  fontSize: 'clamp(22px, 4vw, 30px)',
-  lineHeight: 1.2,
+  fontSize: 'clamp(24px, 3.6vw, 32px)',
+  fontWeight: 400,
+  lineHeight: 1.15,
   letterSpacing: '-0.01em',
 })
 
 export const subheadingStyle = css({
   margin: '0 0 12px',
-  fontSize: '12px',
-  fontWeight: 700,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-2)',
+  fontSize: '16px',
+  fontWeight: 400,
+  color: 'var(--ink-1)',
 })
 
 export const cardStyle = css({
-  border: '1px solid var(--glass-border)',
-  borderRadius: '18px',
-  padding: '18px 22px',
-  background: 'var(--glass)',
-  backdropFilter: 'blur(18px) saturate(1.15)',
-  WebkitBackdropFilter: 'blur(18px) saturate(1.15)',
-  boxShadow: '0 16px 40px rgba(0, 0, 0, 0.32)',
+  border: '1px solid var(--line)',
+  borderRadius: '16px',
+  padding: '20px 24px',
+  background: 'var(--paper-2)',
 })
 
 export const mutedStyle = css({ color: 'var(--ink-3)' })

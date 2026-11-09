@@ -323,8 +323,6 @@ const badgeStyle = css({
   border: '1px solid var(--glass-border)',
   borderRadius: '999px',
   fontSize: '12px',
-  fontWeight: 700,
-  letterSpacing: '0.08em',
 })
 
 const provenanceStyle = css({
@@ -364,16 +362,14 @@ const warningStyle = css({
 const factsStyle = css({
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(11rem, 1fr))',
-  gap: '10px 20px',
-  margin: '14px 0 0',
+  gap: '12px 24px',
+  margin: '16px 0 0',
 })
 
 const factStyle = css({
   margin: 0,
   '& dt': {
     fontSize: '11px',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
     color: 'var(--ink-3)',
   },
   '& dd': { margin: 0 },
@@ -397,8 +393,6 @@ const tableStyle = css({
   },
   '& th': {
     fontSize: '11px',
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
     color: 'var(--ink-3)',
     fontWeight: 400,
   },
@@ -420,5 +414,4 @@ const advisoryListStyle = css({
 const hazardStyle = css({
   fontWeight: 700,
   color: 'var(--accent)',
-  letterSpacing: '0.06em',
 })

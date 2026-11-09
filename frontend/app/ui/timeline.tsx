@@ -71,10 +71,10 @@ export function Timeline(handle: Handle<{ points: TimelinePoint[] }>) {
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         >
           <text mix={axisTitleStyle} x={LEFT} y={TOP - 6}>
-            Ceiling (ft, dashed 1,000 / 3,000)
+            Ceiling, ft
           </text>
           <text mix={axisTitleStyle} x={LEFT} y={ceilingTop + GAP - 8}>
-            Visibility (SM, dashed 3 / 5)
+            Visibility, SM
           </text>
 
           {thresholds(ceilingY, [1000, 3000], LEFT, width)}
@@ -156,7 +156,8 @@ export function Timeline(handle: Handle<{ points: TimelinePoint[] }>) {
           })}
         </svg>
         <figcaption mix={captionStyle}>
-          {points.length} observations, newest last. Times are UTC.
+          {points.length} observations, newest last · UTC. Dashed lines mark the
+          MVFR and VFR limits.
         </figcaption>
       </figure>
     )
@@ -210,11 +211,11 @@ const figureStyle = css({
 })
 
 const axisTitleStyle = css({
-  fontSize: '9px',
+  fontSize: '11px',
   fill: 'var(--ink-3)',
 })
 
-const tickStyle = css({ fontSize: '9px', fill: 'var(--ink-3)' })
+const tickStyle = css({ fontSize: '11px', fill: 'var(--ink-3)' })
 
 const lineStyle = css({
   fill: 'none',

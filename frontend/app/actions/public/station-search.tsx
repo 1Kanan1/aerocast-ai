@@ -266,7 +266,7 @@ const listStyle = css({
   '& a:hover': { background: 'rgba(255, 255, 255, 0.06)' },
 })
 
-const icaoStyle = css({ fontWeight: 700, letterSpacing: '0.05em' })
+const icaoStyle = css({ fontWeight: 700 })
 
 const stateStyle = css({ color: 'var(--ink-3)' })
 

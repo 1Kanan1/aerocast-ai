@@ -52,7 +52,6 @@ describe('map page', () => {
     assert.match(html, /id="ai-drawer"/)
     assert.match(html, /aria-label="Search stations"/)
     assert.match(html, /aria-label="Open explanation"/)
-    assert.match(html, /Not for navigation/)
     assert.match(html, /Not for flight planning/)
   })
 

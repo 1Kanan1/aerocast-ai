@@ -35,7 +35,6 @@ export function MapShell(handle: Handle<MapShellProps>) {
           <div mix={mapAreaStyle}>
             <MapIsland initial={island} />
             <StationPopup />
-            <p mix={mapNoteStyle}>Not for navigation.</p>
           </div>
 
           <header mix={[glassStyle, navbarStyle]}>
@@ -122,7 +121,7 @@ const navbarStyle = css({
   display: 'flex',
   alignItems: 'center',
   gap: '2px',
-  padding: '6px 8px 6px 18px',
+  padding: '6px 8px 6px 16px',
   borderRadius: '999px',
   maxWidth: 'calc(100vw - 24px)',
 })
@@ -149,18 +148,6 @@ const iconStyle = css({
     background: 'rgba(255, 255, 255, 0.07)',
     color: 'var(--ink-0)',
   },
-})
-
-const mapNoteStyle = css({
-  position: 'absolute',
-  top: '22px',
-  right: '22px',
-  zIndex: 2,
-  margin: 0,
-  fontSize: '10px',
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-3)',
 })
 
 const drawerStyle = css({
@@ -198,7 +185,7 @@ const disclaimerStyle = css({
   padding: '6px 14px',
   borderRadius: '999px',
   maxWidth: 'min(560px, calc(100vw - 24px))',
-  fontSize: '10px',
+  fontSize: '11px',
   lineHeight: 1.4,
   textAlign: 'center',
   color: 'var(--ink-3)',

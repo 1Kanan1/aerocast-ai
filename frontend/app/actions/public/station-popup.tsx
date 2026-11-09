@@ -336,7 +336,7 @@ const headerStyle = css({
   borderBlockEnd: '1px solid var(--glass-border)',
 })
 
-const icaoStyle = css({ fontWeight: 700, letterSpacing: '0.06em' })
+const icaoStyle = css({ fontWeight: 700 })
 
 const nameStyle = css({
   display: 'block',
@@ -369,7 +369,7 @@ const bodyStyle = css({
   '& > p': { margin: 0 },
 })
 
-const categoryStyle = css({ fontSize: '12px', fontWeight: 700 })
+const categoryStyle = css({ fontSize: '12px' })
 
 const ageStyle = css({ fontSize: '11px', color: 'var(--ink-3)' })
 
@@ -399,9 +399,7 @@ const factsStyle = css({
 const factStyle = css({
   margin: 0,
   '& dt': {
-    fontSize: '10px',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
+    fontSize: '11px',
     color: 'var(--ink-3)',
   },
   '& dd': { margin: 0, fontSize: '12px' },
@@ -419,11 +417,8 @@ const rawStyle = css({
 })
 
 const sectionStyle = css({
-  margin: '8px 0 0',
-  fontSize: '10px',
-  fontWeight: 700,
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase',
+  margin: '12px 0 0',
+  fontSize: '11px',
   color: 'var(--ink-3)',
 })
 
@@ -444,7 +439,7 @@ const listStyle = css({
   '& li:last-child': { borderBlockEnd: 0, paddingBlockEnd: 0 },
 })
 
-const periodHeadStyle = css({ fontSize: '11px', fontWeight: 700 })
+const periodHeadStyle = css({ fontSize: '11px' })
 
 const periodDetailStyle = css({
   fontSize: '11px',
