@@ -7,6 +7,7 @@ import type {
 } from '#app/lib/api-types.ts'
 import type { ApiResult } from '#app/lib/api.ts'
 import { EMPTY_LAYERS, islandLayers } from '#app/lib/map-data.ts'
+import { CATEGORY_SHADES } from '#app/lib/public/categories.ts'
 import { routes } from '#app/routes.ts'
 import { Document } from '#app/actions/document.tsx'
 import { ChatSidebar } from '#app/actions/public/chat-sidebar.tsx'
@@ -79,6 +80,19 @@ export function MapShell(handle: Handle<MapShellProps>) {
           </header>
 
           <StationSearch initial={rows} query={query} />
+
+          <ul aria-label="Flight category key" mix={[glassStyle, keyStyle]}>
+            {Object.entries(CATEGORY_SHADES).map(([category, shade]) => (
+              <li key={category}>
+                <span
+                  aria-hidden="true"
+                  mix={keyDotStyle}
+                  style={{ background: shade }}
+                />
+                {category}
+              </li>
+            ))}
+          </ul>
 
           <div id="ai-drawer" mix={drawerStyle} popover="manual">
             <ChatSidebar />
@@ -177,6 +191,29 @@ const drawerStyle = css({
     animation: 'rmx-drawer-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards',
   },
   '&::backdrop': { background: 'rgba(0, 0, 0, 0.45)' },
+})
+
+const keyStyle = css({
+  position: 'absolute',
+  right: '16px',
+  bottom: '56px',
+  zIndex: 2,
+  display: 'flex',
+  gap: '12px',
+  margin: 0,
+  padding: '6px 12px',
+  listStyle: 'none',
+  borderRadius: '999px',
+  fontSize: '11px',
+  color: 'var(--ink-3)',
+  '& li': { display: 'flex', alignItems: 'center', gap: '6px' },
+})
+
+const keyDotStyle = css({
+  width: '8px',
+  height: '8px',
+  borderRadius: '50%',
+  border: '1px solid rgba(255, 255, 255, 0.16)',
 })
 
 const disclaimerStyle = css({

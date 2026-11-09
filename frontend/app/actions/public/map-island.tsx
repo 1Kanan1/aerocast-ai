@@ -10,7 +10,7 @@ import { clientEntry, css, ref } from 'remix/component'
 import type { MapLayers } from '#app/lib/api-types.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
-import { CATEGORY_BADGES, CATEGORY_SHADES } from '#app/lib/public/categories.ts'
+import { CATEGORY_SHADES } from '#app/lib/public/categories.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 
@@ -196,7 +196,17 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
     type: 'circle',
     source: 'stations',
     paint: {
-      'circle-radius': 5,
+      'circle-radius': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        3,
+        3.5,
+        6,
+        5,
+        10,
+        7,
+      ],
       'circle-color': [
         'match',
         ['get', 'category'],
@@ -214,25 +224,6 @@ function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
       'circle-stroke-width': 1.5,
     },
   })
-
-  // Glyphs come from the basemap style, so an offline fallback has none.
-  if (map.getStyle().glyphs) {
-    map.addLayer({
-      id: 'stations-badges',
-      type: 'symbol',
-      source: 'stations',
-      minzoom: 5,
-      layout: {
-        'text-field': ['get', 'badge'],
-        'text-size': 9,
-        'text-offset': [0, -1.1],
-        'text-anchor': 'top',
-        'text-allow-overlap': true,
-        'text-font': ['Noto Sans Regular'],
-      },
-      paint: { 'text-color': '#f4f4f2', 'text-halo-color': PAPER },
-    })
-  }
 
   map.on('click', 'stations-dots', (event) => {
     let icao = event.features?.[0]?.properties?.icao
@@ -343,7 +334,6 @@ function stationsOf(data: IslandLayers): FeatureCollection {
       properties: {
         icao: station.icao,
         category: station.category,
-        badge: CATEGORY_BADGES[station.category ?? ''] ?? '?',
       },
     })),
   }
