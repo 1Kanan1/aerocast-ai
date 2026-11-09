@@ -181,16 +181,14 @@ const drawerStyle = css({
 
 const disclaimerStyle = css({
   position: 'absolute',
-  bottom: '44px',
-  left: '50%',
-  transform: 'translateX(-50%)',
+  bottom: '16px',
+  left: '64px',
   zIndex: 2,
   margin: 0,
-  padding: '6px 14px',
-  borderRadius: '999px',
-  maxWidth: 'min(560px, calc(100vw - 24px))',
+  padding: '6px 12px',
+  borderRadius: '8px',
+  maxWidth: 'min(520px, calc(100vw - 88px))',
   fontSize: '11px',
   lineHeight: 1.4,
-  textAlign: 'center',
   color: 'var(--ink-3)',
 })

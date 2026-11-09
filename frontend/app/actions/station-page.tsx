@@ -343,7 +343,7 @@ const rawStyle = css({
   display: 'block',
   padding: '10px 12px',
   border: '1px solid var(--line)',
-  borderRadius: '6px',
+  borderRadius: '8px',
   background: 'var(--paper)',
   fontFamily: 'inherit',
   fontSize: '12px',
@@ -356,6 +356,7 @@ const warningStyle = css({
   padding: '8px 10px',
   borderInlineStart: '3px solid var(--accent)',
   background: 'var(--paper)',
+  borderRadius: '8px',
   fontSize: '12px',
 })
 

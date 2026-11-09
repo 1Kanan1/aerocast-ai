@@ -107,7 +107,7 @@ const labelStyle = css({
   '& textarea': {
     padding: '8px 10px',
     border: '1px solid var(--line)',
-    borderRadius: '6px',
+    borderRadius: '8px',
     background: 'var(--paper)',
     color: 'var(--ink-0)',
     font: 'inherit',
@@ -119,7 +119,7 @@ const buttonStyle = css({
   marginBlockStart: '10px',
   padding: '8px 16px',
   border: '1px solid var(--ink-0)',
-  borderRadius: '6px',
+  borderRadius: '8px',
   background: 'var(--ink-0)',
   color: 'var(--paper)',
   font: 'inherit',

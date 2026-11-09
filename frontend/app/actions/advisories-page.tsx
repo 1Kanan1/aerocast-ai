@@ -36,7 +36,15 @@ export function AdvisoriesPage(
             The API is unavailable right now, so advisories cannot be listed.
           </p>
         ) : rows.length === 0 ? (
-          <p mix={mutedStyle}>No active advisories are on file.</p>
+          <section mix={[cardStyle, emptyStyle]}>
+            <span aria-hidden="true" mix={emptyDotStyle} />
+            <div>
+              <p mix={emptyTitleStyle}>No active advisories</p>
+              <p mix={mutedStyle}>
+                Nothing is in force over the United States as of this request.
+              </p>
+            </div>
+          </section>
         ) : (
           [...groups.entries()].map(([hazard, items]) => (
             <section key={hazard} aria-labelledby={`hazard-${hazard}`}>
@@ -104,6 +112,27 @@ const ledeStyle = css({
   margin: '0 0 8px',
   maxWidth: '62ch',
   color: 'var(--ink-2)',
+})
+
+const emptyStyle = css({
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: '16px',
+})
+
+const emptyDotStyle = css({
+  width: '8px',
+  height: '8px',
+  flexShrink: 0,
+  marginBlockStart: '6px',
+  borderRadius: '50%',
+  border: '1px solid var(--ink-3)',
+})
+
+const emptyTitleStyle = css({
+  margin: '0 0 4px',
+  fontSize: '14px',
+  color: 'var(--ink-0)',
 })
 
 const listStyle = css({

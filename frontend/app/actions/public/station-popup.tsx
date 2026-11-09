@@ -317,7 +317,7 @@ const hostStyle = css({
   width: 'min(420px, calc(100vw - 32px))',
   maxHeight: 'calc(100% - 104px)',
   flexDirection: 'column',
-  borderRadius: '20px',
+  borderRadius: '16px',
   background: 'var(--glass-strong)',
   border: '1px solid var(--glass-border)',
   boxShadow: 'var(--shadow)',
@@ -332,7 +332,7 @@ const headerStyle = css({
   alignItems: 'flex-start',
   justifyContent: 'space-between',
   gap: '8px',
-  padding: '12px 14px 10px',
+  padding: '12px 16px',
   borderBlockEnd: '1px solid var(--glass-border)',
 })
 
@@ -369,10 +369,10 @@ const bodyStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',
-  padding: '12px 14px',
+  padding: '12px 16px',
   display: 'flex',
   flexDirection: 'column',
-  gap: '8px',
+  gap: '10px',
   '& > p': { margin: 0 },
 })
 
@@ -384,7 +384,7 @@ const staleStyle = css({
   marginInlineStart: '6px',
   padding: '0 6px',
   border: '1px solid var(--accent)',
-  borderRadius: '999px',
+  borderRadius: '4px',
   color: 'var(--accent)',
 })
 
@@ -416,7 +416,7 @@ const rawStyle = css({
   display: 'block',
   padding: '7px 9px',
   border: '1px solid var(--glass-border)',
-  borderRadius: '12px',
+  borderRadius: '8px',
   background: 'rgba(0, 0, 0, 0.25)',
   fontSize: '11px',
   whiteSpace: 'pre-wrap',
@@ -457,7 +457,7 @@ const mutedStyle = css({ fontSize: '12px', color: 'var(--ink-3)' })
 
 const footerStyle = css({
   borderBlockStart: '1px solid var(--glass-border)',
-  padding: '10px 14px 12px',
+  padding: '12px 16px',
 })
 
 const composerStyle = css({
