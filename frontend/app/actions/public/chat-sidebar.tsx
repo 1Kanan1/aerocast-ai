@@ -288,6 +288,10 @@ const clearStyle = css({
   fontSize: '11px',
   cursor: 'pointer',
   '&:hover': { color: 'var(--ink-1)' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
 })
 
 const closeStyle = css({
@@ -302,6 +306,10 @@ const closeStyle = css({
   lineHeight: 1,
   cursor: 'pointer',
   '&:hover': { color: 'var(--ink-0)', background: 'rgba(255, 255, 255, 0.08)' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
 })
 
 const threadStyle = css({
@@ -414,6 +422,10 @@ const sendStyle = css({
   transition: 'opacity 120ms ease, transform 120ms ease',
   '&:hover': { transform: 'translateY(-1px)' },
   '&:disabled': { opacity: 0.3, cursor: 'not-allowed', transform: 'none' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
 })
 
 const disclaimerStyle = css({

@@ -13,7 +13,7 @@ import { ChatSidebar } from '#app/actions/public/chat-sidebar.tsx'
 import { MapIsland } from '#app/actions/public/map-island.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
 import { StationSearch } from '#app/actions/public/station-search.tsx'
-import { AlertIcon, InfoIcon, SearchIcon, SparkIcon } from './public/icons.tsx'
+import { AlertIcon, InfoIcon, SearchIcon, SpeechIcon } from './public/icons.tsx'
 import { glassStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
 
 interface MapShellProps {
@@ -74,7 +74,7 @@ export function MapShell(handle: Handle<MapShellProps>) {
               title="Explanation"
               type="button"
             >
-              <SparkIcon />
+              <SpeechIcon />
             </button>
           </header>
 
@@ -147,6 +147,10 @@ const iconStyle = css({
   '&:hover': {
     background: 'rgba(255, 255, 255, 0.07)',
     color: 'var(--ink-0)',
+  },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
   },
 })
 

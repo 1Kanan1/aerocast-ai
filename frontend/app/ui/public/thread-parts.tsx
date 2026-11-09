@@ -7,7 +7,7 @@ import {
   CopyIcon,
   PencilIcon,
   RefreshIcon,
-  SparkIcon,
+  SpeechIcon,
 } from '#app/ui/public/icons.tsx'
 
 export interface Suggestion {
@@ -219,7 +219,7 @@ export function AssistantTurn(
         {handle.props.showName === false ? null : (
           <header mix={[assistantMetaStyle, turnInStyle]}>
             <span mix={assistantIconStyle}>
-              <SparkIcon />
+              <SpeechIcon />
             </span>
             AeroCast
           </header>
@@ -393,7 +393,7 @@ const suggestionStyle = css({
 const suggestionMarkStyle = css({
   fontSize: '15px',
   lineHeight: 1,
-  color: 'var(--accent)',
+  color: 'var(--ink-3)',
 })
 
 const suggestionTitleStyle = css({ fontSize: '13px' })

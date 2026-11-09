@@ -204,6 +204,7 @@ const panelStyle = css({
     backdropFilter: 'blur(3px)',
     WebkitBackdropFilter: 'blur(3px)',
   },
+  '&:focus-within': { borderColor: 'rgba(255, 255, 255, 0.22)' },
 })
 
 const rowStyle = css({
@@ -241,7 +242,14 @@ const iconStyle = css({
   background: 'transparent',
   color: 'var(--ink-2)',
   cursor: 'pointer',
-  '&:hover': { background: 'rgba(255, 255, 255, 0.07)', color: 'var(--ink-0)' },
+  '&:hover': {
+    background: 'rgba(255, 255, 255, 0.07)',
+    color: 'var(--ink-0)',
+  },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
 })
 
 const resultsStyle = css({ margin: '2px 4px 4px' })

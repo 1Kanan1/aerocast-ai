@@ -96,7 +96,7 @@ export function InfoIcon(_handle: Handle) {
   )
 }
 
-export function SparkIcon(_handle: Handle) {
+export function SpeechIcon(_handle: Handle) {
   return () => (
     <svg
       aria-hidden="true"
@@ -105,12 +105,12 @@ export function SparkIcon(_handle: Handle) {
       stroke="currentColor"
       stroke-linecap="round"
       stroke-linejoin="round"
-      stroke-width="1.5"
+      stroke-width="1.6"
       viewBox="0 0 24 24"
       width="16"
     >
-      <path d="M11 4.5 12.5 9 17 10.5 12.5 12 11 16.5 9.5 12 5 10.5 9.5 9Z" />
-      <path d="M18 15.5 18.7 17.5 20.5 18.2 18.7 18.9 18 21 17.3 18.9 15.5 18.2 17.3 17.5Z" />
+      <path d="M4 5h16v11H8l-4 3V5Z" />
+      <path d="M8 9.5h8M8 13h5" />
     </svg>
   )
 }

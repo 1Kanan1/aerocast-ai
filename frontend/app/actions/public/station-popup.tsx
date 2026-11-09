@@ -355,7 +355,14 @@ const closeStyle = css({
   fontSize: '15px',
   lineHeight: 1,
   cursor: 'pointer',
-  '&:hover': { color: 'var(--ink-0)', background: 'rgba(255, 255, 255, 0.08)' },
+  '&:hover': {
+    color: 'var(--ink-0)',
+    background: 'rgba(255, 255, 255, 0.08)',
+  },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
 })
 
 const bodyStyle = css({
