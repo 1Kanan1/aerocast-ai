@@ -28,6 +28,17 @@ export function ceilingLabel(facts: BundleMetar): string {
     : `${facts.ceiling.ft.toLocaleString()} ft`
 }
 
+export function cloudsLabel(facts: BundleMetar): string {
+  if (facts.clouds.length === 0) return 'clear'
+  return facts.clouds
+    .map((cloud) =>
+      cloud.base_ft === null
+        ? cloud.cover
+        : `${cloud.cover} ${cloud.base_ft.toLocaleString()} ft`,
+    )
+    .join(', ')
+}
+
 export function temperatureLabel(facts: BundleMetar): string {
   let temperature = facts.temperature
   if (temperature === null) return 'not reported'

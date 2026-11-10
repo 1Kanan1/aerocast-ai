@@ -94,14 +94,6 @@ class StationDetail(BaseModel):
     advisories: list[NearbyAdvisory]
 
 
-class MapStation(BaseModel):
-    icao: str
-    lat: float
-    lon: float
-    category: str | None
-    observed_at: datetime
-
-
 class MapAdvisory(BaseModel):
     kind: str
     hazard: str
@@ -110,7 +102,8 @@ class MapAdvisory(BaseModel):
 
 
 class MapLayers(BaseModel):
-    stations: list[MapStation]
+    """Only what the map draws: advisory polygons."""
+
     advisories: list[MapAdvisory]
 
 

@@ -7,10 +7,9 @@ import type {
 import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
-import type { MapLayers } from '#app/lib/api-types.ts'
+import type { MapLayers, ResolveSuggestion } from '#app/lib/api-types.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
-import { CATEGORY_SHADES } from '#app/lib/public/categories.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 
@@ -66,65 +65,67 @@ export const MapIsland = clientEntry(
       )
 
       let moveTimer: ReturnType<typeof setTimeout> | undefined
-      let points = stationPoints(handle.props.initial)
-      let selectedIcao: string | null = null
+      let selectedPoint: [number, number] | null = null
 
       // The server text is for a browser without JavaScript; from here it is
       // only a loading note until the first style is ready.
       if (fallback) fallback.textContent = 'Loading map…'
 
+      // The ask bar and the search both select; the map only draws what the
+      // session holds. A selection that moves the marker also moves the view.
+      let applySession = (): void => {
+        let station = session.selected
+        showSuggested(map, session.suggested)
+
+        if (station === null || station.lat === null || station.lon === null) {
+          selectedPoint = null
+          showSelection(map, null)
+          session.setAnchor(null)
+          return
+        }
+
+        let point: [number, number] = [station.lon, station.lat]
+        let moved =
+          selectedPoint === null ||
+          selectedPoint[0] !== point[0] ||
+          selectedPoint[1] !== point[1]
+
+        selectedPoint = point
+        showSelection(map, point)
+        session.setAnchor(project(map, point))
+
+        if (moved) {
+          map.flyTo({
+            center: point,
+            zoom: Math.max(map.getZoom(), 6),
+            duration: 900,
+          })
+        }
+      }
+
       map.on('load', () => {
         if (signal.aborted) return
 
         addAdvisoryLayers(map, handle.props.initial)
-        addStationLayers(map, handle.props.initial)
+        addMarkers(map)
+        applySession()
         fallback?.remove()
-      })
-
-      // Clicking the map away from a dot dismisses the card.
-      map.on('click', (event) => {
-        if (map.getLayer('stations-dots') === undefined) return
-        let hits = map.queryRenderedFeatures(event.point, {
-          layers: ['stations-dots'],
-        })
-        if (hits.length === 0) session.clear()
       })
 
       // Keep the station card and its highlight over the dot as the map moves.
       map.on('move', () => {
-        if (selectedIcao === null) return
-        let point = points.get(selectedIcao)
-        if (!point) return
-        session.setAnchor(project(map, point))
+        if (selectedPoint === null) return
+        session.setAnchor(project(map, selectedPoint))
       })
 
-      // The card clears the selection on close. A new selection (from a dot or
-      // from search) sets the highlight and the anchor here, in one place.
-      session.addEventListener(
-        'change',
-        () => {
-          let station = session.selected
-          if (station === null) {
-            selectedIcao = null
-            showSelection(map, null)
-            session.setAnchor(null)
-            return
-          }
-
-          if (station.icao === selectedIcao) return
-          selectedIcao = station.icao
-
-          let point = points.get(station.icao) ?? null
-          showSelection(map, point)
-          if (point) session.setAnchor(project(map, point))
-        },
-        { signal: handle.signal },
-      )
+      session.addEventListener('change', applySession, {
+        signal: handle.signal,
+      })
 
       map.on('moveend', () => {
         clearTimeout(moveTimer)
         moveTimer = setTimeout(() => {
-          void refresh(map, points)
+          void refreshAdvisories(map)
         }, MOVE_DEBOUNCE_MS)
       })
 
@@ -172,67 +173,58 @@ function emptyStyle(): StyleSpecification {
   }
 }
 
-function addStationLayers(map: MapLibreMap, data: IslandLayers): void {
-  map.addSource('stations', { type: 'geojson', data: stationsOf(data) })
-  map.addSource('selection', {
+/** The selected station and any fresh alternative, and nothing else. */
+function addMarkers(map: MapLibreMap): void {
+  map.addSource('suggested', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
+    data: emptyCollection(),
+  })
+  map.addLayer({
+    id: 'suggested-ring',
+    type: 'circle',
+    source: 'suggested',
+    paint: {
+      'circle-radius': 8,
+      'circle-color': 'rgba(0, 0, 0, 0)',
+      'circle-stroke-color': '#a6a6a1',
+      'circle-stroke-width': 1.2,
+      'circle-stroke-opacity': 0.85,
+    },
   })
 
+  map.addSource('selection', {
+    type: 'geojson',
+    data: emptyCollection(),
+  })
   map.addLayer({
     id: 'selection-halo',
     type: 'circle',
     source: 'selection',
     paint: {
-      'circle-radius': 11,
+      'circle-radius': 12,
       'circle-color': 'rgba(224, 96, 63, 0)',
       'circle-stroke-color': ACCENT,
       'circle-stroke-width': 2,
     },
   })
-
   map.addLayer({
-    id: 'stations-dots',
+    id: 'selection-dot',
     type: 'circle',
-    source: 'stations',
+    source: 'selection',
     paint: {
-      'circle-radius': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        3,
-        3.5,
-        6,
-        5,
-        10,
-        7,
-      ],
-      'circle-color': [
-        'match',
-        ['get', 'category'],
-        'VFR',
-        CATEGORY_SHADES.VFR,
-        'MVFR',
-        CATEGORY_SHADES.MVFR,
-        'IFR',
-        CATEGORY_SHADES.IFR,
-        'LIFR',
-        CATEGORY_SHADES.LIFR,
-        '#9a9a9a',
-      ],
-      'circle-stroke-color': PAPER,
-      'circle-stroke-width': 1.5,
+      'circle-radius': 4,
+      'circle-color': '#f4f4f2',
     },
   })
 
-  map.on('click', 'stations-dots', (event) => {
+  map.on('click', 'suggested-ring', (event) => {
     let icao = event.features?.[0]?.properties?.icao
     if (typeof icao === 'string') void session.select(icao)
   })
-  map.on('mouseenter', 'stations-dots', () => {
+  map.on('mouseenter', 'suggested-ring', () => {
     map.getCanvas().style.cursor = 'pointer'
   })
-  map.on('mouseleave', 'stations-dots', () => {
+  map.on('mouseleave', 'suggested-ring', () => {
     map.getCanvas().style.cursor = ''
   })
 }
@@ -257,10 +249,7 @@ function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {
   })
 }
 
-async function refresh(
-  map: MapLibreMap,
-  points: Map<string, [number, number]>,
-): Promise<void> {
+async function refreshAdvisories(map: MapLibreMap): Promise<void> {
   let bounds = map.getBounds()
   let bbox = [
     bounds.getWest(),
@@ -280,24 +269,11 @@ async function refresh(
     let payload = (await response.json()) as { data?: MapLayers }
     if (!payload.data) return
 
-    let data = islandLayers(payload.data)
-    let stations = map.getSource('stations') as GeoJSONSource | undefined
     let advisories = map.getSource('advisories') as GeoJSONSource | undefined
-    stations?.setData(stationsOf(data))
-    advisories?.setData(advisoriesOf(data))
-
-    for (let [icao, point] of stationPoints(data)) points.set(icao, point)
+    advisories?.setData(advisoriesOf(islandLayers(payload.data)))
   } catch {
     // A failed viewport fetch leaves the last drawn layer in place.
   }
-}
-
-function stationPoints(data: IslandLayers): Map<string, [number, number]> {
-  let points = new Map<string, [number, number]>()
-  for (let station of data.stations) {
-    points.set(station.icao, [station.lon, station.lat])
-  }
-  return points
 }
 
 function project(map: MapLibreMap, point: [number, number]): Anchor {
@@ -307,34 +283,32 @@ function project(map: MapLibreMap, point: [number, number]): Anchor {
 
 function showSelection(map: MapLibreMap, point: [number, number] | null): void {
   let source = map.getSource('selection') as GeoJSONSource | undefined
+  source?.setData(featureCollection(point === null ? [] : [point]))
+}
+
+function showSuggested(map: MapLibreMap, stations: ResolveSuggestion[]): void {
+  let source = map.getSource('suggested') as GeoJSONSource | undefined
   source?.setData({
     type: 'FeatureCollection',
-    features:
-      point === null
-        ? []
-        : [
-            {
-              type: 'Feature',
-              geometry: { type: 'Point', coordinates: point },
-              properties: {},
-            },
-          ],
+    features: stations.map((station) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [station.lon, station.lat] },
+      properties: { icao: station.icao },
+    })),
   })
 }
 
-function stationsOf(data: IslandLayers): FeatureCollection {
+function emptyCollection(): FeatureCollection {
+  return { type: 'FeatureCollection', features: [] }
+}
+
+function featureCollection(points: [number, number][]): FeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: data.stations.map((station) => ({
+    features: points.map((point) => ({
       type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [station.lon, station.lat],
-      },
-      properties: {
-        icao: station.icao,
-        category: station.category,
-      },
+      geometry: { type: 'Point', coordinates: point },
+      properties: {},
     })),
   }
 }

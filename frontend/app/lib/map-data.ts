@@ -6,13 +6,6 @@ export interface IslandGeometry {
   coordinates: number[][] | number[][][]
 }
 
-export interface IslandStation {
-  category: string | null
-  icao: string
-  lat: number
-  lon: number
-}
-
 export interface IslandAdvisory {
   geometry: IslandGeometry
   hazard: string
@@ -22,19 +15,12 @@ export interface IslandAdvisory {
 
 export interface IslandLayers {
   advisories: IslandAdvisory[]
-  stations: IslandStation[]
 }
 
-export const EMPTY_LAYERS: IslandLayers = { advisories: [], stations: [] }
+export const EMPTY_LAYERS: IslandLayers = { advisories: [] }
 
 export function islandLayers(layers: MapLayers): IslandLayers {
   return {
-    stations: layers.stations.map(({ category, icao, lat, lon }) => ({
-      category,
-      icao,
-      lat,
-      lon,
-    })),
     advisories: layers.advisories.map(
       ({ geometry, hazard, kind, source_id }) => ({
         geometry: geometry as unknown as IslandGeometry,

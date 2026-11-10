@@ -34,8 +34,7 @@ describe('map page', () => {
   it('renders the workspace with the islands the page needs', async (t) => {
     mockApi(t, {
       '/api/stations': () => Response.json(envelope([STATION])),
-      '/api/map/layers': () =>
-        Response.json(envelope({ stations: [], advisories: [] })),
+      '/api/map/layers': () => Response.json(envelope({ advisories: [] })),
     })
 
     let response = await get(routes.home.href())
@@ -56,8 +55,7 @@ describe('map page', () => {
   it('server-renders search results as station links', async (t) => {
     mockApi(t, {
       '/api/stations': () => Response.json(envelope([STATION])),
-      '/api/map/layers': () =>
-        Response.json(envelope({ stations: [], advisories: [] })),
+      '/api/map/layers': () => Response.json(envelope({ advisories: [] })),
     })
 
     let html = await (await get(`${routes.home.href()}?q=sfo`)).text()
@@ -67,7 +65,7 @@ describe('map page', () => {
   })
 
   it('proxies layer requests same-origin', async (t) => {
-    let layers = envelope({ stations: [], advisories: [] })
+    let layers = envelope({ advisories: [] })
     mockApi(t, { '/api/map/layers': () => Response.json(layers) })
 
     let response = await get(`${routes.layers.href()}?bbox=-123,37,-122,38`)

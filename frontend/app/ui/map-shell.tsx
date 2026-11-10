@@ -7,7 +7,6 @@ import type {
 } from '#app/lib/api-types.ts'
 import type { ApiResult } from '#app/lib/api.ts'
 import { EMPTY_LAYERS, islandLayers } from '#app/lib/map-data.ts'
-import { CATEGORY_SHADES } from '#app/lib/public/categories.ts'
 import { routes } from '#app/routes.ts'
 import { Document } from '#app/actions/document.tsx'
 import { AnswerPanel } from '#app/actions/public/answer-panel.tsx'
@@ -75,19 +74,6 @@ export function MapShell(handle: Handle<MapShellProps>) {
           </header>
 
           <StationSearch initial={rows} query={query} />
-
-          <ul aria-label="Flight category key" mix={[glassStyle, keyStyle]}>
-            {Object.entries(CATEGORY_SHADES).map(([category, shade]) => (
-              <li key={category}>
-                <span
-                  aria-hidden="true"
-                  mix={keyDotStyle}
-                  style={{ background: shade }}
-                />
-                {category}
-              </li>
-            ))}
-          </ul>
         </main>
       </Document>
     )
@@ -153,27 +139,4 @@ const iconStyle = css({
     outline: '2px solid var(--ink-2)',
     outlineOffset: '2px',
   },
-})
-
-const keyStyle = css({
-  position: 'absolute',
-  right: '16px',
-  bottom: '56px',
-  zIndex: 2,
-  display: 'flex',
-  gap: '12px',
-  margin: 0,
-  padding: '6px 12px',
-  listStyle: 'none',
-  borderRadius: '999px',
-  fontSize: '11px',
-  color: 'var(--ink-3)',
-  '& li': { display: 'flex', alignItems: 'center', gap: '6px' },
-})
-
-const keyDotStyle = css({
-  width: '8px',
-  height: '8px',
-  borderRadius: '50%',
-  border: '1px solid rgba(255, 255, 255, 0.16)',
 })

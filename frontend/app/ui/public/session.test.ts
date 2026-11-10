@@ -30,6 +30,14 @@ const BRIEF = {
 
 const DETAIL = {
   data: {
+    station: {
+      icao: 'KSFO',
+      name: 'San Francisco Intl',
+      state: 'CA',
+      lat: 37.6196,
+      lon: -122.3656,
+      elev_m: 4,
+    },
     metar: { parse_status: 'ok', upstream_category: 'VFR' },
   },
   meta: { source: 'aviationweather.gov' },
@@ -69,6 +77,8 @@ describe('station session', () => {
     await session.select('KSFO')
 
     assert.equal(session.selected?.name, 'San Francisco Intl')
+    assert.equal(session.selected?.lat, 37.6196)
+    assert.equal(session.selected?.lon, -122.3656)
     assert.equal(session.selected?.category, 'VFR')
     assert.equal(session.selected?.facts?.raw, METAR.raw)
     assert.equal(session.selected?.advisories.length, 2)

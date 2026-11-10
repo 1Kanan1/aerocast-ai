@@ -154,45 +154,16 @@ async def station_bundle(
 async def map_layers(
     bbox: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    """Dots and polygons for the viewport, and nothing else."""
+    """Advisory polygons for the viewport, and nothing else."""
     bounds = _bounds(bbox)
-    min_lon, min_lat, max_lon, max_lat = bounds
 
-    latest = await fetch_all(
-        "select distinct on (station_icao) station_icao, category, obs_time "
-        "from metar_observations order by station_icao, obs_time desc"
-    )
-    positions = await fetch_all(
-        "select icao, lat, lon from stations "
-        "where lat between :min_lat and :max_lat "
-        "and lon between :min_lon and :max_lon",
-        {
-            "min_lat": min_lat,
-            "max_lat": max_lat,
-            "min_lon": min_lon,
-            "max_lon": max_lon,
-        },
-    )
     advisories = await fetch_all(
         "select kind, hazard, source_id, geom from advisories "
         "where valid_to > now()"
     )
 
-    place = {row["icao"]: row for row in positions}
-
     return wrap(
         {
-            "stations": [
-                {
-                    "icao": row["station_icao"],
-                    "lat": place[row["station_icao"]]["lat"],
-                    "lon": place[row["station_icao"]]["lon"],
-                    "category": row["category"],
-                    "observed_at": row["obs_time"].isoformat(),
-                }
-                for row in latest
-                if row["station_icao"] in place
-            ],
             "advisories": [
                 {
                     "kind": row["kind"],

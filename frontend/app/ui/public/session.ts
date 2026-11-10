@@ -8,6 +8,7 @@ import type {
   BundleTaf,
   ResolveResponse,
   ResolveStation,
+  ResolveSuggestion,
   StationDetailResponse,
   StationHistory,
 } from '#app/lib/api-types.ts'
@@ -51,7 +52,9 @@ export interface SelectedStation {
   facts: BundleMetar | null
   history: HistoryPoint[]
   icao: string
+  lat: number | null
   loading: boolean
+  lon: number | null
   name: string
   parseStatus: string | null
   raw: string | null
@@ -70,6 +73,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   selected: SelectedStation | null = null
   anchor: Anchor | null = null
   clarification: Clarification | null = null
+  suggested: ResolveSuggestion[] = []
   #pending: AbortController | null = null
   #ask: AbortController | null = null
   #anchorListeners = new Set<(anchor: Anchor | null) => void>()
@@ -87,11 +91,15 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     for (let listener of this.#anchorListeners) listener(anchor)
   }
 
-  async select(icao: string): Promise<void> {
+  async select(
+    icao: string,
+    suggested: ResolveSuggestion[] = [],
+  ): Promise<void> {
     let previous = this.selected
     let thread = previous?.icao === icao ? previous.thread : []
 
     this.clarification = null
+    this.suggested = suggested
     this.#pending?.abort()
     this.#ask?.abort()
     this.#ask = null
@@ -107,7 +115,9 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
       facts: null,
       history: [],
       icao,
+      lat: null,
       loading: true,
+      lon: null,
       name: icao,
       parseStatus: null,
       raw: null,
@@ -155,6 +165,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
       this.selected = {
         ...this.selected,
         name: station?.name ?? icao,
+        lat: detail.data.station.lat,
+        lon: detail.data.station.lon,
         category: metar?.flight_category.value ?? null,
         basis: metar?.flight_category.basis ?? null,
         facts: metar,
@@ -289,7 +301,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
       : null
 
     if (payload?.station) {
-      await this.select(payload.station.icao)
+      await this.select(payload.station.icao, payload.suggested)
       await this.ask(text)
       return
     }
@@ -345,6 +357,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.#ask = null
     this.selected = null
     this.clarification = null
+    this.suggested = []
     this.setAnchor(null)
     this.notify()
   }

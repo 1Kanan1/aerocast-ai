@@ -211,21 +211,12 @@ export interface MapAdvisory {
 }
 
 export interface MapLayers {
-  stations: MapStation[]
   advisories: MapAdvisory[]
 }
 
 export interface MapLayersResponse {
   data: MapLayers
   meta: Meta
-}
-
-export interface MapStation {
-  icao: string
-  lat: number
-  lon: number
-  category: string | null
-  observed_at: string
 }
 
 export interface Meta {

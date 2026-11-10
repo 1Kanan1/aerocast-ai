@@ -243,9 +243,6 @@ async def test_map_layers_keeps_what_the_viewport_contains(
     response = await get("/api/map/layers?bbox=-123,37,-122,38")
 
     body = response.json()
-    assert [station["icao"] for station in body["data"]["stations"]] == [
-        "KSFO"
-    ]
     assert [item["source_id"] for item in body["data"]["advisories"]] == [
         "ZULU:3W"
     ]
@@ -262,10 +259,6 @@ async def test_map_layers_without_a_bbox_covers_the_world(
     assert [item["source_id"] for item in body["data"]["advisories"]] == [
         "ZULU:3W",
         "ZULU:4W",
-    ]
-    # KJFK has no observation in the fake, so the map has no dot for it.
-    assert [station["icao"] for station in body["data"]["stations"]] == [
-        "KSFO"
     ]
 
 

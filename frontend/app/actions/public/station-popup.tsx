@@ -1,24 +1,21 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import { ageLabel, timeLabel, windowLabel } from '#app/lib/format.ts'
+import { ageLabel, timeLabel } from '#app/lib/format.ts'
 import {
-  ceilingLabel,
-  periodWindLabel,
-  temperatureLabel,
+  cloudsLabel,
   visibilityLabel,
   windLabel,
 } from '#app/lib/public/labels.ts'
-import { type Anchor, session } from '#app/ui/public/session.ts'
 import type { SelectedStation } from '#app/ui/public/session.ts'
-import { Timeline, timelinePoints } from '#app/ui/timeline.tsx'
+import { type Anchor, session } from '#app/ui/public/session.ts'
 
 const CARD_GAP = 16
 const CARD_PAD = 12
 const NAVBAR_FLOOR = 84
 const CARD_EXIT_MS = 160
 
-/** The station card: every fact the API has, with its composer pinned below. */
+/** The ask-first station card: who it is, the wind, and one way to ask. */
 export const StationPopup = clientEntry(
   import.meta.url,
   function StationPopup(handle: Handle) {
@@ -41,10 +38,10 @@ export const StationPopup = clientEntry(
       let roomBelow = bounds.height - anchor.y - CARD_GAP - CARD_PAD
       // Sit above the dot like a tooltip; only drop below when the dot is so
       // close to the top that there is no usable card height.
-      let above = roomAbove >= 200
+      let above = roomAbove >= 240
       let room = above ? roomAbove : roomBelow
 
-      host.style.maxHeight = `${Math.max(180, room)}px`
+      host.style.maxHeight = `${Math.max(220, room)}px`
       host.style.left = `${Math.min(
         Math.max(CARD_PAD, anchor.x - CARD_GAP - width),
         bounds.width - reserved - width - CARD_PAD,
@@ -99,7 +96,6 @@ export const StationPopup = clientEntry(
     return () => {
       let station = session.selected ?? (closing ? last : null)
       let facts = station?.facts ?? null
-      let taf = station?.taf ?? null
 
       return (
         <div
@@ -115,12 +111,12 @@ export const StationPopup = clientEntry(
           {station === null ? null : (
             <>
               <header mix={headerStyle}>
-                <div>
+                <div mix={identityStyle}>
                   <span mix={icaoStyle}>{station.icao}</span>
                   <span mix={nameStyle}>{station.name}</span>
                 </div>
                 <button
-                  aria-label="Close station panel"
+                  aria-label="Close station card"
                   mix={[closeStyle, on('click', () => session.clear())]}
                   type="button"
                 >
@@ -136,119 +132,55 @@ export const StationPopup = clientEntry(
                 ) : (
                   <>
                     <p mix={categoryStyle}>
-                      {station.category ?? 'no category'}
-                      {station.basis === null ? '' : ` · ${station.basis}`}
+                      <span>{station.category ?? 'no category'}</span>
+                      <span mix={ageStyle}>
+                        {station.source} · {ageLabel(station.ageSeconds)}
+                        {station.stale ? ' · stale' : ''}
+                      </span>
                     </p>
-
-                    <p mix={ageStyle}>
-                      {station.source}
-                      {facts === null
-                        ? ''
-                        : ` · observed ${timeLabel(facts.observed_at)}`}{' '}
-                      · {ageLabel(station.ageSeconds)}
-                      {station.stale ? (
-                        <span mix={staleStyle}>stale</span>
-                      ) : null}
-                    </p>
-
-                    {station.parseStatus !== null &&
-                    station.parseStatus !== 'ok' ? (
-                      <p mix={warningStyle}>
-                        Our parser disagrees with AWC on this report
-                        {station.upstreamCategory
-                          ? ` (upstream category ${station.upstreamCategory})`
-                          : ''}
-                        . The difference is kept visible.
-                      </p>
-                    ) : null}
 
                     {facts === null ? (
                       <p mix={mutedStyle}>No observation on file.</p>
                     ) : (
-                      <>
-                        <dl mix={factsStyle}>
-                          <Fact label="Wind" value={windLabel(facts)} />
-                          <Fact
-                            label="Visibility"
-                            value={visibilityLabel(facts)}
-                          />
-                          <Fact label="Ceiling" value={ceilingLabel(facts)} />
-                          <Fact
-                            label="Temperature"
-                            value={temperatureLabel(facts)}
-                          />
-                          <Fact
-                            label="Altimeter"
-                            value={
-                              facts.altimeter_in_hg === null
-                                ? 'not reported'
-                                : `${facts.altimeter_in_hg} inHg`
-                            }
-                          />
-                          <Fact
-                            label="Weather"
-                            value={
-                              facts.weather.length === 0
-                                ? 'none'
-                                : facts.weather.join(' ')
-                            }
-                          />
-                        </dl>
-                        <code mix={rawStyle}>{facts.raw}</code>
-                      </>
+                      <dl mix={factsStyle}>
+                        <Fact label="Wind" value={windLabel(facts)} />
+                        <Fact
+                          label="Visibility"
+                          value={visibilityLabel(facts)}
+                        />
+                        <Fact label="Clouds" value={cloudsLabel(facts)} />
+                      </dl>
                     )}
 
-                    <h3 mix={sectionStyle}>Forecast</h3>
-                    {taf === null ? (
-                      <p mix={mutedStyle}>No TAF on file.</p>
-                    ) : (
-                      <ul mix={listStyle}>
-                        {taf.periods.map((period) => (
-                          <li key={period.ref}>
-                            <span mix={periodHeadStyle}>
-                              {period.change} ·{' '}
-                              {windowLabel(period.from, period.to)}
-                            </span>
-                            <span mix={periodDetailStyle}>
-                              {periodWindLabel(period)} ·{' '}
-                              {period.visibility_sm === null
-                                ? '—'
-                                : `${period.visibility_sm} SM`}{' '}
-                              ·{' '}
-                              {period.ceiling_ft === null
-                                ? 'no ceiling'
-                                : `${period.ceiling_ft.toLocaleString()} ft`}
-                              {period.weather.length === 0
-                                ? ''
-                                : ` · ${period.weather.join(' ')}`}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                    {facts === null ? null : (
+                      <p mix={observedStyle}>
+                        Observed {timeLabel(facts.observed_at)}
+                      </p>
                     )}
 
-                    <h3 mix={sectionStyle}>Last 48 hours</h3>
-                    <Timeline points={timelinePoints(station.history)} />
-
-                    <h3 mix={sectionStyle}>Advisories within 50 nm</h3>
-                    {station.advisories.length === 0 ? (
-                      <p mix={mutedStyle}>None active.</p>
-                    ) : (
-                      <ul mix={listStyle}>
-                        {station.advisories.map((advisory) => (
-                          <li key={advisory.ref}>
-                            <span mix={periodHeadStyle}>
-                              {advisory.hazard} · {advisory.kind.toUpperCase()}
+                    {session.suggested.length === 0 ? null : (
+                      <div mix={suggestedStyle}>
+                        <p mix={suggestedLeadStyle}>
+                          This report is old. Nearby:
+                        </p>
+                        {session.suggested.map((item) => (
+                          <button
+                            key={item.icao}
+                            mix={[
+                              suggestedButtonStyle,
+                              on('click', () => void session.select(item.icao)),
+                            ]}
+                            type="button"
+                          >
+                            <span mix={suggestedCodeStyle}>{item.icao}</span>
+                            <span mix={suggestedNameStyle}>{item.name}</span>
+                            <span mix={suggestedMetaStyle}>
+                              {item.distance_nm} nm ·{' '}
+                              {ageLabel(item.age_seconds)}
                             </span>
-                            <span mix={periodDetailStyle}>
-                              {advisory.distance_nm === null
-                                ? ''
-                                : `${advisory.distance_nm.toFixed(0)} nm · `}
-                              until {timeLabel(advisory.valid_to)}
-                            </span>
-                          </li>
+                          </button>
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </>
                 )}
@@ -291,8 +223,7 @@ const hostStyle = css({
   top: '84px',
   left: '16px',
   zIndex: 3,
-  width: 'min(420px, calc(100vw - 32px))',
-  maxHeight: 'calc(100% - 104px)',
+  width: 'min(320px, calc(100vw - 32px))',
   flexDirection: 'column',
   borderRadius: '16px',
   background: 'var(--glass-strong)',
@@ -309,27 +240,37 @@ const headerStyle = css({
   alignItems: 'flex-start',
   justifyContent: 'space-between',
   gap: '8px',
-  padding: '12px 16px',
+  padding: '10px 12px 8px',
   borderBlockEnd: '1px solid var(--glass-border)',
+})
+
+const identityStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '1px',
+  minWidth: 0,
 })
 
 const icaoStyle = css({ fontWeight: 700 })
 
 const nameStyle = css({
-  display: 'block',
   fontSize: '11px',
   color: 'var(--ink-3)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
 })
 
 const closeStyle = css({
-  width: '26px',
-  height: '26px',
+  width: '24px',
+  height: '24px',
+  flexShrink: 0,
   borderRadius: '999px',
   border: '1px solid var(--glass-border)',
   background: 'rgba(255, 255, 255, 0.04)',
   color: 'var(--ink-2)',
   font: 'inherit',
-  fontSize: '15px',
+  fontSize: '14px',
   lineHeight: 1,
   cursor: 'pointer',
   '&:hover': {
@@ -346,100 +287,99 @@ const bodyStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',
-  padding: '12px 16px',
+  padding: '10px 12px',
   display: 'flex',
   flexDirection: 'column',
-  gap: '10px',
+  gap: '8px',
   '& > p': { margin: 0 },
 })
 
-const categoryStyle = css({ fontSize: '12px' })
-
-const ageStyle = css({ fontSize: '11px', color: 'var(--ink-3)' })
-
-const staleStyle = css({
-  marginInlineStart: '6px',
-  padding: '0 6px',
-  border: '1px solid var(--accent)',
-  borderRadius: '4px',
-  color: 'var(--accent)',
+const categoryStyle = css({
+  display: 'flex',
+  alignItems: 'baseline',
+  justifyContent: 'space-between',
+  gap: '8px',
+  fontSize: '12px',
 })
 
-const warningStyle = css({
-  padding: '7px 9px',
-  borderInlineStart: '2px solid var(--accent)',
-  borderRadius: '6px',
-  background: 'rgba(255, 255, 255, 0.04)',
-  fontSize: '11px',
-})
+const ageStyle = css({ fontSize: '10px', color: 'var(--ink-3)' })
 
 const factsStyle = css({
   display: 'grid',
   gridTemplateColumns: '1fr 1fr',
-  gap: '8px 12px',
+  gap: '6px 12px',
   margin: 0,
 })
 
 const factStyle = css({
   margin: 0,
-  '& dt': {
-    fontSize: '11px',
-    color: 'var(--ink-3)',
-  },
-  '& dd': { margin: 0, fontSize: '12px' },
+  fontSize: '12px',
+  '& dt': { fontSize: '10px', color: 'var(--ink-3)' },
+  '& dd': { margin: 0 },
+  '&:last-child': { gridColumn: '1 / -1' },
 })
 
-const rawStyle = css({
-  display: 'block',
-  padding: '7px 9px',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '8px',
-  background: 'rgba(0, 0, 0, 0.25)',
-  fontSize: '11px',
-  whiteSpace: 'pre-wrap',
-  overflowWrap: 'anywhere',
+const observedStyle = css({ fontSize: '10px', color: 'var(--ink-3)' })
+
+const suggestedStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  paddingBlockStart: '8px',
+  borderBlockStart: '1px solid var(--glass-border)',
 })
 
-const sectionStyle = css({
-  margin: '12px 0 0',
-  fontSize: '11px',
+const suggestedLeadStyle = css({
+  margin: 0,
+  fontSize: '10px',
   color: 'var(--ink-3)',
 })
 
-const listStyle = css({
-  listStyle: 'none',
-  margin: 0,
-  padding: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  '& li': {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1px',
-    paddingBlockEnd: '6px',
-    borderBlockEnd: '1px solid var(--glass-border)',
+const suggestedButtonStyle = css({
+  display: 'grid',
+  gridTemplateColumns: '3.6rem 1fr',
+  gap: '2px 8px',
+  padding: '6px 8px',
+  border: '1px solid var(--glass-border)',
+  borderRadius: '10px',
+  background: 'transparent',
+  color: 'var(--ink-0)',
+  font: 'inherit',
+  textAlign: 'left',
+  cursor: 'pointer',
+  '&:hover': { background: 'rgba(255, 255, 255, 0.05)' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '-2px',
   },
-  '& li:last-child': { borderBlockEnd: 0, paddingBlockEnd: 0 },
 })
 
-const periodHeadStyle = css({ fontSize: '11px' })
+const suggestedCodeStyle = css({ fontSize: '12px', fontWeight: 700 })
 
-const periodDetailStyle = css({
+const suggestedNameStyle = css({
   fontSize: '11px',
   color: 'var(--ink-2)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+})
+
+const suggestedMetaStyle = css({
+  gridColumn: '2',
+  fontSize: '10px',
+  color: 'var(--ink-3)',
 })
 
 const mutedStyle = css({ fontSize: '12px', color: 'var(--ink-3)' })
 
 const footerStyle = css({
   borderBlockStart: '1px solid var(--glass-border)',
-  padding: '12px 16px',
+  padding: '8px 12px',
 })
 
 const askStyle = css({
   width: '100%',
-  padding: '8px 14px',
+  padding: '7px 14px',
   border: '1px solid rgba(255, 255, 255, 0.16)',
   borderRadius: '999px',
   background: 'var(--ink-0)',

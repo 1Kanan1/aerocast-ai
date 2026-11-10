@@ -4,6 +4,7 @@ import { describe, it } from 'remix/test'
 import type { BundleMetar, BundlePeriod } from '#app/lib/api-types.ts'
 import {
   ceilingLabel,
+  cloudsLabel,
   periodWindLabel,
   temperatureLabel,
   visibilityLabel,
@@ -82,6 +83,22 @@ describe('fact labels', () => {
   it('says no ceiling when there is none', () => {
     assert.equal(ceilingLabel(metar({})), 'no ceiling')
     assert.equal(ceilingLabel(metar({ ceiling: { ft: 2400 } })), '2,400 ft')
+  })
+
+  it('lists cloud layers with their bases, or clear when there are none', () => {
+    assert.equal(cloudsLabel(metar({ clouds: [] })), 'clear')
+    assert.equal(
+      cloudsLabel(
+        metar({
+          clouds: [
+            { cover: 'FEW', base_ft: 9000 },
+            { cover: 'BKN', base_ft: 2400 },
+            { cover: 'VV', base_ft: null },
+          ],
+        }),
+      ),
+      'FEW 9,000 ft, BKN 2,400 ft, VV',
+    )
   })
 
   it('includes the spread only when the dewpoint is known', () => {
