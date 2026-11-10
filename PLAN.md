@@ -8,6 +8,10 @@ This is a portfolio build, not a product launch. That shapes every tradeoff belo
 Optimize for: a reviewer can clone it, run one command, and see something real; and
 the parts they read in the source show engineering judgment.
 
+**Current direction: ask first.** The map stopped being the entrance. A question
+resolves a station, and the map becomes the context for the answer. Section 17 records
+the redesign, its decisions and how much of it is built.
+
 ## 1. Positioning
 
 AeroCast sits between two things that beat it:
@@ -31,7 +35,8 @@ Everything else is table stakes for looking credible.
 
 No flight planning, no route weather, no NOTAMs (FAA retired the Federal NOTAM System
 on 2026-04-18 for NMS, which needs developer enrollment), no TFRs, no charts, no
-accounts, no go/no-go anything.
+accounts, no go/no-go anything. Routes and a recommendation mode are parked as
+nice-to-have in section 17, not promised.
 
 ## 2. Stack
 
@@ -515,6 +520,7 @@ TAF over 18 hours, advisory past `valid_to` (excluded from active queries entire
 | GET | `/api/stations/{icao}` | station, latest METAR/TAF, advisories within 50nm |
 | GET | `/api/stations/{icao}/observations?hours=48` | timeline feed |
 | GET | `/api/stations/{icao}/brief` | the fact bundle, no AI involved |
+| GET | `/api/resolve?q=` | ask-first: the station a question names, candidate stations, stale suggestions |
 | POST | `/api/ask` | `{icao, question}` to validated answer |
 | GET | `/api/advisories?kind=&hazard=&bbox=` | active only |
 | GET | `/api/map/layers?bbox=` | compact station dots + advisory polygons |
@@ -570,6 +576,9 @@ allowed to know arrives as a fact bundle; everything it says has to point at a r
 
 ```
 question
+  -> resolve the place: exact ICAO, station name, or state name
+     -> several matches: candidate rows, no model call
+     -> no match: say so, no model call
   -> pre-check: does it ask for a decision? (regex)  -> fixed refusal, no model call
   -> cache: sha256(brief_hash + normalized_question + prompt_version)
   -> pool: LLM_CHAIN order, fastest model first, then the template floor
@@ -867,6 +876,9 @@ hazards. Panels are glass: a translucent fill, a hairline light border, heavy bl
 behind it, and one soft shadow scale. Controls are pills, and on the map page the
 navbar, search and explanation float over the canvas instead of framing it.
 
+**Superseded in part.** The ask-first pass moves content panels to solid surfaces and
+keeps glass only for floating map chrome; section 17 records the change.
+
 ```
 ink-0  #f4f4f2   ink-1  #d7d7d3   ink-2  #a6a6a1   ink-3  #83837e
 line   rgba(255,255,255,0.10)     paper  #09090a   paper-2 #101012
@@ -883,6 +895,9 @@ On the dark basemap the ramp runs the other way: VFR is the dimmest dot and LIFR
 brightest, so worse weather stands out instead of fading in. The basemap is the light
 OpenFreeMap style greyscaled and inverted at load time, which keeps one style source and
 no second key.
+
+The ask-first map drops the national dot field, the letter badges and the severity key:
+only the selected station and one suggested alternative are drawn. Section 17.
 
 Advisory polygons get hatched fills and thin accent outlines, never a fill color as the
 only signal.
@@ -914,7 +929,8 @@ HTML, and the facts stay readable with JavaScript off.
   The thread follows the assistant-ui pattern: a welcome screen with starter prompts on
   an empty station, right-aligned user bubbles, plain assistant turns, a pulsing pending
   line, and one elevated composer pinned to the bottom. The composer sends on Enter,
-  keeps Shift+Enter for a newline, and stays disabled until a station is selected. The
+  keeps Shift+Enter for a newline, and stays disabled until a station is selected.
+  Ask-first enables it with no station selected. The
   validated claims and refs stay server-side; the reader sees the prose only, with a copy
   icon that appears on hover. The summary reveals word by word. It is not token streaming;
   validation needs the complete answer before a single word is shown. While an answer runs,
@@ -1080,6 +1096,7 @@ read anyone's actual `.env`.
 | 4. Frontend | 3 | map island, station page, timeline, advisories, ask panel, works with JS off |
 | 5. AI | 1.5 | provider chain, validation, refusals, cache, rate limit, eval fixture passing |
 | 6. Polish | 1 | disclosure pass, README, demo seed, deploy, live URL |
+| 7. Ask-first | in progress | resolver and candidate rows shipped; floating ask bar, marker card, radar and sketch layer remain; section 17 |
 
 About 10 days if the cross-check is well behaved, 12 if it turns up interesting cases
 (budget for interesting cases; they make the README better).
@@ -1114,3 +1131,62 @@ Those are the portfolio.
 - Decide repo visibility. Public is the point for a portfolio, and it is safe because all
   committed weather data is US public domain.
 - Choose whether `make crosscheck` becomes a blocking CI job or nightly-only.
+
+## 17. Ask-first redesign (in progress)
+
+Select-then-ask made the map a gate: every question required a dot first, so
+"what is the weather in Denver" had no way in. The redesign inverts it. The question is
+the input, the station is an output, and the map becomes the context for the answer.
+
+### Flow
+
+1. The ask bar floats over the map. No station required.
+2. The resolve endpoint reads the place before any model call: exact ICAO, then station
+   name or full state name, then candidates when several match.
+3. Candidates render as clickable rows: ICAO, name and state, ranked with TAF presence
+   first so the field people usually mean comes up first.
+4. A resolved station fetches its brief immediately, so the conditions block renders
+   before the model answers.
+5. A follow-up with no new place stays on the current station; a new place starts a new
+   thread.
+
+### Decisions
+
+- **Panel.** Answers open in a 520px right panel over the map, not a separate page.
+- **Map.** No nationwide dot field. Only the selected station and one suggested
+  alternative are drawn. No severity key, no letter badges.
+- **Stale data.** When the chosen station is stale or missing, the nearest station with
+  an observation younger than 90 minutes is offered, never substituted silently.
+- **Marker card.** Ask-first: identity, category, age, wind, visibility and clouds, plus
+  one "Ask about this station" button. No forecast, no history, no composer.
+- **Answer.** Full conditions block, then prose, then decision factors, then ASCII
+  visuals: a wind arrow, ceiling and visibility bars, and a TAF timeline. Factors, not
+  verdicts; a recommendation mode is nice-to-have.
+- **Sketch layer.** roughjs SVG overlay redrawn on move and zoom: wobbly rings, leader
+  lines, plain-language labels and hatched advisories. The basemap itself is untouched.
+- **Radar.** IEM NEXRAD composite tiles behind the sketch. nowCOAST is the preferred
+  licence, but its ArcGIS path returns 403 from this network; retry from the deploy
+  host. Two paint presets, grey wash and muted hue, are compared before one is kept.
+- **Palette.** Neutral surfaces from the HeroUI, assistant-ui and Graspnote references.
+  No orange or purple in the chrome; the accent becomes white on dark and black on
+  light, with hue reserved for the weather data.
+- **City names.** Matching works because most station names contain the city. A
+  gazetteer is deferred until real questions miss.
+- **Parked.** Routes, recommendation mode, time queries ("tomorrow at noon"),
+  device-location lookup and Mermaid rendering.
+
+### Contract
+
+The resolve endpoint returns `{station, candidates, suggested, message}`. `AskRequest`
+still carries `{icao, question}`; the client resolves first. The station page and the
+no-JS form keep working unchanged.
+
+### Status
+
+- Done: resolver with six tests, ask-first composer and candidate rows in the existing
+  drawer, resolve proxy and client. Commits `679e0b9` and `0ed062d`.
+- Next: floating ask bar and 520px panel, dot removal and the marker card, radar and
+  the sketch overlay, then the palette pass.
+- Known limits: every station in the local database is days old, so the stale-suggestion
+  branch cannot be seen live; the thread still resets when the station changes; the map
+  still renders the full dot field.
