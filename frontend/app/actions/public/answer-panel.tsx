@@ -1,0 +1,353 @@
+import type { Handle } from 'remix/component'
+import { clientEntry, css, on, ref } from 'remix/component'
+
+import type { BundleMetar } from '#app/lib/api-types.ts'
+import { ageLabel, timeLabel } from '#app/lib/format.ts'
+import {
+  ceilingLabel,
+  temperatureLabel,
+  visibilityLabel,
+  windLabel,
+} from '#app/lib/public/labels.ts'
+import type { SelectedStation } from '#app/ui/public/session.ts'
+import { session } from '#app/ui/public/session.ts'
+import {
+  type Suggestion,
+  AssistantTurn,
+  ClarificationView,
+  ThreadWelcome,
+  UserTurn,
+} from '#app/ui/public/thread-parts.tsx'
+
+const SUGGESTIONS: readonly Suggestion[] = [
+  { prompt: 'What is the ceiling?' },
+  { prompt: 'What is the visibility?' },
+  { prompt: 'What is the wind doing?' },
+  { prompt: 'What does the forecast say?' },
+  { prompt: 'What does MVFR mean?' },
+]
+
+/** The answer surface: conditions first, then the thread, over the map. */
+export const AnswerPanel = clientEntry(
+  import.meta.url,
+  function AnswerPanel(handle: Handle) {
+    let scroller: HTMLElement | undefined
+
+    function scrollToEnd(): void {
+      if (scroller) scroller.scrollTop = scroller.scrollHeight
+    }
+
+    function restartFrom(index: number, question: string): void {
+      let text = question.trim()
+      if (text === '') return
+      session.discardFrom(index)
+      void session.ask(text)
+    }
+
+    session.addEventListener(
+      'change',
+      async () => {
+        await handle.update()
+        scrollToEnd()
+      },
+      { signal: handle.signal },
+    )
+
+    handle.queueTask(() => {
+      document.addEventListener(
+        'keydown',
+        (event) => {
+          if (event.key !== 'Escape') return
+          if (document.querySelector('[popover]:popover-open') !== null) return
+          if (session.selected === null && session.clarification === null) {
+            return
+          }
+          session.clear()
+        },
+        { signal: handle.signal },
+      )
+    })
+
+    return () => {
+      let station = session.selected
+      let clarification = session.clarification
+      let open = station !== null || clarification !== null
+
+      return (
+        <aside
+          aria-label="Answer"
+          data-open={open ? 'true' : 'false'}
+          mix={panelStyle}
+        >
+          <header mix={headerStyle}>
+            <div mix={identityStyle}>
+              <span mix={icaoStyle}>{station?.icao ?? 'AeroCast'}</span>
+              <span mix={nameStyle}>
+                {station?.name ?? 'Which station did you mean?'}
+              </span>
+            </div>
+            <button
+              aria-label="Close answers"
+              mix={[closeStyle, on('click', () => session.clear())]}
+              type="button"
+            >
+              ×
+            </button>
+          </header>
+
+          <div mix={[bodyStyle, ref((node) => (scroller = node))]}>
+            {clarification === null ? null : (
+              <ClarificationView
+                message={clarification.message}
+                onChoose={(icao) => session.choose(icao)}
+                options={clarification.options}
+              />
+            )}
+
+            {station === null ? null : station.loading ? (
+              <p mix={mutedStyle}>Loading station facts…</p>
+            ) : station.error !== null ? (
+              <p mix={mutedStyle}>{station.error}</p>
+            ) : (
+              <>
+                {station.facts === null ? (
+                  <p mix={mutedStyle}>No observation on file.</p>
+                ) : (
+                  <Conditions facts={station.facts} station={station} />
+                )}
+
+                {station.thread.length === 0 ? (
+                  <ThreadWelcome
+                    category={station.category}
+                    disabled={false}
+                    icao={station.icao}
+                    name={station.name}
+                    onAsk={(prompt) => void session.ask(prompt)}
+                    suggestions={SUGGESTIONS}
+                  />
+                ) : (
+                  station.thread.map((entry, index) => (
+                    <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
+                      <UserTurn
+                        onEdit={(next) => restartFrom(index, next)}
+                        question={entry.question}
+                      />
+                      <AssistantTurn
+                        entry={entry}
+                        onRegenerate={() => {
+                          let question = station.thread[index]?.question
+                          if (question !== undefined) {
+                            restartFrom(index, question)
+                          }
+                        }}
+                        showName={index === 0}
+                      />
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+          </div>
+        </aside>
+      )
+    }
+  },
+)
+
+/** The facts every answer rests on, shown once above the prose. */
+function Conditions(
+  handle: Handle<{ facts: BundleMetar; station: SelectedStation }>,
+) {
+  return () => {
+    let { facts, station } = handle.props
+
+    return (
+      <section aria-label="Conditions" mix={conditionsStyle}>
+        <p mix={conditionsHeadStyle}>
+          <span mix={categoryStyle}>{station.category ?? 'no category'}</span>
+          <span mix={ageStyle}>
+            {station.source} · observed {timeLabel(facts.observed_at)} ·{' '}
+            {ageLabel(station.ageSeconds)}
+            {station.stale ? ' · stale' : ''}
+          </span>
+        </p>
+        {station.parseStatus !== null &&
+        station.parseStatus !== 'ok' &&
+        station.upstreamCategory !== null ? (
+          <p mix={warningStyle}>
+            Our parser disagrees with AWC on this report (upstream category{' '}
+            {station.upstreamCategory}). The difference is kept visible.
+          </p>
+        ) : null}
+        <dl mix={factsStyle}>
+          <Fact label="Wind" value={windLabel(facts)} />
+          <Fact label="Visibility" value={visibilityLabel(facts)} />
+          <Fact label="Ceiling" value={ceilingLabel(facts)} />
+          <Fact label="Temperature" value={temperatureLabel(facts)} />
+          <Fact
+            label="Altimeter"
+            value={
+              facts.altimeter_in_hg === null
+                ? 'not reported'
+                : `${facts.altimeter_in_hg} inHg`
+            }
+          />
+          <Fact
+            label="Weather"
+            value={
+              facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
+            }
+          />
+        </dl>
+        <code mix={rawStyle}>{facts.raw}</code>
+      </section>
+    )
+  }
+}
+
+function Fact(handle: Handle<{ label: string; value: string }>) {
+  return () => (
+    <div mix={factStyle}>
+      <dt>{handle.props.label}</dt>
+      <dd>{handle.props.value}</dd>
+    </div>
+  )
+}
+
+const panelStyle = css({
+  position: 'absolute',
+  top: '76px',
+  right: '16px',
+  bottom: '44px',
+  zIndex: 4,
+  display: 'none',
+  flexDirection: 'column',
+  width: 'min(520px, calc(100vw - 32px))',
+  borderRadius: '20px',
+  border: '1px solid var(--line)',
+  background: 'var(--paper-2)',
+  boxShadow: 'var(--shadow)',
+  overflow: 'hidden',
+  '&[data-open="true"]': {
+    display: 'flex',
+    animation: 'rmx-card-in 200ms ease-out',
+  },
+  '@media (max-width: 900px)': { bottom: '120px' },
+})
+
+const headerStyle = css({
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
+  gap: '12px',
+  padding: '14px 20px',
+  borderBlockEnd: '1px solid var(--line)',
+})
+
+const identityStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  minWidth: 0,
+})
+
+const icaoStyle = css({ fontWeight: 700 })
+
+const nameStyle = css({
+  fontSize: '11px',
+  color: 'var(--ink-3)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+})
+
+const closeStyle = css({
+  width: '28px',
+  height: '28px',
+  flexShrink: 0,
+  borderRadius: '999px',
+  border: '1px solid var(--glass-border)',
+  background: 'transparent',
+  color: 'var(--ink-2)',
+  font: 'inherit',
+  fontSize: '16px',
+  lineHeight: 1,
+  cursor: 'pointer',
+  '&:hover': { color: 'var(--ink-0)', background: 'rgba(255, 255, 255, 0.06)' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
+})
+
+const bodyStyle = css({
+  flex: '1 1 auto',
+  minHeight: 0,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '20px',
+  padding: '16px 20px 20px',
+  scrollBehavior: 'smooth',
+})
+
+const exchangeStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px',
+})
+
+const conditionsStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px',
+  paddingBlockEnd: '16px',
+  borderBlockEnd: '1px solid var(--line)',
+})
+
+const conditionsHeadStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
+  margin: 0,
+})
+
+const categoryStyle = css({ fontSize: '12px', color: 'var(--ink-1)' })
+
+const ageStyle = css({ fontSize: '11px', color: 'var(--ink-3)' })
+
+const warningStyle = css({
+  margin: 0,
+  padding: '7px 9px',
+  borderInlineStart: '2px solid var(--accent)',
+  borderRadius: '6px',
+  background: 'rgba(255, 255, 255, 0.04)',
+  fontSize: '11px',
+})
+
+const factsStyle = css({
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: '10px 16px',
+  margin: 0,
+})
+
+const factStyle = css({
+  margin: 0,
+  '& dt': { fontSize: '11px', color: 'var(--ink-3)' },
+  '& dd': { margin: 0, fontSize: '12px', color: 'var(--ink-0)' },
+})
+
+const rawStyle = css({
+  display: 'block',
+  padding: '7px 9px',
+  border: '1px solid var(--line)',
+  borderRadius: '8px',
+  background: 'rgba(0, 0, 0, 0.28)',
+  fontSize: '11px',
+  whiteSpace: 'pre-wrap',
+  overflowWrap: 'anywhere',
+})
+
+const mutedStyle = css({ margin: 0, fontSize: '12px', color: 'var(--ink-3)' })

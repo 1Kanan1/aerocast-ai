@@ -10,11 +10,12 @@ import { EMPTY_LAYERS, islandLayers } from '#app/lib/map-data.ts'
 import { CATEGORY_SHADES } from '#app/lib/public/categories.ts'
 import { routes } from '#app/routes.ts'
 import { Document } from '#app/actions/document.tsx'
-import { ChatSidebar } from '#app/actions/public/chat-sidebar.tsx'
+import { AnswerPanel } from '#app/actions/public/answer-panel.tsx'
+import { AskBar } from '#app/actions/public/ask-bar.tsx'
 import { MapIsland } from '#app/actions/public/map-island.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
 import { StationSearch } from '#app/actions/public/station-search.tsx'
-import { AlertIcon, InfoIcon, SearchIcon, SpeechIcon } from './public/icons.tsx'
+import { AlertIcon, InfoIcon, SearchIcon } from './public/icons.tsx'
 import { glassStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
 
 interface MapShellProps {
@@ -36,7 +37,10 @@ export function MapShell(handle: Handle<MapShellProps>) {
           <div mix={mapAreaStyle}>
             <MapIsland initial={island} />
             <StationPopup />
+            <AnswerPanel />
           </div>
+
+          <AskBar />
 
           <header mix={[glassStyle, navbarStyle]}>
             <a href={routes.home.href()} mix={wordmarkStyle}>
@@ -68,15 +72,6 @@ export function MapShell(handle: Handle<MapShellProps>) {
             >
               <InfoIcon />
             </a>
-            <button
-              aria-label="Open explanation"
-              mix={iconStyle}
-              popovertarget="ai-drawer"
-              title="Explanation"
-              type="button"
-            >
-              <SpeechIcon />
-            </button>
           </header>
 
           <StationSearch initial={rows} query={query} />
@@ -93,14 +88,6 @@ export function MapShell(handle: Handle<MapShellProps>) {
               </li>
             ))}
           </ul>
-
-          <div id="ai-drawer" mix={drawerStyle} popover="manual">
-            <ChatSidebar />
-          </div>
-
-          <p mix={[glassStyle, disclaimerStyle]}>
-            Educational tool. Not for flight planning. Briefing: 1-800-WX-BRIEF.
-          </p>
         </main>
       </Document>
     )
@@ -168,31 +155,6 @@ const iconStyle = css({
   },
 })
 
-const drawerStyle = css({
-  position: 'fixed',
-  inset: '0 0 0 auto',
-  width: 'min(420px, 100vw)',
-  height: '100dvh',
-  margin: 0,
-  padding: 0,
-  border: 0,
-  borderInlineStart: '1px solid rgba(255, 255, 255, 0.14)',
-  background: 'rgba(18, 18, 22, 0.42)',
-  color: 'var(--ink-0)',
-  boxShadow: '-30px 0 90px rgba(0, 0, 0, 0.65)',
-  backdropFilter: 'blur(34px) saturate(1.3)',
-  WebkitBackdropFilter: 'blur(34px) saturate(1.3)',
-  transform: 'translateX(100%)',
-  '&:popover-open': {
-    transform: 'translateX(0)',
-    animation: 'rmx-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1)',
-  },
-  '&[data-closing="true"]': {
-    animation: 'rmx-drawer-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards',
-  },
-  '&::backdrop': { background: 'rgba(0, 0, 0, 0.45)' },
-})
-
 const keyStyle = css({
   position: 'absolute',
   right: '16px',
@@ -214,18 +176,4 @@ const keyDotStyle = css({
   height: '8px',
   borderRadius: '50%',
   border: '1px solid rgba(255, 255, 255, 0.16)',
-})
-
-const disclaimerStyle = css({
-  position: 'absolute',
-  bottom: '16px',
-  left: '64px',
-  zIndex: 2,
-  margin: 0,
-  padding: '6px 12px',
-  borderRadius: '8px',
-  maxWidth: 'min(520px, calc(100vw - 88px))',
-  fontSize: '11px',
-  lineHeight: 1.4,
-  color: 'var(--ink-3)',
 })

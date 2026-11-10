@@ -31,6 +31,11 @@ export const StationPopup = clientEntry(
       if (!host || anchor === null || !host.parentElement) return
 
       let bounds = host.parentElement.getBoundingClientRect()
+      // The answer panel takes the right edge; keep the card clear of it.
+      let panel = host.parentElement.querySelector<HTMLElement>(
+        '[aria-label="Answer"][data-open="true"]',
+      )
+      let reserved = panel === null ? 0 : panel.offsetWidth + 16
       let width = host.offsetWidth
       let roomAbove = anchor.y - CARD_GAP - NAVBAR_FLOOR
       let roomBelow = bounds.height - anchor.y - CARD_GAP - CARD_PAD
@@ -42,7 +47,7 @@ export const StationPopup = clientEntry(
       host.style.maxHeight = `${Math.max(180, room)}px`
       host.style.left = `${Math.min(
         Math.max(CARD_PAD, anchor.x - CARD_GAP - width),
-        bounds.width - width - CARD_PAD,
+        bounds.width - reserved - width - CARD_PAD,
       )}px`
 
       if (above) {
@@ -85,19 +90,6 @@ export const StationPopup = clientEntry(
       },
       { signal: handle.signal },
     )
-
-    handle.queueTask(() => {
-      document.addEventListener(
-        'keydown',
-        (event) => {
-          if (event.key !== 'Escape') return
-          if (document.querySelector('[popover]:popover-open') !== null) return
-          if (session.selected === null) return
-          session.clear()
-        },
-        { signal: handle.signal },
-      )
-    })
 
     handle.queueTask(() => {
       last = session.selected
@@ -263,34 +255,19 @@ export const StationPopup = clientEntry(
               </div>
 
               <footer mix={footerStyle}>
-                <form
+                <button
+                  aria-label={`Ask about ${station.icao}`}
                   mix={[
-                    composerStyle,
-                    on('submit', (event) => {
-                      event.preventDefault()
-                      let form = event.currentTarget
-                      let question = String(
-                        new FormData(form).get('question') ?? '',
-                      )
-                      form.reset()
-
-                      let drawer = document.getElementById('ai-drawer')
-                      drawer?.showPopover()
-                      void session.ask(question)
+                    askStyle,
+                    on('click', () => {
+                      let field = document.querySelector('[data-ask-field]')
+                      if (field instanceof HTMLTextAreaElement) field.focus()
                     }),
                   ]}
+                  type="button"
                 >
-                  <input
-                    aria-label="Ask about this station"
-                    maxLength={400}
-                    name="question"
-                    placeholder="Ask about this station"
-                    type="text"
-                  />
-                  <button mix={askStyle} type="submit">
-                    Ask
-                  </button>
-                </form>
+                  Ask about {station.icao}
+                </button>
               </footer>
             </>
           )}
@@ -460,24 +437,9 @@ const footerStyle = css({
   padding: '12px 16px',
 })
 
-const composerStyle = css({
-  display: 'flex',
-  gap: '6px',
-  '& input': {
-    flex: '1 1 auto',
-    minWidth: 0,
-    padding: '7px 10px',
-    border: '1px solid var(--glass-border)',
-    borderRadius: '999px',
-    background: 'rgba(0, 0, 0, 0.28)',
-    color: 'var(--ink-0)',
-    font: 'inherit',
-    fontSize: '12px',
-  },
-})
-
 const askStyle = css({
-  padding: '7px 14px',
+  width: '100%',
+  padding: '8px 14px',
   border: '1px solid rgba(255, 255, 255, 0.16)',
   borderRadius: '999px',
   background: 'var(--ink-0)',
@@ -485,4 +447,8 @@ const askStyle = css({
   font: 'inherit',
   fontSize: '12px',
   cursor: 'pointer',
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
 })
