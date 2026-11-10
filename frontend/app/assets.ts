@@ -19,6 +19,7 @@ export const assets = createAssetServer({
     'app/lib/map-data.ts',
     'app/lib/monochrome.ts',
     'app/lib/observations.ts',
+    'app/lib/radar.ts',
     'app/ui/answer.tsx',
     'app/ui/timeline.tsx',
   ],
