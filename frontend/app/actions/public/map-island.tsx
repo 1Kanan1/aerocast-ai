@@ -21,6 +21,15 @@ const PAPER = '#09090a'
 /** The one hue on the map belongs to the hazard polygons, not the chrome. */
 const HAZARD_INK = '#e0603f'
 const INK = '#f4f4f2'
+/**
+ * The United States and its territories: the Aleutians to the Virgin
+ * Islands, the North Slope to Puerto Rico. Shemya, on the far side of the
+ * antimeridian, is the one station the box leaves out.
+ */
+const US_BOUNDS: [[number, number], [number, number]] = [
+  [-180, 17],
+  [-64, 72],
+]
 
 interface MapIslandProps {
   initial: IslandLayers
@@ -55,8 +64,9 @@ export const MapIsland = clientEntry(
         style: style ?? emptyStyle(),
         center: [-96, 38],
         zoom: 3.4,
-        minZoom: 2.5,
+        minZoom: 3,
         maxZoom: 10,
+        maxBounds: US_BOUNDS,
         dragRotate: false,
         pitchWithRotate: false,
         attributionControl: {
