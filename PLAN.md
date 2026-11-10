@@ -1096,7 +1096,7 @@ read anyone's actual `.env`.
 | 4. Frontend | 3 | map island, station page, timeline, advisories, ask panel, works with JS off |
 | 5. AI | 1.5 | provider chain, validation, refusals, cache, rate limit, eval fixture passing |
 | 6. Polish | 1 | disclosure pass, README, demo seed, deploy, live URL |
-| 7. Ask-first | in progress | resolver and candidate rows shipped; floating ask bar, marker card, radar and sketch layer remain; section 17 |
+| 7. Ask-first | in progress | resolver, ask bar, answer panel, marker card and marker-only map shipped; radar, sketch layer and palette remain; section 17 |
 
 About 10 days if the cross-check is well behaved, 12 if it turns up interesting cases
 (budget for interesting cases; they make the README better).
@@ -1183,10 +1183,12 @@ no-JS form keep working unchanged.
 
 ### Status
 
-- Done: resolver with six tests, ask-first composer and candidate rows in the existing
-  drawer, resolve proxy and client. Commits `679e0b9` and `0ed062d`.
-- Next: floating ask bar and 520px panel, dot removal and the marker card, radar and
-  the sketch overlay, then the palette pass.
-- Known limits: every station in the local database is days old, so the stale-suggestion
-  branch cannot be seen live; the thread still resets when the station changes; the map
-  still renders the full dot field.
+- Done: resolver with six tests; a floating ask bar and a 520px answer panel that
+  replace the drawer; the map draws only the selected station and any suggested
+  alternative; the ask-first marker card; the map endpoint returns advisories only.
+  Commits `679e0b9`, `0ed062d`, `eeb6ab2`, `ef6feee` and `e6e4335`.
+- Next: IEM radar with the two paint presets, the roughjs sketch overlay, then the
+  palette pass.
+- Known limits: every station in the local database is days old, so the
+  stale-suggestion branch has never been seen live; the thread still resets when the
+  station changes; below 900px the ask bar covers the map's attribution.
