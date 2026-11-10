@@ -10,6 +10,7 @@ import { clientEntry, css, ref } from 'remix/component'
 import type { MapLayers, ResolveSuggestion } from '#app/lib/api-types.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
+import { RADAR_ATTRIBUTION } from '#app/lib/radar.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 
@@ -17,7 +18,9 @@ const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
 const MOVE_DEBOUNCE_MS = 250
 const PAPER = '#09090a'
-const ACCENT = '#e0603f'
+/** The one hue on the map belongs to the hazard polygons, not the chrome. */
+const HAZARD_INK = '#e0603f'
+const INK = '#f4f4f2'
 
 interface MapIslandProps {
   initial: IslandLayers
@@ -56,7 +59,10 @@ export const MapIsland = clientEntry(
         maxZoom: 10,
         dragRotate: false,
         pitchWithRotate: false,
-        attributionControl: { compact: true },
+        attributionControl: {
+          compact: true,
+          customAttribution: `${RADAR_ATTRIBUTION} · Wind, temperature and humidity: <a href="https://open-meteo.com/">Open-Meteo</a> (RRFS)`,
+        },
       })
 
       map.addControl(
@@ -92,12 +98,16 @@ export const MapIsland = clientEntry(
 
         selectedPoint = point
         showSelection(map, point)
-        session.setAnchor(project(map, point))
+        session.setAnchor(anchorAt(map, point))
 
         if (moved) {
+          // The answer panel covers the right edge, so center the station in
+          // the part of the map the reader can still see.
           map.flyTo({
             center: point,
-            zoom: Math.max(map.getZoom(), 6),
+            zoom: Math.max(map.getZoom(), 8),
+            padding:
+              window.innerWidth > 900 ? { right: 520, top: 0 } : undefined,
             duration: 900,
           })
         }
@@ -115,7 +125,7 @@ export const MapIsland = clientEntry(
       // Keep the station card and its highlight over the dot as the map moves.
       map.on('move', () => {
         if (selectedPoint === null) return
-        session.setAnchor(project(map, selectedPoint))
+        session.setAnchor(anchorAt(map, selectedPoint))
       })
 
       session.addEventListener('change', applySession, {
@@ -197,23 +207,12 @@ function addMarkers(map: MapLibreMap): void {
     data: emptyCollection(),
   })
   map.addLayer({
-    id: 'selection-halo',
-    type: 'circle',
-    source: 'selection',
-    paint: {
-      'circle-radius': 12,
-      'circle-color': 'rgba(224, 96, 63, 0)',
-      'circle-stroke-color': ACCENT,
-      'circle-stroke-width': 2,
-    },
-  })
-  map.addLayer({
     id: 'selection-dot',
     type: 'circle',
     source: 'selection',
     paint: {
       'circle-radius': 4,
-      'circle-color': '#f4f4f2',
+      'circle-color': INK,
     },
   })
 
@@ -245,7 +244,7 @@ function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {
     id: 'advisories-outline',
     type: 'line',
     source: 'advisories',
-    paint: { 'line-color': ACCENT, 'line-width': 1 },
+    paint: { 'line-color': HAZARD_INK, 'line-width': 1 },
   })
 }
 
@@ -276,9 +275,17 @@ async function refreshAdvisories(map: MapLibreMap): Promise<void> {
   }
 }
 
-function project(map: MapLibreMap, point: [number, number]): Anchor {
+function anchorAt(map: MapLibreMap, point: [number, number]): Anchor {
   let projected = map.project(point)
-  return { x: projected.x, y: projected.y }
+  // Metres per pixel at this latitude, so the weather area is a real distance
+  // on the map rather than a fixed size on the screen.
+  let metersPerPixel =
+    (156543.03392 * Math.cos((point[1] * Math.PI) / 180)) / 2 ** map.getZoom()
+  return {
+    x: projected.x,
+    y: projected.y,
+    pxPerNm: 1852 / metersPerPixel,
+  }
 }
 
 function showSelection(map: MapLibreMap, point: [number, number] | null): void {
@@ -336,7 +343,7 @@ function hatchPattern(): ImageData {
   canvas.height = size
   let context = canvas.getContext('2d')
   if (context === null) throw new Error('no 2d context')
-  context.strokeStyle = ACCENT
+  context.strokeStyle = HAZARD_INK
   context.globalAlpha = 0.45
   context.lineWidth = 1
   context.beginPath()

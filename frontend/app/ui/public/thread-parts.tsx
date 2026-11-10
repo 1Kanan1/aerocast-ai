@@ -642,7 +642,7 @@ const refusalStyle = css({
   padding: '10px 12px',
   border: '1px solid var(--accent)',
   borderRadius: '12px',
-  background: 'rgba(224, 96, 63, 0.06)',
+  background: 'rgba(255, 255, 255, 0.04)',
 })
 
 const refusalNoteStyle = css({

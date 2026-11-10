@@ -72,7 +72,7 @@ export const tokensStyle = css({
   '--line': 'rgba(255, 255, 255, 0.10)',
   '--paper': '#09090a',
   '--paper-2': '#101012',
-  '--accent': '#e0603f',
+  '--accent': '#f4f4f2',
   '--glass': 'rgba(22, 22, 25, 0.62)',
   '--glass-strong': 'rgba(24, 24, 28, 0.86)',
   '--glass-border': 'rgba(255, 255, 255, 0.09)',

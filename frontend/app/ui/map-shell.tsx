@@ -12,8 +12,10 @@ import { Document } from '#app/actions/document.tsx'
 import { AnswerPanel } from '#app/actions/public/answer-panel.tsx'
 import { AskBar } from '#app/actions/public/ask-bar.tsx'
 import { MapIsland } from '#app/actions/public/map-island.tsx'
+import { SketchLayer } from '#app/actions/public/sketch-layer.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
 import { StationSearch } from '#app/actions/public/station-search.tsx'
+import { WeatherKey } from '#app/actions/public/weather-key.tsx'
 import { AlertIcon, InfoIcon, SearchIcon } from './public/icons.tsx'
 import { glassStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
 
@@ -35,6 +37,7 @@ export function MapShell(handle: Handle<MapShellProps>) {
         <main mix={[tokensStyle, shellStyle]}>
           <div mix={mapAreaStyle}>
             <MapIsland initial={island} />
+            <SketchLayer />
             <StationPopup />
             <AnswerPanel />
           </div>
@@ -74,6 +77,8 @@ export function MapShell(handle: Handle<MapShellProps>) {
           </header>
 
           <StationSearch initial={rows} query={query} />
+
+          <WeatherKey />
         </main>
       </Document>
     )

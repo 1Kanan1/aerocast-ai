@@ -29,6 +29,8 @@ export interface ThreadEntry {
 export interface Anchor {
   x: number
   y: number
+  /** Screen pixels per nautical mile at the station's latitude and zoom. */
+  pxPerNm: number
 }
 
 /** A question that matched more than one station, waiting for a choice. */
