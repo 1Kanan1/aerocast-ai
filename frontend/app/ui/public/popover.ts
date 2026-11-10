@@ -2,8 +2,8 @@ const CLOSE_MS = 160
 
 /**
  * Native popovers hide immediately on Escape and light dismiss, before an
- * exit animation can run. The drawer and search are `manual` popovers, so
- * closing is ours: mark the exit animation, then hide when it finishes.
+ * exit animation can run. The search is a `manual` popover, so closing is
+ * ours: mark the exit animation, then hide when it finishes.
  */
 export function closePopover(
   popover: HTMLElement,
