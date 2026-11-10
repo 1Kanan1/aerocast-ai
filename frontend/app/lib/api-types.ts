@@ -295,6 +295,31 @@ export interface ProviderStatus {
   reachable: boolean | null
 }
 
+export interface ResolveResponse {
+  station: ResolveStation | null
+  candidates: ResolveStation[]
+  suggested: ResolveSuggestion[]
+  message: string | null
+}
+
+export interface ResolveStation {
+  icao: string
+  name: string
+  state: string | null
+  lat: number
+  lon: number
+}
+
+export interface ResolveSuggestion {
+  icao: string
+  name: string
+  state: string | null
+  lat: number
+  lon: number
+  distance_nm: number
+  age_seconds: number
+}
+
 export interface Station {
   icao: string
   name: string

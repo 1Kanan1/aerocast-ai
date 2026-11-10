@@ -309,6 +309,28 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=400)
 
 
+class ResolveStation(BaseModel):
+    icao: str
+    name: str
+    state: str | None
+    lat: float
+    lon: float
+
+
+class ResolveSuggestion(ResolveStation):
+    distance_nm: float
+    age_seconds: int
+
+
+class ResolveResponse(BaseModel):
+    """What a free-text question resolves to, or the stations it might mean."""
+
+    station: ResolveStation | None
+    candidates: list[ResolveStation]
+    suggested: list[ResolveSuggestion]
+    message: str | None
+
+
 class AnswerClaim(BaseModel):
     text: str
     refs: list[str]
