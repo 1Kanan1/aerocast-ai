@@ -4,6 +4,7 @@ import type {
   AdvisoryList,
   Health,
   MapLayersResponse,
+  ResolveResponse,
   StationBrief,
   StationDetailResponse,
   StationHistory,
@@ -106,6 +107,16 @@ export function apiGetStations(
 ): Promise<ApiResult<StationList>> {
   return apiGet<StationList>(
     `/api/stations?q=${encodeURIComponent(query)}`,
+    signal,
+  )
+}
+
+export function apiGetResolve(
+  question: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<ResolveResponse>> {
+  return apiGet<ResolveResponse>(
+    `/api/resolve?q=${encodeURIComponent(question)}`,
     signal,
   )
 }

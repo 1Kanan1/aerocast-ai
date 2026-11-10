@@ -6,6 +6,8 @@ import type {
   BundleAdvisory,
   BundleMetar,
   BundleTaf,
+  ResolveResponse,
+  ResolveStation,
   StationDetailResponse,
   StationHistory,
 } from '#app/lib/api-types.ts'
@@ -26,6 +28,13 @@ export interface ThreadEntry {
 export interface Anchor {
   x: number
   y: number
+}
+
+/** A question that matched more than one station, waiting for a choice. */
+export interface Clarification {
+  question: string
+  message: string | null
+  options: ResolveStation[]
 }
 
 export interface HistoryPoint {
@@ -60,6 +69,7 @@ export interface SelectedStation {
 export class StationSession extends TypedEventTarget<{ change: Event }> {
   selected: SelectedStation | null = null
   anchor: Anchor | null = null
+  clarification: Clarification | null = null
   #pending: AbortController | null = null
   #ask: AbortController | null = null
   #anchorListeners = new Set<(anchor: Anchor | null) => void>()
@@ -81,6 +91,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     let previous = this.selected
     let thread = previous?.icao === icao ? previous.thread : []
 
+    this.clarification = null
     this.#pending?.abort()
     this.#ask?.abort()
     this.#ask = null
@@ -257,6 +268,64 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.notify()
   }
 
+  /**
+   * Ask-first: resolve the place in the question before any model call.
+   * A station is asked directly, several matches wait for a choice, and no
+   * match falls back to the station already on screen.
+   */
+  async askQuestion(question: string): Promise<void> {
+    let text = question.trim()
+    if (text === '') return
+
+    this.clarification = null
+    this.notify()
+
+    let response = await fetch(
+      `${routes.resolve.href()}?q=${encodeURIComponent(text)}`,
+      { headers: { accept: 'application/json' } },
+    )
+    let payload = response.ok
+      ? ((await response.json()) as ResolveResponse)
+      : null
+
+    if (payload?.station) {
+      await this.select(payload.station.icao)
+      await this.ask(text)
+      return
+    }
+
+    if (payload !== null && payload.candidates.length > 0) {
+      this.clarification = {
+        question: text,
+        message: payload.message,
+        options: payload.candidates,
+      }
+      this.notify()
+      return
+    }
+
+    if (this.selected !== null) {
+      await this.ask(text)
+      return
+    }
+
+    this.clarification = {
+      question: text,
+      message: payload?.message ?? 'No station matches that question.',
+      options: [],
+    }
+    this.notify()
+  }
+
+  /** Answer the pending clarification with one of its stations. */
+  choose(icao: string): void {
+    let pending = this.clarification
+    if (pending === null) return
+
+    this.clarification = null
+    void this.select(icao).then(() => this.ask(pending.question))
+  }
+
   /** Drop the turn at `index` and every turn after it. */
   discardFrom(index: number): void {
     let selected = this.selected
@@ -275,6 +344,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.#ask?.abort()
     this.#ask = null
     this.selected = null
+    this.clarification = null
     this.setAnchor(null)
     this.notify()
   }

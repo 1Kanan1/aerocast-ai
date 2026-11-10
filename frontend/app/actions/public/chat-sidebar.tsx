@@ -7,6 +7,7 @@ import { SendIcon, StopIcon } from '#app/ui/public/icons.tsx'
 import {
   type Suggestion,
   AssistantTurn,
+  ClarificationView,
   ThreadWelcome,
   UserTurn,
 } from '#app/ui/public/thread-parts.tsx'
@@ -73,9 +74,10 @@ export const ChatSidebar = clientEntry(
 
     return () => {
       let station = session.selected
+      let clarification = session.clarification
       let pending =
         station !== null && station.thread.some((entry) => entry.pending)
-      let canAsk = station !== null && !pending
+      let canAsk = !pending
 
       return (
         <div mix={[sidebarStyle, ref((node) => (root = node))]}>
@@ -115,13 +117,19 @@ export const ChatSidebar = clientEntry(
           </header>
 
           <div mix={[threadStyle, ref((node) => (scroller = node))]}>
-            {station === null ? (
+            {clarification !== null ? (
+              <ClarificationView
+                message={clarification.message}
+                onChoose={(icao) => session.choose(icao)}
+                options={clarification.options}
+              />
+            ) : station === null ? (
               <div mix={emptyStyle}>
-                <p mix={kickerStyle}>Explanation layer</p>
-                <h2 mix={emptyTitleStyle}>Select a station</h2>
+                <p mix={kickerStyle}>Ask about the weather</p>
+                <h2 mix={emptyTitleStyle}>Anywhere in the US</h2>
                 <p mix={emptyTextStyle}>
-                  Pick a dot on the map, then ask about its weather. Answers
-                  restate the facts shown there and cite them.
+                  Name a city, a state or an airport code. The answer shows the
+                  facts it is based on and cites them.
                 </p>
               </div>
             ) : station.thread.length === 0 ? (
@@ -164,13 +172,13 @@ export const ChatSidebar = clientEntry(
                 }
                 draft = ''
                 handle.update()
-                if (question !== '') void session.ask(question)
+                if (question !== '') void session.askQuestion(question)
               }),
             ]}
           >
             <div mix={composerShellStyle}>
               <textarea
-                aria-label="Ask about the selected station"
+                aria-label="Ask about the weather"
                 disabled={!canAsk}
                 maxLength={400}
                 mix={[
@@ -190,18 +198,16 @@ export const ChatSidebar = clientEntry(
                 name="question"
                 placeholder={
                   station === null
-                    ? 'Select a station first'
+                    ? 'Ask about the weather anywhere…'
                     : `Ask about ${station.icao}'s weather…`
                 }
                 rows={1}
               />
               <div mix={composerRowStyle}>
                 <span mix={hintStyle}>
-                  {station === null
-                    ? 'Select a station to ask'
-                    : pending
-                      ? 'Working…'
-                      : 'Enter to send · Shift+Enter for a new line'}
+                  {pending
+                    ? 'Working…'
+                    : 'Enter to send · Shift+Enter for a new line'}
                 </span>
                 {pending ? (
                   <button

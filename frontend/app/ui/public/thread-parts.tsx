@@ -1,6 +1,7 @@
 import type { Handle } from 'remix/component'
 import { css, on, ref } from 'remix/component'
 
+import type { ResolveStation } from '#app/lib/api-types.ts'
 import type { ThreadEntry } from '#app/ui/public/session.ts'
 import {
   CheckIcon,
@@ -61,6 +62,43 @@ export function ThreadWelcome(handle: Handle<WelcomeProps>) {
       </div>
     )
   }
+}
+
+/** The stations a question might mean, as rows the reader can pick. */
+export function ClarificationView(
+  handle: Handle<{
+    message: string | null
+    onChoose: (icao: string) => void
+    options: ResolveStation[]
+  }>,
+) {
+  return () => (
+    <div mix={clarifyStyle}>
+      <p mix={clarifyLeadStyle}>
+        {handle.props.message ?? 'Which station did you mean?'}
+      </p>
+      {handle.props.options.length === 0 ? null : (
+        <div mix={optionListStyle}>
+          {handle.props.options.map((option) => (
+            <button
+              key={option.icao}
+              mix={[
+                optionStyle,
+                on('click', () => handle.props.onChoose(option.icao)),
+              ]}
+              type="button"
+            >
+              <span mix={optionCodeStyle}>{option.icao}</span>
+              <span mix={optionNameStyle}>
+                {option.name}
+                {option.state === null ? '' : `, ${option.state}`}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** A user turn: right aligned, compact, editable in place on the last one. */
@@ -397,6 +435,55 @@ const suggestionMarkStyle = css({
 })
 
 const suggestionTitleStyle = css({ fontSize: '13px' })
+
+const clarifyStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+})
+
+const clarifyLeadStyle = css({
+  margin: 0,
+  fontSize: '14px',
+  lineHeight: 1.55,
+  color: 'var(--ink-0)',
+})
+
+const optionListStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  border: '1px solid var(--glass-border)',
+  borderRadius: '12px',
+  overflow: 'hidden',
+  '& button + button': {
+    borderBlockStart: '1px solid var(--glass-border)',
+  },
+})
+
+const optionStyle = css({
+  display: 'grid',
+  gridTemplateColumns: '4.5rem 1fr',
+  gap: '10px',
+  padding: '10px 12px',
+  border: 0,
+  background: 'transparent',
+  color: 'var(--ink-0)',
+  font: 'inherit',
+  textAlign: 'left',
+  cursor: 'pointer',
+  '&:hover': { background: 'rgba(255, 255, 255, 0.05)' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '-2px',
+  },
+})
+
+const optionCodeStyle = css({ fontWeight: 700 })
+
+const optionNameStyle = css({
+  fontSize: '13px',
+  color: 'var(--ink-2)',
+})
 
 const userRowStyle = css({
   display: 'flex',

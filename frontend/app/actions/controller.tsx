@@ -11,6 +11,7 @@ import {
   apiGetHealth,
   apiGetHistory,
   apiGetMapLayers,
+  apiGetResolve,
   apiGetStation,
   apiGetStations,
 } from '#app/lib/api.ts'
@@ -123,6 +124,24 @@ export default createController(routes, {
       if (!result.ok || !result.data) {
         return Response.json(
           { error: 'search is unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    },
+
+    async resolve(context) {
+      let result = await apiGetResolve(
+        context.url.searchParams.get('q') ?? '',
+        context.request.signal,
+      )
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'the resolver is unavailable' },
           { status: 502 },
         )
       }
