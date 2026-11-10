@@ -1096,7 +1096,7 @@ read anyone's actual `.env`.
 | 4. Frontend | 3 | map island, station page, timeline, advisories, ask panel, works with JS off |
 | 5. AI | 1.5 | provider chain, validation, refusals, cache, rate limit, eval fixture passing |
 | 6. Polish | 1 | disclosure pass, README, demo seed, deploy, live URL |
-| 7. Ask-first | in progress | resolver, ask bar, answer panel, marker card and marker-only map shipped; radar, sketch layer and palette remain; section 17 |
+| 7. Ask-first | done | resolver, ask bar, answer panel, marker card, marker-only map, radar, sketch layer, palette; section 17 |
 
 About 10 days if the cross-check is well behaved, 12 if it turns up interesting cases
 (budget for interesting cases; they make the README better).
@@ -1132,7 +1132,7 @@ Those are the portfolio.
   committed weather data is US public domain.
 - Choose whether `make crosscheck` becomes a blocking CI job or nightly-only.
 
-## 17. Ask-first redesign (in progress)
+## 17. Ask-first redesign
 
 Select-then-ask made the map a gate: every question required a dot first, so
 "what is the weather in Denver" had no way in. The redesign inverts it. The question is
@@ -1162,14 +1162,17 @@ the input, the station is an output, and the map becomes the context for the ans
 - **Answer.** Full conditions block, then prose, then decision factors, then ASCII
   visuals: a wind arrow, ceiling and visibility bars, and a TAF timeline. Factors, not
   verdicts; a recommendation mode is nice-to-have.
-- **Sketch layer.** roughjs SVG overlay redrawn on move and zoom: wobbly rings, leader
-  lines, plain-language labels and hatched advisories. The basemap itself is untouched.
-- **Radar.** IEM NEXRAD composite tiles behind the sketch. nowCOAST is the preferred
-  licence, but its ArcGIS path returns 403 from this network; retry from the deploy
-  host. Two paint presets, grey wash and muted hue, are compared before one is kept.
+- **Sketch layer.** roughjs SVG overlay redrawn from the anchor the map already
+  reports: a wobbly double ring, a leader line, a plain-language label ("wind from the
+  south-southeast at 3 kt") and a needle showing which way the air moves. Advisories
+  keep their hatched fill. The basemap itself is untouched.
+- **Radar.** IEM NEXRAD composite tiles below the place labels. nowCOAST is the
+  preferred licence, but its ArcGIS path returns 403 from this network; retry from the
+  deploy host. Grey wash and muted hue were compared on the same frame: grey lost
+  against the basemap's own light borders, so the muted ramp is kept.
 - **Palette.** Neutral surfaces from the HeroUI, assistant-ui and Graspnote references.
-  No orange or purple in the chrome; the accent becomes white on dark and black on
-  light, with hue reserved for the weather data.
+  No orange or purple in the chrome: the accent is the ink color, and the hazard
+  polygons carry the only hue on the map.
 - **City names.** Matching works because most station names contain the city. A
   gazetteer is deferred until real questions miss.
 - **Parked.** Routes, recommendation mode, time queries ("tomorrow at noon"),
@@ -1183,12 +1186,14 @@ no-JS form keep working unchanged.
 
 ### Status
 
-- Done: resolver with six tests; a floating ask bar and a 520px answer panel that
-  replace the drawer; the map draws only the selected station and any suggested
-  alternative; the ask-first marker card; the map endpoint returns advisories only.
-  Commits `679e0b9`, `0ed062d`, `eeb6ab2`, `ef6feee` and `e6e4335`.
-- Next: IEM radar with the two paint presets, the roughjs sketch overlay, then the
-  palette pass.
+- Done: resolver with six tests; floating ask bar and 520px answer panel; marker-only
+  map; ask-first marker card; advisories-only layer endpoint; IEM radar; roughjs sketch
+  layer; neutral chrome with the hazard polygons as the only hue. Commits `679e0b9`,
+  `0ed062d`, `eeb6ab2`, `ef6feee`, `e6e4335`, `087de51` and `6001be9`.
+- Not built from the decisions above: the factor lines and ASCII visuals under an
+  answer (the body is prose plus caveats), and a light theme, so the accent's "black on
+  light" half has no surface yet.
 - Known limits: every station in the local database is days old, so the
   stale-suggestion branch has never been seen live; the thread still resets when the
-  station changes; below 900px the ask bar covers the map's attribution.
+  station changes; below 900px the ask bar covers the map's attribution; the radar
+  legend cannot print a frame time because the tile endpoint exposes none.
