@@ -378,31 +378,39 @@ const mapStyle = css({
   height: '100%',
   width: '100%',
   background: 'var(--paper)',
+  // MapLibre ships unlayered CSS and these rules are layered, so every
+  // override of its own chrome has to be important to win the cascade.
   '& .maplibregl-ctrl-group': {
-    background: 'rgba(20, 20, 24, 0.68)',
-    border: '1px solid var(--glass-border)',
-    borderRadius: '14px',
+    background: 'rgba(20, 20, 24, 0.68) !important',
+    border: '1px solid var(--glass-border) !important',
+    borderRadius: '14px !important',
     overflow: 'hidden',
-    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)',
+    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4) !important',
     backdropFilter: 'blur(14px)',
     WebkitBackdropFilter: 'blur(14px)',
   },
   '& .maplibregl-ctrl-group button': {
-    background: 'transparent',
+    background: 'transparent !important',
     filter: 'invert(1)',
   },
   '& .maplibregl-ctrl-group button + button': {
     borderBlockStart: '1px solid var(--glass-border)',
   },
-  '& .maplibregl-ctrl-attrib': {
-    background: 'rgba(20, 20, 24, 0.62)',
-    color: 'var(--ink-3)',
+  '& .maplibregl-ctrl-attrib.maplibregl-compact': {
+    background: 'rgba(20, 20, 24, 0.72) !important',
+    color: 'var(--ink-3) !important',
     borderRadius: '10px',
     backdropFilter: 'blur(10px)',
     WebkitBackdropFilter: 'blur(10px)',
   },
-  '& .maplibregl-ctrl-attrib a': { color: 'var(--ink-2)' },
-  '& .maplibregl-ctrl-attrib-button': { filter: 'invert(1)' },
+  '& .maplibregl-ctrl-attrib.maplibregl-compact-show': {
+    background: 'rgba(20, 20, 24, 0.88) !important',
+  },
+  '& .maplibregl-ctrl-attrib a': { color: 'var(--ink-2) !important' },
+  '& .maplibregl-ctrl-attrib-button': {
+    backgroundColor: 'transparent !important',
+    filter: 'invert(1)',
+  },
 })
 
 const fallbackStyle = css({
