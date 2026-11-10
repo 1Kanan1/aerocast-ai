@@ -309,6 +309,12 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     }
 
     if (payload !== null && payload.candidates.length > 0) {
+      this.#pending?.abort()
+      this.#ask?.abort()
+      this.#ask = null
+      this.selected = null
+      this.suggested = []
+      this.setAnchor(null)
       this.clarification = {
         question: text,
         message: payload.message,

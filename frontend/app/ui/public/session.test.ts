@@ -134,6 +134,34 @@ describe('station session', () => {
     assert.equal(session.selected?.icao, 'KJFK')
   })
 
+  it('drops the old station when a question needs a choice', async (t) => {
+    mockFetch(t, (path) =>
+      path.includes('/resolve')
+        ? Response.json({
+            station: null,
+            candidates: [
+              {
+                icao: 'KSPI',
+                name: 'Springfield Capital',
+                state: 'IL',
+                lat: 39.84,
+                lon: -89.68,
+              },
+            ],
+            suggested: [],
+            message: '“springfield” matches several stations.',
+          })
+        : stationApi(path),
+    )
+    let session = new StationSession()
+    await session.select('KSFO')
+
+    await session.askQuestion('weather in Springfield')
+
+    assert.equal(session.selected, null)
+    assert.equal(session.clarification?.options[0]?.icao, 'KSPI')
+  })
+
   it('records an unavailable explanation on the entry', async (t) => {
     mockFetch(t, (path) =>
       path.includes('/ask')
