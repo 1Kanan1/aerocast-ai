@@ -1162,14 +1162,24 @@ the input, the station is an output, and the map becomes the context for the ans
 - **Answer.** Full conditions block, then prose, then decision factors, then ASCII
   visuals: a wind arrow, ceiling and visibility bars, and a TAF timeline. Factors, not
   verdicts; a recommendation mode is nice-to-have.
-- **Sketch layer.** roughjs SVG overlay redrawn from the anchor the map already
-  reports: a wobbly double ring, a leader line, a plain-language label ("wind from the
-  south-southeast at 3 kt") and a needle showing which way the air moves. Advisories
-  keep their hatched fill. The basemap itself is untouched.
-- **Radar.** IEM NEXRAD composite tiles below the place labels. nowCOAST is the
-  preferred licence, but its ArcGIS path returns 403 from this network; retry from the
-  deploy host. Grey wash and muted hue were compared on the same frame: grey lost
-  against the basemap's own light borders, so the muted ramp is kept.
+- **Weather window.** A 30 nm area around the selected station at map scale. No
+  boundary is drawn: it is only the sampling limit that decides how far the metrics
+  reach, so it grows and shrinks with the map instead of riding the camera. The radar
+  is fetched inside it, composited, softened and recolored to a cold-to-warm ramp, then
+  faded at the edge. Wind is a field of strokes sampled from Open-Meteo's RRFS grid, a
+  4x4 of model points around the station, so direction and speed bend across the area
+  instead of pointing one way; the strokes are longer with speed, end in a small
+  arrowhead, drift in the direction they point, and take their color from the local
+  temperature. A legend with a switch beside each ramp shows what the rain and
+  temperature colors mean, and both layers start on. A soft bloom
+  and a label carry the
+  temperature, and the label adds the station wind in words, the humidity from the
+  dewpoint and the share of the area with echo.
+- **Radar.** IEM NEXRAD base reflectivity, recolored in the browser from its own ramp to
+  a cold-to-warm one: light echo is blue, heavy cores run yellow and red. One request
+  set per station inside the radius, not per viewport tile. nowCOAST is the preferred
+  licence, but its ArcGIS path returns 403 from this network; retry from the deploy
+  host.
 - **Palette.** Neutral surfaces from the HeroUI, assistant-ui and Graspnote references.
   No orange or purple in the chrome: the accent is the ink color, and the hazard
   polygons carry the only hue on the map.
@@ -1187,9 +1197,9 @@ no-JS form keep working unchanged.
 ### Status
 
 - Done: resolver with six tests; floating ask bar and 520px answer panel; marker-only
-  map; ask-first marker card; advisories-only layer endpoint; IEM radar; roughjs sketch
-  layer; neutral chrome with the hazard polygons as the only hue. Commits `679e0b9`,
-  `0ed062d`, `eeb6ab2`, `ef6feee`, `e6e4335`, `087de51` and `6001be9`.
+  map; ask-first marker card; advisories-only layer endpoint; radar read inside a
+  radius and recolored; map-scale weather area with an RRFS wind field; neutral chrome
+  with the hazard polygons as the only hue.
 - Not built from the decisions above: the factor lines and ASCII visuals under an
   answer (the body is prose plus caveats), and a light theme, so the accent's "black on
   light" half has no surface yet.
