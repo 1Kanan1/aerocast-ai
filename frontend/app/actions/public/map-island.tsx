@@ -7,7 +7,11 @@ import type {
 import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
-import type { MapLayers, ResolveSuggestion } from '#app/lib/api-types.ts'
+import type {
+  MapLayers,
+  ResolveSuggestion,
+  AreaStation,
+} from '#app/lib/api-types.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
 import { RADAR_ATTRIBUTION } from '#app/lib/radar.ts'
@@ -24,6 +28,35 @@ const HAZARD_INK = '#e0603f'
 const SELECTION_INK = '#7ec7d6'
 /** Mean Earth radius in nautical miles, for the area circle. */
 const EARTH_RADIUS_NM = 3440.065
+/** Each map's area tooltip, so a changed area can close the last one. */
+const tips = new WeakMap<MapLibreMap, import('maplibre-gl').Popup>()
+
+/** The hover card for a station dot: who it is, and how far away. */
+function stationTip(
+  icao: string,
+  name: string,
+  distanceNm: number | null,
+): HTMLElement {
+  let node = document.createElement('div')
+  node.className = 'station-tip'
+
+  let code = document.createElement('strong')
+  code.textContent = icao
+  node.append(code)
+
+  let label = document.createElement('div')
+  label.textContent = name
+  node.append(label)
+
+  if (distanceNm !== null) {
+    let distance = document.createElement('div')
+    distance.className = 'station-tip-muted'
+    distance.textContent = `${distanceNm} nm from the click`
+    node.append(distance)
+  }
+
+  return node
+}
 /**
  * The opening view: the contiguous states with room around them. Alaska,
  * Hawaii and the territories are a pan away, inside the limit below.
@@ -151,7 +184,7 @@ export const MapIsland = clientEntry(
         if (signal.aborted) return
 
         addAdvisoryLayers(map, handle.props.initial)
-        addMarkers(map)
+        addMarkers(map, maplibre)
         applySession()
         fallback?.remove()
       })
@@ -160,7 +193,7 @@ export const MapIsland = clientEntry(
       // keeps its own handler and never opens the area.
       map.on('click', (event) => {
         let hit = map.queryRenderedFeatures(event.point, {
-          layers: ['suggested-ring', 'selection-dot'],
+          layers: ['suggested-ring', 'selection-dot', 'area-stations'],
         })
         if (hit.length > 0) return
 
@@ -235,7 +268,10 @@ function emptyStyle(): StyleSpecification {
 }
 
 /** The selected station and any fresh alternative, and nothing else. */
-function addMarkers(map: MapLibreMap): void {
+function addMarkers(
+  map: MapLibreMap,
+  maplibre: typeof import('maplibre-gl'),
+): void {
   map.addSource('area-window', {
     type: 'geojson',
     data: emptyCollection(),
@@ -326,6 +362,44 @@ function addMarkers(map: MapLibreMap): void {
   map.on('mouseleave', 'suggested-ring', () => {
     map.getCanvas().style.cursor = ''
   })
+
+  // A station inside the area point: hover names it, click reads it.
+  let tip = new maplibre.Popup({
+    closeButton: false,
+    closeOnClick: false,
+    offset: 10,
+  })
+  tips.set(map, tip)
+
+  map.on('mouseenter', 'area-stations', (event) => {
+    let feature = event.features?.[0]
+    if (feature === undefined) return
+
+    let { icao, name, distance_nm } = (feature.properties ?? {}) as {
+      icao?: string
+      name?: string
+      distance_nm?: number
+    }
+    if (typeof icao !== 'string' || typeof name !== 'string') return
+
+    let geometry = feature.geometry
+    if (!geometry || !('coordinates' in geometry)) return
+    let coordinates = geometry.coordinates as [number, number]
+
+    tip
+      .setLngLat(coordinates)
+      .setDOMContent(stationTip(icao, name, distance_nm ?? null))
+      .addTo(map)
+    map.getCanvas().style.cursor = 'pointer'
+  })
+  map.on('mouseleave', 'area-stations', () => {
+    tip.remove()
+    map.getCanvas().style.cursor = ''
+  })
+  map.on('click', 'area-stations', (event) => {
+    let icao = event.features?.[0]?.properties?.icao
+    if (typeof icao === 'string') void session.select(icao)
+  })
 }
 
 function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {
@@ -401,12 +475,14 @@ function showArea(
     lat: number
     lon: number
     radiusNm: number | null
-    stations: { lat: number; lon: number }[]
+    stations: AreaStation[]
   } | null,
 ): void {
   let ring = map.getSource('area-window') as GeoJSONSource | undefined
   let point = map.getSource('area-point') as GeoJSONSource | undefined
   let dots = map.getSource('area-stations') as GeoJSONSource | undefined
+
+  tips.get(map)?.remove()
 
   ring?.setData(
     area === null || area.radiusNm === null
@@ -421,9 +497,21 @@ function showArea(
   dots?.setData(
     area === null
       ? emptyCollection()
-      : featureCollection(
-          area.stations.map((station) => [station.lon, station.lat]),
-        ),
+      : {
+          type: 'FeatureCollection',
+          features: area.stations.map((station) => ({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [station.lon, station.lat],
+            },
+            properties: {
+              icao: station.icao,
+              name: station.name,
+              distance_nm: station.distance_nm,
+            },
+          })),
+        },
   )
 }
 

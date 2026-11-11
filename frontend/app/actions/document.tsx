@@ -53,7 +53,19 @@ export function Document(handle: Handle<DocumentProps>) {
 @keyframes rmx-word-in {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
-}`}
+}
+.maplibregl-popup-content {
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-strong);
+  color: var(--ink-0);
+  box-shadow: var(--shadow);
+  font: 12px/1.45 ui-sans-serif, system-ui, sans-serif;
+}
+.maplibregl-popup-tip { display: none; }
+.station-tip .station-tip-muted { color: var(--ink-3); }
+.station-tip strong { font-size: 12px; }`}
           </style>
           <title>{title}</title>
           {head}
