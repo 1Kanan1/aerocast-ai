@@ -105,7 +105,7 @@ export const MapIsland = clientEntry(
       let applySession = (): void => {
         let station = session.selected
         showSuggested(map, session.suggested)
-        showAreaWindow(
+        showArea(
           map,
           session.area === null
             ? null
@@ -113,6 +113,7 @@ export const MapIsland = clientEntry(
                 lat: session.area.lat,
                 lon: session.area.lon,
                 radiusNm: session.areaPayload?.radius_nm ?? null,
+                stations: session.areaPayload?.stations ?? [],
               },
         )
 
@@ -257,6 +258,33 @@ function addMarkers(map: MapLibreMap): void {
     },
   })
 
+  map.addSource('area-point', { type: 'geojson', data: emptyCollection() })
+  map.addLayer({
+    id: 'area-point',
+    type: 'circle',
+    source: 'area-point',
+    paint: {
+      'circle-radius': 4,
+      'circle-color': '#f2f2ee',
+      'circle-stroke-color': PAPER,
+      'circle-stroke-width': 1.5,
+    },
+  })
+
+  map.addSource('area-stations', { type: 'geojson', data: emptyCollection() })
+  map.addLayer({
+    id: 'area-stations',
+    type: 'circle',
+    source: 'area-stations',
+    paint: {
+      'circle-radius': 4,
+      'circle-color': '#93b8c2',
+      'circle-stroke-color': PAPER,
+      'circle-stroke-width': 1,
+      'circle-opacity': 0.95,
+    },
+  })
+
   map.addSource('suggested', {
     type: 'geojson',
     data: emptyCollection(),
@@ -366,18 +394,36 @@ function showSelection(map: MapLibreMap, point: [number, number] | null): void {
   source?.setData(featureCollection(point === null ? [] : [point]))
 }
 
-/** The window around a click: a fixed circle drawn where the reader asked. */
-function showAreaWindow(
+/** The window around a click: the ring, the clicked point and its stations. */
+function showArea(
   map: MapLibreMap,
-  area: { lat: number; lon: number; radiusNm: number | null } | null,
+  area: {
+    lat: number
+    lon: number
+    radiusNm: number | null
+    stations: { lat: number; lon: number }[]
+  } | null,
 ): void {
-  let source = map.getSource('area-window') as GeoJSONSource | undefined
-  if (source === undefined) return
+  let ring = map.getSource('area-window') as GeoJSONSource | undefined
+  let point = map.getSource('area-point') as GeoJSONSource | undefined
+  let dots = map.getSource('area-stations') as GeoJSONSource | undefined
 
-  source.setData(
+  ring?.setData(
     area === null || area.radiusNm === null
       ? emptyCollection()
       : areaWindow(area.lat, area.lon, area.radiusNm),
+  )
+  point?.setData(
+    area === null
+      ? emptyCollection()
+      : featureCollection([[area.lon, area.lat]]),
+  )
+  dots?.setData(
+    area === null
+      ? emptyCollection()
+      : featureCollection(
+          area.stations.map((station) => [station.lon, station.lat]),
+        ),
   )
 }
 
