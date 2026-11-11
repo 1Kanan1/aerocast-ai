@@ -55,7 +55,7 @@ export default createController(routes, {
       let [detail, brief, history] = await Promise.all([
         apiGetStation(icao, signal),
         apiGetBrief(icao, signal),
-        apiGetHistory(icao, 48, signal),
+        apiGetHistory(icao, 168, signal),
       ])
 
       if (!detail.ok || !detail.data) {
@@ -213,7 +213,7 @@ export default createController(routes, {
     async history(context) {
       let result = await apiGetHistory(
         context.params.icao.toUpperCase(),
-        48,
+        168,
         context.request.signal,
       )
 

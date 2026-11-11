@@ -46,6 +46,7 @@ export const AnswerPanel = clientEntry(
   import.meta.url,
   function AnswerPanel(handle: Handle) {
     let scroller: HTMLElement | undefined
+    let collapsed = false
 
     function scrollToEnd(): void {
       if (scroller) scroller.scrollTop = scroller.scrollHeight
@@ -109,7 +110,38 @@ export const AnswerPanel = clientEntry(
             </button>
           </header>
 
-          <div mix={[bodyStyle, ref((node) => (scroller = node))]}>
+          {station === null ? null : (
+            <div data-collapsed={collapsed ? 'true' : 'false'} mix={infoStyle}>
+              <button
+                aria-expanded={!collapsed}
+                aria-label={collapsed ? 'Show conditions' : 'Hide conditions'}
+                mix={[
+                  collapseStyle,
+                  on('click', () => {
+                    collapsed = !collapsed
+                    handle.update()
+                  }),
+                ]}
+                type="button"
+              >
+                {collapsed ? '⌄' : '⌃'}
+              </button>
+
+              {station.loading ? (
+                <p mix={mutedStyle}>Loading station facts…</p>
+              ) : station.error !== null ? (
+                <p mix={mutedStyle}>{station.error}</p>
+              ) : station.facts === null ? (
+                <p mix={mutedStyle}>No observation on file.</p>
+              ) : session.viewHour === 0 ? (
+                <Conditions facts={station.facts} station={station} />
+              ) : (
+                <TimedConditions hour={session.viewHour} station={station} />
+              )}
+            </div>
+          )}
+
+          <div mix={[threadStyle, ref((node) => (scroller = node))]}>
             {clarification === null ? null : (
               <ClarificationView
                 message={clarification.message}
@@ -118,50 +150,36 @@ export const AnswerPanel = clientEntry(
               />
             )}
 
-            {station === null ? null : station.loading ? (
-              <p mix={mutedStyle}>Loading station facts…</p>
-            ) : station.error !== null ? (
-              <p mix={mutedStyle}>{station.error}</p>
+            {station === null ||
+            station.loading ||
+            station.error !== null ? null : station.thread.length === 0 ? (
+              <ThreadWelcome
+                category={station.category}
+                disabled={false}
+                icao={station.icao}
+                name={station.name}
+                onAsk={(prompt) => void session.ask(prompt)}
+                suggestions={SUGGESTIONS}
+              />
             ) : (
-              <>
-                {station.facts === null ? (
-                  <p mix={mutedStyle}>No observation on file.</p>
-                ) : session.viewHour === 0 ? (
-                  <Conditions facts={station.facts} station={station} />
-                ) : (
-                  <TimedConditions hour={session.viewHour} station={station} />
-                )}
-
-                {station.thread.length === 0 ? (
-                  <ThreadWelcome
-                    category={station.category}
-                    disabled={false}
-                    icao={station.icao}
-                    name={station.name}
-                    onAsk={(prompt) => void session.ask(prompt)}
-                    suggestions={SUGGESTIONS}
+              station.thread.map((entry, index) => (
+                <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
+                  <UserTurn
+                    onEdit={(next) => restartFrom(index, next)}
+                    question={entry.question}
                   />
-                ) : (
-                  station.thread.map((entry, index) => (
-                    <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
-                      <UserTurn
-                        onEdit={(next) => restartFrom(index, next)}
-                        question={entry.question}
-                      />
-                      <AssistantTurn
-                        entry={entry}
-                        onRegenerate={() => {
-                          let question = station.thread[index]?.question
-                          if (question !== undefined) {
-                            restartFrom(index, question)
-                          }
-                        }}
-                        showName={index === 0}
-                      />
-                    </div>
-                  ))
-                )}
-              </>
+                  <AssistantTurn
+                    entry={entry}
+                    onRegenerate={() => {
+                      let question = station.thread[index]?.question
+                      if (question !== undefined) {
+                        restartFrom(index, question)
+                      }
+                    }}
+                    showName={index === 0}
+                  />
+                </div>
+              ))
             )}
           </div>
         </aside>
@@ -232,7 +250,7 @@ function TimedConditions(
 ) {
   return () => {
     let { hour, station } = handle.props
-    let target = Date.now() + hour * HOUR_MS
+    let target = session.timelineBase + hour * HOUR_MS
 
     if (hour < 0) {
       let point = nearestReport(station.history, target)
@@ -412,7 +430,49 @@ const closeStyle = css({
   },
 })
 
-const bodyStyle = css({
+/**
+ * The conditions stay put while the thread scrolls under them. The chevron
+ * folds them down to their headline so a long answer keeps the room.
+ */
+const infoStyle = css({
+  position: 'relative',
+  flexShrink: 0,
+  maxHeight: '42%',
+  overflowY: 'auto',
+  padding: '14px 20px 12px',
+  borderBlockEnd: '1px solid var(--line)',
+  '&[data-collapsed="true"]': {
+    overflow: 'hidden',
+    maxHeight: '72px',
+  },
+  '&[data-collapsed="true"] section': {
+    '& dl, & code, & p:nth-of-type(2)': { display: 'none' },
+  },
+})
+
+const collapseStyle = css({
+  position: 'absolute',
+  top: '10px',
+  right: '16px',
+  width: '26px',
+  height: '26px',
+  padding: 0,
+  border: '1px solid var(--glass-border)',
+  borderRadius: '50%',
+  background: 'transparent',
+  color: 'var(--ink-2)',
+  font: 'inherit',
+  fontSize: '13px',
+  lineHeight: 1,
+  cursor: 'pointer',
+  '&:hover': { color: 'var(--ink-0)' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
+})
+
+const threadStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',

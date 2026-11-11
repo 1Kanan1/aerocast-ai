@@ -21,6 +21,9 @@ const METAR_STALE_SECONDS = 90 * 60
 /** How far the timeline reaches in either direction, in hours. */
 export const TIMELINE_HOURS = 48
 
+/** Older than this, the rail is drawn against the newest report instead. */
+const TIMELINE_FRESH_MS = 2 * 60 * 60 * 1000
+
 export interface ThreadEntry {
   answer: Answer | null
   pending: boolean
@@ -136,6 +139,19 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     if (this.viewHour === next) return
     this.viewHour = next
     this.notify()
+  }
+
+  /**
+   * The clock the timeline is drawn against. While the report is current
+   * that is the wall clock; once the record is stale it is the newest report,
+   * so the rail lands on hours the station actually has.
+   */
+  get timelineBase(): number {
+    let observed = this.selected?.facts?.observed_at
+    let at = observed === undefined ? NaN : Date.parse(observed)
+    let now = Date.now()
+    if (Number.isNaN(at)) return now
+    return now - at > TIMELINE_FRESH_MS ? at : now
   }
 
   async select(
