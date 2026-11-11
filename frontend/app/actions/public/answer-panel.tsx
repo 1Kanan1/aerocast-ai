@@ -111,34 +111,41 @@ export const AnswerPanel = clientEntry(
           </header>
 
           {station === null ? null : (
-            <div data-collapsed={collapsed ? 'true' : 'false'} mix={infoStyle}>
-              <button
-                aria-expanded={!collapsed}
-                aria-label={collapsed ? 'Show conditions' : 'Hide conditions'}
-                mix={[
-                  collapseStyle,
-                  on('click', () => {
-                    collapsed = !collapsed
-                    handle.update()
-                  }),
-                ]}
-                type="button"
+            <>
+              <div
+                data-collapsed={collapsed ? 'true' : 'false'}
+                mix={infoStyle}
               >
-                {collapsed ? '⌄' : '⌃'}
-              </button>
+                {station.loading ? (
+                  <p mix={mutedStyle}>Loading station facts…</p>
+                ) : station.error !== null ? (
+                  <p mix={mutedStyle}>{station.error}</p>
+                ) : station.facts === null ? (
+                  <p mix={mutedStyle}>No observation on file.</p>
+                ) : session.viewHour === 0 ? (
+                  <Conditions facts={station.facts} station={station} />
+                ) : (
+                  <TimedConditions hour={session.viewHour} station={station} />
+                )}
+              </div>
 
-              {station.loading ? (
-                <p mix={mutedStyle}>Loading station facts…</p>
-              ) : station.error !== null ? (
-                <p mix={mutedStyle}>{station.error}</p>
-              ) : station.facts === null ? (
-                <p mix={mutedStyle}>No observation on file.</p>
-              ) : session.viewHour === 0 ? (
-                <Conditions facts={station.facts} station={station} />
-              ) : (
-                <TimedConditions hour={session.viewHour} station={station} />
-              )}
-            </div>
+              <div mix={dividerStyle}>
+                <button
+                  aria-expanded={!collapsed}
+                  aria-label={collapsed ? 'Show conditions' : 'Hide conditions'}
+                  mix={[
+                    collapseStyle,
+                    on('click', () => {
+                      collapsed = !collapsed
+                      handle.update()
+                    }),
+                  ]}
+                  type="button"
+                >
+                  {collapsed ? '⌄' : '⌃'}
+                </button>
+              </div>
+            </>
           )}
 
           <div mix={[threadStyle, ref((node) => (scroller = node))]}>
@@ -366,7 +373,7 @@ function Fact(handle: Handle<{ label: string; value: string }>) {
 
 const panelStyle = css({
   position: 'absolute',
-  top: '76px',
+  top: '104px',
   right: '16px',
   bottom: '44px',
   zIndex: 4,
@@ -432,40 +439,47 @@ const closeStyle = css({
 
 /**
  * The conditions stay put while the thread scrolls under them. The chevron
- * folds them down to their headline so a long answer keeps the room.
+ * sits on the divider between the two, and folds the block to its headline.
+ * Nothing here scrolls: it clips, so a long block cannot take the panel.
  */
 const infoStyle = css({
   position: 'relative',
   flexShrink: 0,
-  maxHeight: '42%',
-  overflowY: 'auto',
-  padding: '14px 20px 12px',
-  borderBlockEnd: '1px solid var(--line)',
-  '&[data-collapsed="true"]': {
-    overflow: 'hidden',
-    maxHeight: '76px',
-  },
+  maxHeight: '46%',
+  overflow: 'hidden',
+  padding: '14px 20px 0',
+  '&[data-collapsed="true"]': { maxHeight: '76px' },
   '&[data-collapsed="true"] dl': { display: 'none' },
   '&[data-collapsed="true"] code': { display: 'none' },
   '&[data-collapsed="true"] p + p': { display: 'none' },
 })
 
+/** A zero-height seam between the conditions and the thread, for the chevron. */
+const dividerStyle = css({
+  position: 'relative',
+  height: 0,
+  flexShrink: 0,
+  zIndex: 1,
+})
+
 const collapseStyle = css({
   position: 'absolute',
-  top: '10px',
-  right: '16px',
-  width: '26px',
-  height: '26px',
+  left: '50%',
+  top: 0,
+  width: '28px',
+  height: '28px',
   padding: 0,
-  border: '1px solid var(--glass-border)',
+  border: '1px solid var(--line)',
   borderRadius: '50%',
-  background: 'transparent',
+  background: 'var(--paper-2)',
   color: 'var(--ink-2)',
   font: 'inherit',
-  fontSize: '13px',
+  fontSize: '12px',
   lineHeight: 1,
   cursor: 'pointer',
-  '&:hover': { color: 'var(--ink-0)' },
+  transform: 'translate(-50%, -50%)',
+  transition: 'color 120ms ease, border-color 120ms ease',
+  '&:hover': { color: 'var(--ink-0)', borderColor: 'var(--ink-3)' },
   '&:focus-visible': {
     outline: '2px solid var(--ink-2)',
     outlineOffset: '2px',
@@ -480,7 +494,7 @@ const threadStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '20px',
-  padding: '16px 20px 20px',
+  padding: '28px 20px 20px',
   scrollBehavior: 'smooth',
 })
 

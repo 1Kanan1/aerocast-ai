@@ -4,16 +4,11 @@ import { clientEntry, css, on } from 'remix/component'
 import { TIMELINE_HOURS, session } from '#app/ui/public/session.ts'
 
 const HOUR_MS = 60 * 60 * 1000
-const TICK_STEP = 1
-const LABEL_STEP = 12
+const LABEL_STEP = 24
+const MAJOR_STEP = 6
 
 const WHEN = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-
-const CLOCK = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit',
   minute: '2-digit',
 })
@@ -24,7 +19,7 @@ function position(hour: number): number {
 }
 
 const TICKS: number[] = []
-for (let hour = -TIMELINE_HOURS; hour <= TIMELINE_HOURS; hour += TICK_STEP) {
+for (let hour = -TIMELINE_HOURS; hour <= TIMELINE_HOURS; hour += 1) {
   TICKS.push(hour)
 }
 
@@ -36,8 +31,9 @@ for (let hour = -TIMELINE_HOURS; hour <= TIMELINE_HOURS; hour += LABEL_STEP) {
 /**
  * The playback rail: a tick per hour across 48 either way, the past in the
  * warm tone and the future in grey, the present marked down the middle. The
- * whole rail is a range input, so dragging, clicking and the arrow keys all
- * move it, and the arrows beside it step one hour at a time.
+ * chosen date and time sit above it and the hour markers below. The whole
+ * rail is a range input, so dragging, clicking and the arrow keys all move
+ * it, and the arrows beside it step one hour at a time.
  */
 export const TimelineControl = clientEntry(
   import.meta.url,
@@ -62,6 +58,8 @@ export const TimelineControl = clientEntry(
 
       let hour = session.viewHour
       let base = session.timelineBase
+      let at = base + hour * HOUR_MS
+      let mood = hour === 0 ? 'live' : hour < 0 ? 'observed' : 'forecast'
 
       return (
         <div aria-label="Timeline" mix={barStyle}>
@@ -74,46 +72,55 @@ export const TimelineControl = clientEntry(
             ‹
           </button>
 
-          <div mix={railStyle}>
-            <span aria-hidden="true" mix={trackStyle} />
+          <div mix={bodyStyle}>
+            <p aria-live="polite" mix={headStyle}>
+              <span mix={whenStyle}>
+                {hour === 0 ? 'Now' : WHEN.format(at)}
+              </span>
+              <span mix={moodStyle}>{mood}</span>
+            </p>
 
-            {TICKS.map((tick) => (
+            <div mix={railStyle}>
+              <span aria-hidden="true" mix={trackStyle} />
+
+              {TICKS.map((tick) => (
+                <span
+                  aria-hidden="true"
+                  data-major={tick % MAJOR_STEP === 0 ? 'true' : 'false'}
+                  data-side={tick < 0 ? 'past' : 'future'}
+                  data-selected={tick === hour ? 'true' : 'false'}
+                  key={tick}
+                  mix={tickStyle}
+                  style={{ left: `${position(tick)}%` }}
+                />
+              ))}
+
               <span
                 aria-hidden="true"
-                data-major={tick % LABEL_STEP === 0 ? 'true' : 'false'}
-                data-side={tick < 0 ? 'past' : 'future'}
-                data-selected={tick === hour ? 'true' : 'false'}
-                key={tick}
-                mix={tickStyle}
-                style={{ left: `${position(tick)}%` }}
+                mix={nowLineStyle}
+                style={{ left: '50%' }}
               />
-            ))}
 
-            <span
-              aria-hidden="true"
-              mix={nowLineStyle}
-              style={{ left: '50%' }}
-            />
-
-            <input
-              aria-label="Hours from now"
-              aria-valuetext={
-                hour === 0
-                  ? 'now'
-                  : `${Math.abs(hour)} hours ${hour < 0 ? 'ago' : 'ahead'}`
-              }
-              max={TIMELINE_HOURS}
-              min={-TIMELINE_HOURS}
-              mix={[
-                rangeStyle,
-                on('input', (event) =>
-                  session.setViewHour(event.currentTarget.valueAsNumber),
-                ),
-              ]}
-              step={1}
-              type="range"
-              value={hour}
-            />
+              <input
+                aria-label="Hours from now"
+                aria-valuetext={
+                  hour === 0
+                    ? 'now'
+                    : `${Math.abs(hour)} hours ${hour < 0 ? 'ago' : 'ahead'}`
+                }
+                max={TIMELINE_HOURS}
+                min={-TIMELINE_HOURS}
+                mix={[
+                  rangeStyle,
+                  on('input', (event) =>
+                    session.setViewHour(event.currentTarget.valueAsNumber),
+                  ),
+                ]}
+                step={1}
+                type="range"
+                value={hour}
+              />
+            </div>
 
             <div aria-hidden="true" mix={labelsStyle}>
               {LABELS.map((tick) => (
@@ -130,19 +137,11 @@ export const TimelineControl = clientEntry(
                           : 'translateX(-50%)',
                   }}
                 >
-                  {tick === 0 ? 'now' : CLOCK.format(base + tick * HOUR_MS)}
+                  {tick === 0 ? 'now' : WHEN.format(base + tick * HOUR_MS)}
                 </span>
               ))}
             </div>
           </div>
-
-          <span aria-live="polite" mix={readStyle}>
-            {hour === 0
-              ? 'live'
-              : `${WHEN.format(base + hour * HOUR_MS)} · ${
-                  hour < 0 ? 'observed' : 'forecast'
-                }`}
-          </span>
 
           <button
             aria-label="One hour later"
@@ -163,26 +162,27 @@ const FUTURE = '#787c7c'
 
 const barStyle = css({
   position: 'absolute',
-  top: '16px',
+  top: '12px',
   left: '50%',
   zIndex: 4,
   display: 'flex',
   alignItems: 'center',
-  gap: '12px',
-  width: 'min(760px, calc(100vw - 32px))',
-  padding: '10px 14px',
+  gap: '10px',
+  width: 'min(700px, calc(100vw - 32px))',
+  padding: '8px 12px',
   border: '1px solid var(--glass-border)',
-  borderRadius: '999px',
+  borderRadius: '20px',
   background: 'var(--glass)',
   backdropFilter: 'blur(20px) saturate(1.2)',
   WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
   transform: 'translateX(-50%)',
   boxShadow: 'var(--shadow)',
+  '@media (max-width: 900px)': { width: 'calc(100vw - 24px)' },
 })
 
 const stepStyle = css({
-  width: '30px',
-  height: '30px',
+  width: '28px',
+  height: '28px',
   flexShrink: 0,
   padding: 0,
   border: '1px solid var(--glass-border)',
@@ -190,7 +190,7 @@ const stepStyle = css({
   background: 'transparent',
   color: 'var(--ink-1)',
   font: 'inherit',
-  fontSize: '17px',
+  fontSize: '16px',
   lineHeight: 1,
   cursor: 'pointer',
   transition: 'color 120ms ease, border-color 120ms ease',
@@ -202,16 +202,43 @@ const stepStyle = css({
   },
 })
 
+const bodyStyle = css({
+  flex: '1 1 auto',
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+})
+
+const headStyle = css({
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: '8px',
+  margin: 0,
+  lineHeight: 1.1,
+})
+
+const whenStyle = css({
+  fontSize: '11px',
+  color: 'var(--ink-0)',
+  fontVariantNumeric: 'tabular-nums',
+})
+
+const moodStyle = css({
+  fontSize: '9px',
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: 'var(--ink-3)',
+})
+
 const railStyle = css({
   position: 'relative',
-  flex: '1 1 auto',
-  height: '40px',
-  minWidth: 0,
+  height: '18px',
 })
 
 const trackStyle = css({
   position: 'absolute',
-  top: '9px',
+  top: '8px',
   left: 0,
   right: 0,
   height: '2px',
@@ -222,19 +249,19 @@ const trackStyle = css({
 
 const tickStyle = css({
   position: 'absolute',
-  top: '6px',
+  top: '5px',
   width: '1px',
-  height: '8px',
+  height: '7px',
   background: 'currentcolor',
-  opacity: 0.65,
+  opacity: 0.6,
   transform: 'translateX(-50%)',
   transition: 'background 120ms ease, opacity 120ms ease',
-  '&[data-major="true"]': { top: '3px', height: '14px', opacity: 0.9 },
+  '&[data-major="true"]': { top: '2px', height: '13px', opacity: 0.9 },
   '&[data-side="past"]': { color: PAST },
   '&[data-side="future"]': { color: FUTURE },
   '&[data-selected="true"]': {
-    top: '2px',
-    height: '16px',
+    top: '1px',
+    height: '15px',
     width: '2px',
     background: 'var(--ink-0)',
     opacity: 1,
@@ -245,9 +272,9 @@ const nowLineStyle = css({
   position: 'absolute',
   top: '1px',
   width: '2px',
-  height: '18px',
+  height: '16px',
   background: 'var(--ink-1)',
-  opacity: 0.55,
+  opacity: 0.5,
   transform: 'translateX(-50%)',
 })
 
@@ -263,26 +290,15 @@ const rangeStyle = css({
 })
 
 const labelsStyle = css({
-  position: 'absolute',
-  top: '24px',
-  left: 0,
-  right: 0,
-  height: '14px',
+  position: 'relative',
+  height: '12px',
 })
 
 const labelStyle = css({
   position: 'absolute',
-  fontSize: '10px',
+  top: 0,
+  fontSize: '9px',
   color: 'var(--ink-3)',
   whiteSpace: 'nowrap',
   fontVariantNumeric: 'tabular-nums',
-})
-
-const readStyle = css({
-  minWidth: '132px',
-  fontSize: '10px',
-  letterSpacing: '0.02em',
-  color: 'var(--ink-2)',
-  fontVariantNumeric: 'tabular-nums',
-  textAlign: 'right',
 })

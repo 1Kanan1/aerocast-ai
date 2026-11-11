@@ -20,6 +20,7 @@ export const StationPopup = clientEntry(
     let closing = false
     let closingTimer: ReturnType<typeof setTimeout> | undefined
     let last: SelectedStation | null = null
+    let shownIcao: string | null = null
 
     function place(anchor: Anchor | null): void {
       if (!host || anchor === null || !host.parentElement) return
@@ -71,6 +72,7 @@ export const StationPopup = clientEntry(
           closingTimer = setTimeout(() => {
             closing = false
             last = null
+            shownIcao = null
             handle.update()
           }, CARD_EXIT_MS)
           return
@@ -99,6 +101,11 @@ export const StationPopup = clientEntry(
           ? Math.round(session.echoShare * 100)
           : null
 
+      // The card enters when it appears for a new station, not every time the
+      // session changes: a click on the map should not replay the entrance.
+      let incoming = station !== null && station.icao !== shownIcao
+      if (station !== null) shownIcao = station.icao
+
       return (
         <div
           mix={[hostStyle, ref((node) => (host = node))]}
@@ -106,7 +113,9 @@ export const StationPopup = clientEntry(
             display: station === null ? 'none' : 'flex',
             animation: closing
               ? 'rmx-card-out 160ms ease-in forwards'
-              : 'rmx-card-in 180ms ease-out',
+              : incoming
+                ? 'rmx-card-in 180ms ease-out'
+                : 'none',
             pointerEvents: closing ? 'none' : undefined,
           }}
         >
