@@ -6,7 +6,9 @@ import { assets } from '#app/assets.ts'
 import type { Answer } from '#app/lib/answer.ts'
 import {
   apiAsk,
+  apiAskArea,
   apiGetAdvisories,
+  apiGetArea,
   apiGetBrief,
   apiGetHealth,
   apiGetHistory,
@@ -154,6 +156,57 @@ export default createController(routes, {
       return Response.json(result.data, {
         headers: { 'cache-control': 'no-store' },
       })
+    },
+
+    async area(context) {
+      let lat = Number(context.url.searchParams.get('lat'))
+      let lon = Number(context.url.searchParams.get('lon'))
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return Response.json({ error: 'a point is required' }, { status: 400 })
+      }
+
+      let result = await apiGetArea(lat, lon, context.request.signal)
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'the area is unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    },
+
+    async areaAsk(context) {
+      let body = (await context.request.json().catch(() => null)) as {
+        lat?: number
+        lon?: number
+        question?: string
+      } | null
+      let lat = Number(body?.lat)
+      let lon = Number(body?.lon)
+      let question = String(body?.question ?? '').trim()
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || question === '') {
+        return Response.json(
+          { error: 'a point and a question are required' },
+          { status: 400 },
+        )
+      }
+
+      let result = await apiAskArea(lat, lon, question, context.request.signal)
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'the explanation layer is not available right now' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data)
     },
 
     async resolve(context) {

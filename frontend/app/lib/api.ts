@@ -2,6 +2,7 @@
 
 import type {
   AdvisoryList,
+  AreaResponse,
   Health,
   MapLayersResponse,
   NearbyStations,
@@ -120,6 +121,36 @@ export function apiGetNearby(
   return apiGet<NearbyStations>(
     `/api/stations/near?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
     signal,
+  )
+}
+
+export function apiGetArea(
+  lat: number,
+  lon: number,
+  signal?: AbortSignal,
+): Promise<ApiResult<AreaResponse>> {
+  return apiGet<AreaResponse>(
+    `/api/area?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
+    signal,
+  )
+}
+
+export function apiAskArea(
+  lat: number,
+  lon: number,
+  question: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<Answer>> {
+  return request<Answer>(
+    '/api/area/ask',
+    signal,
+    (status) => status >= 200 && status < 300,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lat, lon, question }),
+    },
+    ASK_TIMEOUT_MS,
   )
 }
 

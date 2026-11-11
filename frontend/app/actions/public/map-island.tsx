@@ -7,11 +7,7 @@ import type {
 import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
-import type {
-  MapLayers,
-  NearbyStation,
-  ResolveSuggestion,
-} from '#app/lib/api-types.ts'
+import type { MapLayers, ResolveSuggestion } from '#app/lib/api-types.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
 import { RADAR_ATTRIBUTION } from '#app/lib/radar.ts'
@@ -147,21 +143,21 @@ export const MapIsland = clientEntry(
         fallback?.remove()
       })
 
-      // An empty click asks what is around that point; a click on a station
-      // keeps its own handler and never opens the list. Either way the list
-      // only ever describes the click that opened it, so a new click closes
-      // the one already on screen.
+      // An empty click asks about the place around it; a click on a station
+      // keeps its own handler and never opens the area.
       map.on('click', (event) => {
         let hit = map.queryRenderedFeatures(event.point, {
           layers: ['suggested-ring', 'selection-dot'],
         })
-        if (hit.length > 0) {
-          session.setNearby(null)
-          return
-        }
+        if (hit.length > 0) return
 
         let { lat, lng } = event.lngLat
-        void showNearby(map, event.point.x, event.point.y, lat, lng)
+        void session.openArea({
+          x: event.point.x,
+          y: event.point.y,
+          lat,
+          lon: lng,
+        })
       })
 
       // Keep the station card and its highlight over the dot as the map moves.
@@ -198,27 +194,6 @@ export const MapIsland = clientEntry(
     )
   },
 )
-
-async function showNearby(
-  map: MapLibreMap,
-  x: number,
-  y: number,
-  lat: number,
-  lon: number,
-): Promise<void> {
-  try {
-    let response = await fetch(
-      `/api/stations/near?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
-      { headers: { accept: 'application/json' } },
-    )
-    if (!response.ok) return
-
-    let payload = (await response.json()) as { data?: NearbyStation[] }
-    session.setNearby({ x, y, stations: payload.data ?? [] })
-  } catch {
-    // A click that cannot reach the search simply offers nothing.
-  }
-}
 
 async function loadStyle(
   signal: AbortSignal,

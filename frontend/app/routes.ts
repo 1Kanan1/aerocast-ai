@@ -11,6 +11,9 @@ export const routes = route({
   search: get('/api/stations'),
   /** Same-origin JSON proxy for the stations around a map click. */
   near: get('/api/stations/near'),
+  /** The stations around a point, taken together. */
+  area: get('/api/area'),
+  areaAsk: post('/api/area/ask'),
   /** Ask-first: the station a question names, or the ones it might mean. */
   resolve: get('/api/resolve'),
   /** Same-origin JSON proxy for the map island. */

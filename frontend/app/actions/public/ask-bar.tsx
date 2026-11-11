@@ -16,9 +16,11 @@ export const AskBar = clientEntry(
 
     return () => {
       let station = session.selected
+      let inArea = session.area !== null
       let pending =
-        station !== null && station.thread.some((entry) => entry.pending)
-      let open = station !== null || session.clarification !== null
+        (station !== null && station.thread.some((entry) => entry.pending)) ||
+        session.areaThread.some((entry) => entry.pending)
+      let open = station !== null || session.clarification !== null || inArea
 
       return (
         <div data-panel={open ? 'true' : 'false'} mix={dockStyle}>
@@ -66,9 +68,11 @@ export const AskBar = clientEntry(
               ]}
               name="question"
               placeholder={
-                station === null
-                  ? 'Ask about the weather anywhere…'
-                  : `Ask about ${station.icao}'s weather…`
+                station !== null
+                  ? `Ask about ${station.icao}'s weather…`
+                  : inArea
+                    ? 'Ask about the weather here…'
+                    : 'Ask about the weather anywhere…'
               }
               rows={1}
             />
