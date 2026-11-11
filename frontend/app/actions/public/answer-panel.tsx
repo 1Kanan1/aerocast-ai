@@ -462,7 +462,7 @@ const infoStyle = css({
   flexShrink: 0,
   maxHeight: '360px',
   overflow: 'hidden',
-  padding: '14px 20px 0',
+  padding: '14px 20px 20px',
   transition: 'max-height 220ms ease, padding 220ms ease, opacity 220ms ease',
   '&[data-collapsed="true"]': {
     maxHeight: '0px',
