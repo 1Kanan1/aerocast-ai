@@ -1169,6 +1169,11 @@ the input, the station is an output, and the map becomes the context for the ans
 - **Answer.** Full conditions block, then prose, then decision factors, then ASCII
   visuals: a wind arrow, ceiling and visibility bars, and a TAF timeline. Factors, not
   verdicts; a recommendation mode is nice-to-have.
+- **Timeline.** A selected station replaces the navbar with a clock that reaches 48
+  hours either way, one hour at a time. Behind the present it reads the nearest report
+  within ninety minutes and shows it as filed; ahead of it, the forecast period that
+  covers the hour, with anything the forecast does not carry marked unknown. The radar
+  and the wind field measure now, so they step aside while the clock is away from it.
 - **Weather window.** A 30 nm area around the selected station at map scale. No
   boundary is drawn: it is only the sampling limit that decides how far the metrics
   reach, so it grows and shrinks with the map instead of riding the camera. The radar

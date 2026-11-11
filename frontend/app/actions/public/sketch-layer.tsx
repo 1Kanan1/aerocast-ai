@@ -244,6 +244,20 @@ export const SketchLayer = clientEntry(
       let rainOn = weatherLayers.rain
       let tempOn = weatherLayers.temp
 
+      // The field is measured now: radar and model wind say nothing about an
+      // hour the timeline is reading, so they step aside for it.
+      if (session.viewHour !== 0) {
+        stopWind()
+        windArrows = []
+        if (windCanvas !== undefined) windCanvas.style.display = 'none'
+        if (settleTimer !== 0) window.clearTimeout(settleTimer)
+        settleTimer = 0
+        built = null
+        session.setEchoShare(null)
+        svg.replaceChildren()
+        return
+      }
+
       if (rainOn) loadRadar(station)
       loadGrid(station)
 

@@ -16,6 +16,7 @@ import { SketchLayer } from '#app/actions/public/sketch-layer.tsx'
 import { NearbyPicker } from '#app/actions/public/nearby-picker.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
 import { StationSearch } from '#app/actions/public/station-search.tsx'
+import { TimelineControl } from '#app/actions/public/timeline-control.tsx'
 import { WeatherKey } from '#app/actions/public/weather-key.tsx'
 import { AlertIcon, InfoIcon, SearchIcon } from './public/icons.tsx'
 import { glassStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
@@ -41,12 +42,13 @@ export function MapShell(handle: Handle<MapShellProps>) {
             <SketchLayer />
             <StationPopup />
             <NearbyPicker />
+            <TimelineControl />
             <AnswerPanel />
           </div>
 
           <AskBar />
 
-          <header mix={[glassStyle, navbarStyle]}>
+          <header data-navbar mix={[glassStyle, navbarStyle]}>
             <a href={routes.home.href()} mix={wordmarkStyle}>
               AEROCAST
             </a>

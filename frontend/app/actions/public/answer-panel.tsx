@@ -1,16 +1,21 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import type { BundleMetar } from '#app/lib/api-types.ts'
+import type {
+  BundleMetar,
+  BundlePeriod,
+  BundleTaf,
+} from '#app/lib/api-types.ts'
 import { ageLabel, timeLabel } from '#app/lib/format.ts'
 import {
   ceilingLabel,
   cloudsLabel,
+  periodWindLabel,
   temperatureLabel,
   visibilityLabel,
   windLabel,
 } from '#app/lib/public/labels.ts'
-import type { SelectedStation } from '#app/ui/public/session.ts'
+import type { HistoryPoint, SelectedStation } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
   type Suggestion,
@@ -19,6 +24,14 @@ import {
   ThreadWelcome,
   UserTurn,
 } from '#app/ui/public/thread-parts.tsx'
+
+/** The timeline's clock, and the hour it is measured in. */
+const HOUR_MS = 60 * 60 * 1000
+const WHEN = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+})
 
 const SUGGESTIONS: readonly Suggestion[] = [
   { prompt: 'What is the ceiling?' },
@@ -113,8 +126,10 @@ export const AnswerPanel = clientEntry(
               <>
                 {station.facts === null ? (
                   <p mix={mutedStyle}>No observation on file.</p>
-                ) : (
+                ) : session.viewHour === 0 ? (
                   <Conditions facts={station.facts} station={station} />
+                ) : (
+                  <TimedConditions hour={session.viewHour} station={station} />
                 )}
 
                 {station.thread.length === 0 ? (
@@ -205,6 +220,121 @@ function Conditions(
       </section>
     )
   }
+}
+
+/**
+ * The conditions at an hour the timeline points at: the report from that
+ * hour when it is behind us, the forecast period when it is ahead. Hours
+ * the data does not cover say so rather than borrowing the nearest number.
+ */
+function TimedConditions(
+  handle: Handle<{ hour: number; station: SelectedStation }>,
+) {
+  return () => {
+    let { hour, station } = handle.props
+    let target = Date.now() + hour * HOUR_MS
+
+    if (hour < 0) {
+      let point = nearestReport(station.history, target)
+      if (point === null) {
+        return (
+          <p mix={mutedStyle}>No observation within an hour of that time.</p>
+        )
+      }
+
+      return (
+        <section aria-label="Conditions" mix={conditionsStyle}>
+          <p mix={conditionsHeadStyle}>
+            <span mix={categoryStyle}>{point.category ?? 'no category'}</span>
+            <span mix={ageStyle}>
+              observed {WHEN.format(Date.parse(point.obs_time))}
+            </span>
+          </p>
+          <code mix={rawStyle}>{point.raw}</code>
+        </section>
+      )
+    }
+
+    let period = periodAt(station.taf, target)
+    if (period === null) {
+      return <p mix={mutedStyle}>The forecast does not reach that hour.</p>
+    }
+
+    return (
+      <section aria-label="Conditions" mix={conditionsStyle}>
+        <p mix={conditionsHeadStyle}>
+          <span mix={categoryStyle}>{period.change}</span>
+          <span mix={ageStyle}>
+            forecast {WHEN.format(Date.parse(period.from))} to{' '}
+            {WHEN.format(Date.parse(period.to))}
+            {period.probability === null ? '' : ` · ${period.probability}%`}
+          </span>
+        </p>
+        <dl mix={factsStyle}>
+          <Fact label="Wind" value={periodWindLabel(period)} />
+          <Fact label="Visibility" value={smLabel(period.visibility_sm)} />
+          <Fact label="Ceiling" value={feetLabel(period.ceiling_ft)} />
+          <Fact label="Clouds" value={cloudsOrUnknown(period.clouds)} />
+          <Fact
+            label="Weather"
+            value={
+              period.weather.length === 0 ? 'unknown' : period.weather.join(' ')
+            }
+          />
+          <Fact label="Temperature" value="unknown" />
+        </dl>
+      </section>
+    )
+  }
+}
+
+/** The report closest to an hour, if one is close enough to stand for it. */
+function nearestReport(
+  history: HistoryPoint[],
+  target: number,
+): HistoryPoint | null {
+  let best: HistoryPoint | null = null
+  let bestGap = Infinity
+
+  for (let point of history) {
+    let gap = Math.abs(Date.parse(point.obs_time) - target)
+    if (gap < bestGap) {
+      best = point
+      bestGap = gap
+    }
+  }
+
+  return bestGap <= HOUR_MS * 1.5 ? best : null
+}
+
+/** The forecast period covering an hour, latest start first. */
+function periodAt(taf: BundleTaf | null, target: number): BundlePeriod | null {
+  if (taf === null) return null
+
+  let covering = taf.periods.filter(
+    (period) =>
+      Date.parse(period.from) <= target && target <= Date.parse(period.to),
+  )
+  return covering.at(-1) ?? null
+}
+
+function smLabel(miles: number | null): string {
+  return miles === null ? 'unknown' : `${miles} SM`
+}
+
+function feetLabel(feet: number | null): string {
+  return feet === null ? 'unknown' : `${feet.toLocaleString()} ft`
+}
+
+function cloudsOrUnknown(clouds: BundlePeriod['clouds']): string {
+  if (clouds.length === 0) return 'unknown'
+  return clouds
+    .map((cloud) =>
+      cloud.base_ft === null
+        ? cloud.cover
+        : `${cloud.cover} ${cloud.base_ft.toLocaleString()} ft`,
+    )
+    .join(', ')
 }
 
 function Fact(handle: Handle<{ label: string; value: string }>) {

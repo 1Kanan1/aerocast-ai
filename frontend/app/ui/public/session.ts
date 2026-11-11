@@ -18,6 +18,9 @@ import { routes } from '#app/routes.ts'
 /** Same threshold the envelope applies, so the card can flag a stale report. */
 const METAR_STALE_SECONDS = 90 * 60
 
+/** How far the timeline reaches in either direction, in hours. */
+export const TIMELINE_HOURS = 48
+
 export interface ThreadEntry {
   answer: Answer | null
   pending: boolean
@@ -53,6 +56,8 @@ export interface Clarification {
 export interface HistoryPoint {
   decoded: Record<string, unknown>
   obs_time: string
+  category: string | null
+  raw: string
 }
 
 export interface SelectedStation {
@@ -90,6 +95,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   echoShare: number | null = null
   /** Stations around the last empty-map click, waiting for a choice. */
   nearby: NearbyChoice | null = null
+  /** Hours from now the panel reads: 0 is live, -3 is three hours ago. */
+  viewHour = 0
   #pending: AbortController | null = null
   #ask: AbortController | null = null
   #anchorListeners = new Set<(anchor: Anchor | null) => void>()
@@ -120,6 +127,17 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.notify()
   }
 
+  /** Hours from now the panel is reading: 0 is live, -3 is three hours ago. */
+  setViewHour(hour: number): void {
+    let next = Math.max(
+      -TIMELINE_HOURS,
+      Math.min(TIMELINE_HOURS, Math.round(hour)),
+    )
+    if (this.viewHour === next) return
+    this.viewHour = next
+    this.notify()
+  }
+
   async select(
     icao: string,
     suggested: ResolveSuggestion[] = [],
@@ -129,6 +147,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
 
     this.clarification = null
     this.suggested = suggested
+    this.viewHour = 0
     this.#pending?.abort()
     this.#ask?.abort()
     this.#ask = null
@@ -393,6 +412,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.selected = null
     this.clarification = null
     this.suggested = []
+    this.viewHour = 0
     this.setAnchor(null)
     this.notify()
   }
