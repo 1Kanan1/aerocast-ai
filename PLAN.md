@@ -1162,10 +1162,10 @@ the input, the station is an output, and the map becomes the context for the ans
   a pan away.
 - **Stale data.** When the chosen station is stale or missing, the nearest station with
   an observation younger than 90 minutes is offered, never substituted silently.
-- **Marker card.** Which dot this is and one way to ask: identity, the ask button, and
-  the nearby alternatives when the report is old. The conditions are in the panel, which
-  is open whenever a station is selected, so nothing is said twice. No forecast, no
-  history, no composer.
+- **Marker card.** Which dot this is, the area's humidity and echo, and the nearby
+  alternatives when the report is old. Conditions are in the panel, which is open
+  whenever a station is selected, so nothing is said twice. No forecast, no history, no
+  composer, no ask button.
 - **Answer.** Full conditions block, then prose, then decision factors, then ASCII
   visuals: a wind arrow, ceiling and visibility bars, and a TAF timeline. Factors, not
   verdicts; a recommendation mode is nice-to-have.

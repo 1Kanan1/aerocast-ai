@@ -92,9 +92,6 @@ export const StationPopup = clientEntry(
 
     return () => {
       let station = session.selected ?? (closing ? last : null)
-      // Any exchange about this station already asked the question the card
-      // would repeat, so the shortcut retires after the first one.
-      let asked = station !== null && station.thread.length > 0
       let facts = station?.facts ?? null
       let humidity = facts === null ? null : humidityPercent(facts.temperature)
       let echo =
@@ -167,31 +164,6 @@ export const StationPopup = clientEntry(
                   ))}
                 </div>
               )}
-
-              <footer mix={footerStyle}>
-                <button
-                  aria-label={`Ask about ${station.icao}`}
-                  disabled={asked}
-                  mix={[
-                    askStyle,
-                    on('click', () => {
-                      void session.ask(
-                        `What are the conditions at ${station.icao}?`,
-                      )
-                    }),
-                  ]}
-                  title={
-                    asked
-                      ? `${station.icao} is already in this conversation`
-                      : undefined
-                  }
-                  type="button"
-                >
-                  {asked
-                    ? `Asked about ${station.icao}`
-                    : `Ask about ${station.icao}`}
-                </button>
-              </footer>
             </>
           )}
         </div>
@@ -347,31 +319,4 @@ const suggestedMetaStyle = css({
   gridColumn: '2',
   fontSize: '10px',
   color: 'var(--ink-3)',
-})
-
-const footerStyle = css({
-  borderBlockStart: '1px solid var(--glass-border)',
-  padding: '8px 12px',
-})
-
-const askStyle = css({
-  width: '100%',
-  padding: '7px 14px',
-  border: '1px solid rgba(255, 255, 255, 0.16)',
-  borderRadius: '999px',
-  background: 'var(--ink-0)',
-  color: 'var(--paper)',
-  font: 'inherit',
-  fontSize: '12px',
-  cursor: 'pointer',
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '2px',
-  },
-  '&:disabled': {
-    background: 'transparent',
-    borderColor: 'var(--glass-border)',
-    color: 'var(--ink-3)',
-    cursor: 'default',
-  },
 })
