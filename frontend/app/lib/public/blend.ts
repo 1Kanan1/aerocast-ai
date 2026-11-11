@@ -67,7 +67,7 @@ export function blendStations(stations: BlendStation[]): Blend | null {
     ceilingValue === null
       ? null
       : {
-          value: ceilingValue,
+          value: Math.round(ceilingValue),
           reports: ceilingReports,
         }
 
@@ -89,13 +89,14 @@ export function blendStations(stations: BlendStation[]): Blend | null {
       visibility === null
         ? null
         : {
-            value: visibility,
+            value: Math.round(visibility * 10) / 10,
             low: Math.min(...visibilityValues),
             high: Math.max(...visibilityValues),
           },
     ceiling_ft: ceiling,
-    temperature_c: temperature,
-    humidity_pct: humidity,
+    temperature_c:
+      temperature === null ? null : Math.round(temperature * 10) / 10,
+    humidity_pct: humidity === null ? null : Math.round(humidity),
   }
 }
 

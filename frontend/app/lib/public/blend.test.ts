@@ -82,7 +82,7 @@ describe('blend', () => {
 
     assert.ok(blend !== null)
     // Weights are 1 and 1/10, so 10 SM at the click dominates 0 SM at 9 nm.
-    assert.ok(Math.abs((blend.visibility_sm?.value ?? 0) - 9.09) < 0.01)
+    assert.ok(Math.abs((blend.visibility_sm?.value ?? 0) - 9.1) < 0.01)
     assert.equal(blend.visibility_sm?.low, 0)
     assert.equal(blend.visibility_sm?.high, 10)
   })
