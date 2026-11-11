@@ -19,6 +19,7 @@ from app.llm.contract import (
 from app.llm.fallback import fallback_answer
 from app.llm.guardrails import asks_for_verdict, fixed_refusal
 from app.llm.prompts import build_messages
+from app.llm.scope import classify_scope
 from app.llm.validate import InvalidAnswerError, validate_answer
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,9 @@ async def ask(request: models.AskRequest) -> dict[str, object]:
 
     if asks_for_verdict(question):
         return wire_answer(Answer("", (), (), fixed_refusal("decision")))
+
+    if await classify_scope(get_settings(), question) is False:
+        return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
 
     completion = await complete(
         get_settings(),

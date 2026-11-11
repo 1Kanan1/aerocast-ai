@@ -9,6 +9,7 @@ from app.api import ask as ask_module
 from app.api import stations as stations_module
 from app.api import weather as weather_module
 from app.llm.client import Completion
+from app.llm.guardrails import fixed_refusal
 from app.main import app
 
 OBSERVED_AT = datetime(2026, 11, 1, 8, 56, tzinfo=UTC)
@@ -169,6 +170,12 @@ def install(monkeypatch, **tables: list[dict[str, Any]]) -> None:
     monkeypatch.setattr(stations_module, "fetch_all", db.fetch_all)
     monkeypatch.setattr(stations_module, "fetch_one", db.fetch_one)
     monkeypatch.setattr(weather_module, "fetch_all", db.fetch_all)
+
+    async def no_scope(*args: object, **kwargs: object) -> None:
+        return None
+
+    # The scope check is a provider call; tests never make one.
+    monkeypatch.setattr(ask_module, "classify_scope", no_scope)
 
 
 async def get(path: str) -> httpx.Response:
@@ -402,6 +409,50 @@ async def test_ask_refuses_a_verdict_without_a_model(monkeypatch) -> None:
     assert response.status_code == 200
     assert body["refusal"]
     assert body["claims"] == []
+
+
+async def test_ask_refuses_out_of_scope_before_the_answer(monkeypatch) -> None:
+    install(monkeypatch)
+
+    async def off_topic(*args: object, **kwargs: object) -> bool:
+        return False
+
+    async def fail(*args: object, **kwargs: object):
+        raise AssertionError("an off-topic question must not reach the model")
+
+    monkeypatch.setattr(ask_module, "classify_scope", off_topic)
+    monkeypatch.setattr(ask_module, "complete", fail)
+
+    response = await post(
+        "/api/ask", {"icao": "KSFO", "question": "Who won the game?"}
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["refusal"] == fixed_refusal("out_of_scope")
+    assert body["claims"] == []
+
+
+async def test_ask_answers_when_the_scope_check_has_no_opinion(
+    monkeypatch,
+) -> None:
+    install(monkeypatch)
+
+    async def unsure(*args: object, **kwargs: object) -> None:
+        return None
+
+    async def fake_complete(*args: object, **kwargs: object):
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "classify_scope", unsure)
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    response = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["claims"]
 
 
 async def test_ask_falls_back_when_the_answer_is_invented(monkeypatch) -> None:
