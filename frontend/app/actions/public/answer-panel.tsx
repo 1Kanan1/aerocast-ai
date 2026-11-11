@@ -16,7 +16,11 @@ import {
   visibilityLabel,
   windLabel,
 } from '#app/lib/public/labels.ts'
-import type { HistoryPoint, SelectedStation } from '#app/ui/public/session.ts'
+import type {
+  Clarification,
+  HistoryPoint,
+  SelectedStation,
+} from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
   type Suggestion,
@@ -28,6 +32,8 @@ import {
 
 /** The timeline's clock, and the hour it is measured in. */
 const HOUR_MS = 60 * 60 * 1000
+/** How long the panel takes to leave, matching rmx-card-out. */
+const PANEL_EXIT_MS = 160
 const WHEN = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
   hour: '2-digit',
@@ -48,6 +54,12 @@ export const AnswerPanel = clientEntry(
   function AnswerPanel(handle: Handle) {
     let scroller: HTMLElement | undefined
     let collapsed = false
+    // The panel stays mounted for one beat after it closes, so the exit
+    // animation has something to play on.
+    let closing = false
+    let closingTimer: ReturnType<typeof setTimeout> | undefined
+    let lastStation: SelectedStation | null = session.selected
+    let lastClarification: Clarification | null = session.clarification
 
     function scrollToEnd(): void {
       // A station with no turns is showing the welcome: leave it at the top
@@ -67,6 +79,26 @@ export const AnswerPanel = clientEntry(
     session.addEventListener(
       'change',
       async () => {
+        if (session.selected === null && session.clarification === null) {
+          if (closing) return
+          if (lastStation === null && lastClarification === null) return
+
+          // Keep the last contents on screen while the panel fades out.
+          closing = true
+          await handle.update()
+          closingTimer = setTimeout(() => {
+            closing = false
+            lastStation = null
+            lastClarification = null
+            handle.update()
+          }, PANEL_EXIT_MS)
+          return
+        }
+
+        clearTimeout(closingTimer)
+        closing = false
+        lastStation = session.selected
+        lastClarification = session.clarification
         await handle.update()
         scrollToEnd()
       },
@@ -89,13 +121,15 @@ export const AnswerPanel = clientEntry(
     })
 
     return () => {
-      let station = session.selected
-      let clarification = session.clarification
+      let station = session.selected ?? (closing ? lastStation : null)
+      let clarification =
+        session.clarification ?? (closing ? lastClarification : null)
       let open = station !== null || clarification !== null
 
       return (
         <aside
           aria-label="Answer"
+          data-closing={closing ? 'true' : 'false'}
           data-open={open ? 'true' : 'false'}
           mix={panelStyle}
         >
@@ -403,6 +437,11 @@ const panelStyle = css({
   '&[data-open="true"]': {
     display: 'flex',
     animation: 'rmx-card-in 200ms ease-out',
+  },
+  '&[data-closing="true"]': {
+    display: 'flex',
+    animation: 'rmx-card-out 160ms ease-in forwards',
+    pointerEvents: 'none',
   },
   '@media (max-width: 900px)': { bottom: '120px' },
 })

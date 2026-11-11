@@ -1,7 +1,11 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on } from 'remix/component'
 
+import type { NearbyChoice } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
+
+/** How long the list takes to leave, matching rmx-card-out. */
+const PICKER_EXIT_MS = 140
 
 /**
  * A click on empty map asks the server which stations sit around it. This is
@@ -11,9 +15,36 @@ import { session } from '#app/ui/public/session.ts'
 export const NearbyPicker = clientEntry(
   import.meta.url,
   function NearbyPicker(handle: Handle) {
-    session.addEventListener('change', () => handle.update(), {
-      signal: handle.signal,
-    })
+    // Keep the list on screen for one beat while it fades out.
+    let closing = false
+    let closingTimer: ReturnType<typeof setTimeout> | undefined
+    let last: NearbyChoice | null = session.nearby
+
+    session.addEventListener(
+      'change',
+      async () => {
+        let next = session.nearby
+
+        if (next === null) {
+          if (last === null || closing) return
+
+          closing = true
+          await handle.update()
+          closingTimer = setTimeout(() => {
+            closing = false
+            last = null
+            handle.update()
+          }, PICKER_EXIT_MS)
+          return
+        }
+
+        clearTimeout(closingTimer)
+        closing = false
+        last = next
+        await handle.update()
+      },
+      { signal: handle.signal },
+    )
 
     handle.queueTask(() => {
       document.addEventListener(
@@ -28,7 +59,7 @@ export const NearbyPicker = clientEntry(
     })
 
     return () => {
-      let choice = session.nearby
+      let choice = session.nearby ?? (closing ? last : null)
       if (choice === null) return null
 
       return (
@@ -38,6 +69,10 @@ export const NearbyPicker = clientEntry(
           style={{
             left: `${Math.min(choice.x, Math.max(12, window.innerWidth - 320))}px`,
             top: `${Math.min(choice.y, Math.max(12, window.innerHeight - 260))}px`,
+            animation: closing
+              ? 'rmx-card-out 140ms ease-in forwards'
+              : undefined,
+            pointerEvents: closing ? 'none' : undefined,
           }}
         >
           <header mix={headerStyle}>
