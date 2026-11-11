@@ -1,12 +1,7 @@
 import * as assert from 'remix/assert'
 import { describe, it } from 'remix/test'
 
-import {
-  SECTORS,
-  humidityPercent,
-  radarCoverage,
-  recolorEchoes,
-} from './radar.ts'
+import { SECTORS, radarCoverage, recolorEchoes } from './radar.ts'
 
 function pixels(
   size: number,
@@ -101,29 +96,5 @@ describe('echo colors', () => {
     assert.ok(warmth(8) < warmth(0), 'light echo is colder than moderate')
     assert.ok(warmth(0) < warmth(12), 'heavy echo is hotter than moderate')
     assert.ok(pixels[10] > pixels[8], 'light echo stays blue')
-  })
-})
-
-describe('humidity', () => {
-  it('reads relative humidity from the temperature and dewpoint', () => {
-    assert.equal(
-      humidityPercent({
-        ref: 't',
-        c: 23,
-        dewpoint_c: 12,
-        dewpoint_spread_c: 11,
-      }),
-      50,
-    )
-    assert.equal(
-      humidityPercent({
-        ref: 't',
-        c: 10,
-        dewpoint_c: 10,
-        dewpoint_spread_c: 0,
-      }),
-      100,
-    )
-    assert.equal(humidityPercent(null), null)
   })
 })

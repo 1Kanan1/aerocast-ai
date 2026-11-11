@@ -16,9 +16,10 @@ from typing import Any
 
 from app.domain.metar import Observation, classify
 from app.domain.taf import Taf, TafPeriod
+from app.domain.weather.humidity import relative_humidity_pct
 from app.domain.weather.models import CloudLayer
 
-DEFINITION_VERSION = "defs-1.0.0"
+DEFINITION_VERSION = "defs-1.1.0"
 
 DEFINITIONS: dict[str, str] = {
     "VFR": "Ceiling above 3,000 ft and visibility above 5 statute miles.",
@@ -41,6 +42,10 @@ DEFINITIONS: dict[str, str] = {
     "dewpoint_spread": (
         "The difference between temperature and dewpoint. A small spread "
         "means the air is close to saturation and fog becomes likely."
+    ),
+    "humidity": (
+        "Relative humidity as a percent of saturation, computed from the "
+        "report's own temperature and dewpoint."
     ),
     "P6SM": (
         "Visibility greater than six statute miles. It is a floor, not a "
@@ -150,6 +155,7 @@ def _metar(
         "clouds": [_cloud(layer) for layer in observation.clouds],
         "weather": list(observation.weather),
         "temperature": _temperature(observation, root),
+        "humidity": _humidity(observation, root),
         "altimeter_in_hg": observation.altimeter_in_hg,
         "remarks": observation.remarks,
     }
@@ -199,6 +205,17 @@ def _temperature(
         "dewpoint_c": observation.dewpoint_c,
         "dewpoint_spread_c": spread,
     }
+
+
+def _humidity(
+    observation: Observation, root: tuple[str, ...]
+) -> dict[str, Any] | None:
+    percent = relative_humidity_pct(
+        observation.temperature_c, observation.dewpoint_c
+    )
+    if percent is None:
+        return None
+    return {"ref": _ref(*root, "humidity"), "relative_pct": percent}
 
 
 def _cloud(layer: CloudLayer) -> dict[str, Any]:

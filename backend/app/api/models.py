@@ -194,6 +194,11 @@ class BundleTemperature(BaseModel):
     dewpoint_spread_c: float | None
 
 
+class BundleHumidity(BaseModel):
+    ref: str
+    relative_pct: int
+
+
 class BundleCloud(BaseModel):
     cover: str
     base_ft: int | None
@@ -214,6 +219,7 @@ class BundleMetar(BaseModel):
     clouds: list[BundleCloud]
     weather: list[str]
     temperature: BundleTemperature | None
+    humidity: BundleHumidity | None
     altimeter_in_hg: float | None
     remarks: str | None
 

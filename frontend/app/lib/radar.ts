@@ -1,5 +1,3 @@
-import type { BundleTemperature } from '#app/lib/api-types.ts'
-
 const TILE_SIZE = 256
 const TILE_ZOOM = 8
 
@@ -208,30 +206,4 @@ export async function fetchRadarWindow(
   } catch {
     return null
   }
-}
-
-/**
- * Relative humidity from the dewpoint, by the Magnus formula. Both readings
- * come from the same METAR, so this needs no extra request.
- */
-export function humidityPercent(
-  temperature: BundleTemperature | null,
-): number | null {
-  if (
-    temperature === null ||
-    temperature.c === null ||
-    temperature.dewpoint_c === null
-  ) {
-    return null
-  }
-
-  let celsius = temperature.c
-  let dewpoint = temperature.dewpoint_c
-  let relative =
-    100 *
-    Math.exp(
-      (17.625 * dewpoint) / (243.04 + dewpoint) -
-        (17.625 * celsius) / (243.04 + celsius),
-    )
-  return Math.round(Math.min(100, Math.max(0, relative)))
 }

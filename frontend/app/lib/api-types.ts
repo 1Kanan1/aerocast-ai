@@ -70,6 +70,11 @@ export interface BundleCloud {
   cloud_type: string | null
 }
 
+export interface BundleHumidity {
+  ref: string
+  relative_pct: number
+}
+
 export interface BundleMetar {
   ref: string
   raw: string
@@ -84,6 +89,7 @@ export interface BundleMetar {
   clouds: BundleCloud[]
   weather: string[]
   temperature: BundleTemperature | null
+  humidity: BundleHumidity | null
   altimeter_in_hg: number | null
   remarks: string | null
 }

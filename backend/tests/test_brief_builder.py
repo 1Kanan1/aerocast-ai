@@ -59,6 +59,13 @@ def test_bundle_carries_the_observation_with_a_basis() -> None:
     assert metar["temperature"]["dewpoint_spread_c"] == 2.2
 
 
+def test_bundle_carries_humidity_drawn_from_the_report_itself() -> None:
+    bundle = brief_for()
+    humidity = bundle["stations"][0]["metar"]["humidity"]
+
+    assert humidity == {"ref": "metar.KSFO.humidity", "relative_pct": 86}
+
+
 def test_bundle_carries_the_forecast_chain() -> None:
     bundle = brief_for()
     taf = bundle["stations"][0]["taf"]

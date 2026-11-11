@@ -2,7 +2,6 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
 import { ageLabel } from '#app/lib/format.ts'
-import { humidityPercent } from '#app/lib/radar.ts'
 import type { SelectedStation } from '#app/ui/public/session.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
@@ -97,7 +96,7 @@ export const StationPopup = clientEntry(
     return () => {
       let station = session.selected ?? (closing ? last : null)
       let facts = station?.facts ?? null
-      let humidity = facts === null ? null : humidityPercent(facts.temperature)
+      let humidity = facts?.humidity?.relative_pct ?? null
       let echo =
         weatherLayers.rain && session.echoShare !== null
           ? Math.round(session.echoShare * 100)
