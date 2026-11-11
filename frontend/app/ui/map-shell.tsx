@@ -1,10 +1,7 @@
 import type { Handle } from 'remix/component'
 import { css } from 'remix/component'
 
-import type {
-  MapLayersResponse,
-  StationList as StationListResponse,
-} from '#app/lib/api-types.ts'
+import type { MapLayersResponse } from '#app/lib/api-types.ts'
 import type { ApiResult } from '#app/lib/api.ts'
 import { EMPTY_LAYERS, islandLayers } from '#app/lib/map-data.ts'
 import { routes } from '#app/routes.ts'
@@ -15,24 +12,20 @@ import { MapIsland } from '#app/actions/public/map-island.tsx'
 import { SketchLayer } from '#app/actions/public/sketch-layer.tsx'
 import { AreaPanel } from '#app/actions/public/area-panel.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
-import { StationSearch } from '#app/actions/public/station-search.tsx'
 import { TimelineControl } from '#app/actions/public/timeline-control.tsx'
 import { WeatherKey } from '#app/actions/public/weather-key.tsx'
-import { AlertIcon, InfoIcon, SearchIcon } from './public/icons.tsx'
+import { AlertIcon, InfoIcon } from './public/icons.tsx'
 import { glassStyle, tokensStyle, wordmarkStyle } from './layout.tsx'
 
 interface MapShellProps {
   layers: ApiResult<MapLayersResponse>
-  query: string
-  stations: ApiResult<StationListResponse>
 }
 
 /** The map fills the window; every control floats over it. */
 export function MapShell(handle: Handle<MapShellProps>) {
   return () => {
-    let { layers, query, stations } = handle.props
+    let { layers } = handle.props
     let island = layers.data ? islandLayers(layers.data.data) : EMPTY_LAYERS
-    let rows = stations.data?.data ?? []
 
     return (
       <Document title="AeroCast AI">
@@ -53,15 +46,6 @@ export function MapShell(handle: Handle<MapShellProps>) {
               AEROCAST
             </a>
             <span mix={dividerStyle} />
-            <button
-              aria-label="Search stations"
-              mix={iconStyle}
-              popovertarget="station-search"
-              title="Search"
-              type="button"
-            >
-              <SearchIcon />
-            </button>
             <a
               aria-label="Advisories"
               href={routes.advisories.href()}
@@ -79,8 +63,6 @@ export function MapShell(handle: Handle<MapShellProps>) {
               <InfoIcon />
             </a>
           </header>
-
-          <StationSearch initial={rows} query={query} />
 
           <WeatherKey />
         </main>

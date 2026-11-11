@@ -39,16 +39,9 @@ export default createController(routes, {
     },
 
     async home(context) {
-      let query = context.url.searchParams.get('q') ?? ''
-      let signal = context.request.signal
-      let [stations, layers] = await Promise.all([
-        apiGetStations(query, signal),
-        apiGetMapLayers(CONUS_BBOX, signal),
-      ])
+      let layers = await apiGetMapLayers(CONUS_BBOX, context.request.signal)
 
-      return context.render(
-        <MapShell layers={layers} query={query} stations={stations} />,
-      )
+      return context.render(<MapShell layers={layers} />)
     },
 
     async station(context) {

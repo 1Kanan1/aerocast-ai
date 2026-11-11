@@ -33,7 +33,6 @@ const BRIEF = {
 describe('map page', () => {
   it('renders the workspace with the islands the page needs', async (t) => {
     mockApi(t, {
-      '/api/stations': () => Response.json(envelope([STATION])),
       '/api/map/layers': () => Response.json(envelope({ advisories: [] })),
     })
 
@@ -47,21 +46,19 @@ describe('map page', () => {
     assert.match(html, /AnswerPanel/)
     assert.match(html, /Ask about the weather/)
     assert.match(html, /StationPopup/)
-    assert.match(html, /id="station-search"/)
-    assert.match(html, /aria-label="Search stations"/)
     assert.match(html, /Not for flight planning/)
   })
 
-  it('server-renders search results as station links', async (t) => {
+  it('leaves search to the ask bar instead of the navbar', async (t) => {
     mockApi(t, {
-      '/api/stations': () => Response.json(envelope([STATION])),
       '/api/map/layers': () => Response.json(envelope({ advisories: [] })),
     })
 
-    let html = await (await get(`${routes.home.href()}?q=sfo`)).text()
+    let html = await (await get(routes.home.href())).text()
 
-    assert.match(html, /href="\/stations\/KSFO"/)
-    assert.match(html, /San Francisco Intl/)
+    assert.doesNotMatch(html, /aria-label="Search stations"/)
+    assert.doesNotMatch(html, /id="station-search"/)
+    assert.match(html, /Ask about the weather anywhere/)
   })
 
   it('proxies layer requests same-origin', async (t) => {
