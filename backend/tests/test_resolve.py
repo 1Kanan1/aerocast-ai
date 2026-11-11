@@ -164,6 +164,20 @@ async def test_an_unmatched_place_says_so(monkeypatch) -> None:
     assert "No station matches" in body["message"]
 
 
+async def test_a_follow_up_question_stays_with_the_station(
+    monkeypatch,
+) -> None:
+    install(monkeypatch, FakeDb([KDEN], {"KDEN": 60}))
+
+    response = await get(
+        "/api/resolve?q=What+was+its+temperature+in+the+last+24+hours%3F"
+    )
+
+    body = response.json()
+    assert body["station"] is None
+    assert body["candidates"] == []
+
+
 async def test_a_stale_station_suggests_a_fresh_neighbour(monkeypatch) -> None:
     install(
         monkeypatch,
