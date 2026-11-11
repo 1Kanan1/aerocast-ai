@@ -300,20 +300,20 @@ describe('station session', () => {
     let seen: (Anchor | null)[] = []
     let stop = session.onAnchor((anchor) => seen.push(anchor))
 
-    session.setAnchor({ x: 10, y: 20, pxPerNm: 1.4 })
+    session.setAnchor({ x: 10, y: 20, pxPerNm: 1.4, bearing: 0 })
     session.setAnchor(null)
     stop()
-    session.setAnchor({ x: 30, y: 40, pxPerNm: 1.4 })
+    session.setAnchor({ x: 30, y: 40, pxPerNm: 1.4, bearing: 0 })
 
-    assert.deepEqual(seen, [{ x: 10, y: 20, pxPerNm: 1.4 }, null])
-    assert.deepEqual(session.anchor, { x: 30, y: 40, pxPerNm: 1.4 })
+    assert.deepEqual(seen, [{ x: 10, y: 20, pxPerNm: 1.4, bearing: 0 }, null])
+    assert.deepEqual(session.anchor, { x: 30, y: 40, pxPerNm: 1.4, bearing: 0 })
   })
 
   it('drops the anchor when the card is cleared', async (t) => {
     mockFetch(t, stationApi)
     let session = new StationSession()
     await session.select('KSFO')
-    session.setAnchor({ x: 10, y: 20, pxPerNm: 1.4 })
+    session.setAnchor({ x: 10, y: 20, pxPerNm: 1.4, bearing: 0 })
 
     session.clear()
 

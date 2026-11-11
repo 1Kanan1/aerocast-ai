@@ -289,36 +289,12 @@ export const SketchLayer = clientEntry(
         radar === null ? 0 : 1,
       ].join('|')
 
-      // Moving and zooming only change where and how big the drawing is, and
-      // rebuilding every rough arrow for that costs more than transforming it.
-      // A pan slides the drawing; a zoom scales it, and the rebuild waits
-      // until the zoom settles so a continuous gesture does not rebuild the
-      // field on every frame of it.
-      if (built !== null && built.key === key) {
-        let dx = x - built.x
-        let dy = y - built.y
-        let scale = radius / built.radius
-
-        if (Math.abs(radius - built.radius) < 0.5) {
-          built.group.setAttribute(
-            'transform',
-            `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`,
-          )
-          if (windCanvas !== undefined) {
-            windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px)`
-          }
-        } else {
-          built.group.setAttribute(
-            'transform',
-            `translate(${(x - scale * built.x).toFixed(2)} ${(y - scale * built.y).toFixed(2)}) scale(${scale.toFixed(4)})`,
-          )
-          if (windCanvas !== undefined) {
-            windCanvas.style.transformOrigin = '50% 50%'
-            windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${scale.toFixed(4)})`
-          }
-          settle()
-        }
-      } else {
+      // Moving, turning and zooming only change where, at what angle and how
+      // big the drawing is, and rebuilding every rough arrow for that costs
+      // more than transforming it. The drawing is always built north-up, so
+      // one transform at the end carries it; only a change of scale has to end
+      // in a rebuild, and that waits until the zoom settles.
+      if (built === null || built.key !== key) {
         clearTimeout(settleTimer)
         settleTimer = 0
         let group = document.createElementNS(SVG_NS, 'g')
@@ -368,6 +344,22 @@ export const SketchLayer = clientEntry(
           ),
         )
       }
+
+      // Carry the drawing to where the camera now puts the station: the same
+      // transform whether it was just built or is being carried across a move.
+      let scale = radius / built.radius
+      let dx = x - built.x
+      let dy = y - built.y
+      let turn = anchor.bearing
+      built.group.setAttribute(
+        'transform',
+        `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${turn.toFixed(2)}) scale(${scale.toFixed(4)}) translate(${(-built.x).toFixed(2)} ${(-built.y).toFixed(2)})`,
+      )
+      if (windCanvas !== undefined) {
+        windCanvas.style.transformOrigin = '50% 50%'
+        windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${scale.toFixed(4)}) rotate(${turn.toFixed(2)}deg)`
+      }
+      if (Math.abs(radius - built.radius) >= 0.5) settle()
 
       let humidity = humidityPercent(facts.temperature)
       let lines = [

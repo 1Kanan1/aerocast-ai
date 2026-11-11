@@ -305,6 +305,7 @@ function anchorAt(map: MapLibreMap, point: [number, number]): Anchor {
     x: projected.x,
     y: projected.y,
     pxPerNm: 1852 / metersPerPixel,
+    bearing: map.getBearing(),
   }
 }
 

@@ -31,6 +31,8 @@ export interface Anchor {
   y: number
   /** Screen pixels per nautical mile at the station's latitude and zoom. */
   pxPerNm: number
+  /** Degrees the map is turned clockwise from north. */
+  bearing: number
 }
 
 /** A question that matched more than one station, waiting for a choice. */
