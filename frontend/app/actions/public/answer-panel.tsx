@@ -181,16 +181,14 @@ export const AnswerPanel = clientEntry(
             {station === null ||
             station.loading ||
             station.error !== null ? null : station.thread.length === 0 ? (
-              <div mix={welcomeStyle}>
-                <ThreadWelcome
-                  category={station.category}
-                  disabled={false}
-                  icao={station.icao}
-                  name={station.name}
-                  onAsk={(prompt) => void session.ask(prompt)}
-                  suggestions={SUGGESTIONS}
-                />
-              </div>
+              <ThreadWelcome
+                category={station.category}
+                disabled={false}
+                icao={station.icao}
+                name={station.name}
+                onAsk={(prompt) => void session.ask(prompt)}
+                suggestions={SUGGESTIONS}
+              />
             ) : (
               station.thread.map((entry, index) => (
                 <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
@@ -228,6 +226,7 @@ function Conditions(
 ) {
   return () => {
     let { compact, facts, station } = handle.props
+    if (compact) return null
 
     return (
       <section aria-label="Conditions" mix={conditionsStyle}>
@@ -294,6 +293,7 @@ function TimedConditions(
 ) {
   return () => {
     let { compact, hour, station } = handle.props
+    if (compact) return null
     let target = session.timelineBase + hour * HOUR_MS
 
     if (hour < 0) {
@@ -489,8 +489,12 @@ const infoStyle = css({
   maxHeight: '360px',
   overflow: 'hidden',
   padding: '14px 20px 0',
-  transition: 'max-height 220ms ease',
-  '&[data-collapsed="true"]': { maxHeight: '52px' },
+  transition: 'max-height 220ms ease, padding 220ms ease',
+  '&[data-collapsed="true"]': {
+    maxHeight: '0px',
+    paddingTop: '0px',
+    paddingBottom: '0px',
+  },
 })
 
 /** A zero-height seam between the conditions and the thread, for the chevron. */
@@ -542,13 +546,10 @@ const threadStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
-  padding: '0 20px 20px',
+  padding: '20px',
   scrollBehavior: 'smooth',
 })
 
-const welcomeStyle = css({ paddingBlockStart: '24px' })
-
-/** Each prompt carries its own room above it, so the seam never crowds one. */
 const exchangeStyle = css({
   display: 'flex',
   flexDirection: 'column',
