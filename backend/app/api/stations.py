@@ -39,11 +39,22 @@ async def near(
     limit: int = Query(default=5, ge=1, le=20),
 ) -> dict[str, Any]:
     """Stations within NEARBY_NM of a point, nearest first."""
+    rows = await nearby_stations(lat, lon, NEARBY_NM, limit)
+    return wrap(rows, source="awc stations")
+
+
+async def nearby_stations(
+    lat: float,
+    lon: float,
+    radius_nm: float,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Stations inside a radius, nearest first, with their distance."""
     # A square in degrees is only a starting point: the list is chosen by the
     # real distance below. A degree of longitude is shorter away from the
     # equator, so the box has to widen with latitude or close stations east
     # and west fall outside it.
-    pad_lat = NEARBY_NM / NM_PER_DEGREE + 0.5
+    pad_lat = radius_nm / NM_PER_DEGREE + 0.5
     pad_lon = pad_lat / max(0.05, math.cos(math.radians(lat)))
 
     rows = await fetch_all(
@@ -62,13 +73,12 @@ async def near(
         (distance_nm(lat, lon, row["lat"], row["lon"]), row) for row in rows
     ]
     found.sort(key=lambda item: item[0])
-    near_by = [
+    inside = [
         {**row, "distance_nm": round(distance, 1)}
         for distance, row in found
-        if distance <= NEARBY_NM
+        if distance <= radius_nm
     ]
-
-    return wrap(near_by[:limit], source="awc stations")
+    return inside[:limit]
 
 
 @router.get("/stations", response_model=models.StationList)
@@ -163,35 +173,42 @@ async def station_bundle(
     if station is None:
         raise HTTPException(status_code=404, detail="unknown station")
 
+    built, observation = await brief_station(station)
+    bundle = build_brief([built], datetime.now(UTC))
+
+    return bundle, observation
+
+
+async def brief_station(
+    station: dict[str, Any],
+) -> tuple[BriefStation, dict[str, Any] | None]:
+    """One station's report, forecast and nearby advisories, for a bundle."""
+    icao = station["icao"]
     observation = await _latest("metar_observations", "obs_time", icao)
     forecast = await _latest("taf_forecasts", "issue_time", icao)
     nearby = await _nearby(station["lat"], station["lon"])
 
-    bundle = build_brief(
-        [
-            BriefStation(
-                icao=station["icao"],
-                name=station["name"],
-                lat=station["lat"],
-                lon=station["lon"],
-                observation=_observation(observation),
-                taf=_taf(forecast),
-                advisories=tuple(
-                    BriefAdvisory(
-                        kind=row["kind"],
-                        hazard=row["hazard"],
-                        valid_to=row["valid_to"],
-                        distance_nm=row["distance_nm"],
-                        due_to=row["due_to"],
-                    )
-                    for row in nearby
-                ),
-            )
-        ],
-        datetime.now(UTC),
+    return (
+        BriefStation(
+            icao=station["icao"],
+            name=station["name"],
+            lat=station["lat"],
+            lon=station["lon"],
+            observation=_observation(observation),
+            taf=_taf(forecast),
+            advisories=tuple(
+                BriefAdvisory(
+                    kind=row["kind"],
+                    hazard=row["hazard"],
+                    valid_to=row["valid_to"],
+                    distance_nm=row["distance_nm"],
+                    due_to=row["due_to"],
+                )
+                for row in nearby
+            ),
+        ),
+        observation,
     )
-
-    return bundle, observation
 
 
 @router.get("/map/layers", response_model=models.MapLayersResponse)

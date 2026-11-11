@@ -306,6 +306,32 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=400)
 
 
+class AreaAskRequest(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    question: str = Field(min_length=1, max_length=400)
+
+
+class AreaStation(BaseModel):
+    icao: str
+    name: str
+    state: str | None
+    lat: float
+    lon: float
+    distance_nm: float
+
+
+class AreaPayload(BaseModel):
+    lat: float
+    lon: float
+    radius_nm: float
+    stations: list[AreaStation]
+    brief: Bundle | None
+
+
+class AreaResponse(Envelope[AreaPayload]): ...
+
+
 class ResolveStation(BaseModel):
     icao: str
     name: str

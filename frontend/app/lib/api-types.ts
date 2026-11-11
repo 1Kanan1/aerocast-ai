@@ -31,6 +31,34 @@ export interface AnswerClaim {
   refs: string[]
 }
 
+export interface AreaAskRequest {
+  lat: number
+  lon: number
+  question: string
+}
+
+export interface AreaPayload {
+  lat: number
+  lon: number
+  radius_nm: number
+  stations: AreaStation[]
+  brief: Bundle | null
+}
+
+export interface AreaResponse {
+  data: AreaPayload
+  meta: Meta
+}
+
+export interface AreaStation {
+  icao: string
+  name: string
+  state: string | null
+  lat: number
+  lon: number
+  distance_nm: number
+}
+
 export interface AskRequest {
   icao: string
   question: string

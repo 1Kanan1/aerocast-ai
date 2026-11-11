@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from app.api import area as area_module
 from app.api import ask as ask_module
 from app.api import stations as stations_module
 from app.api import weather as weather_module
@@ -176,6 +177,7 @@ def install(monkeypatch, **tables: list[dict[str, Any]]) -> None:
 
     # The scope check is a provider call; tests never make one.
     monkeypatch.setattr(ask_module, "classify_scope", no_scope)
+    monkeypatch.setattr(area_module, "classify_scope", no_scope)
 
 
 async def get(path: str) -> httpx.Response:
@@ -362,6 +364,16 @@ async def test_openapi_points_the_brief_at_the_bundle_schema() -> None:
     assert name in schema["components"]["schemas"]
 
 
+KOAK = {
+    "icao": "KOAK",
+    "name": "Oakland Intl",
+    "state": "CA",
+    "lat": 37.7213,
+    "lon": -122.2207,
+    "elev_m": 2,
+}
+
+
 def completion(payload: dict[str, object]) -> Completion:
     return Completion(
         payload=payload,
@@ -484,6 +496,71 @@ async def test_a_bare_station_code_is_answered_without_the_scope_check(
 
     assert response.status_code == 200
     assert response.json()["refusal"] is None
+
+
+async def test_area_gathers_the_stations_around_a_point(monkeypatch) -> None:
+    install(monkeypatch, stations=[KSFO, KOAK, KJFK])
+
+    response = await get("/api/area?lat=37.62&lon=-122.4")
+
+    body = response.json()["data"]
+    assert response.status_code == 200
+    assert [station["icao"] for station in body["stations"]] == [
+        "KSFO",
+        "KOAK",
+    ]
+    assert body["radius_nm"] == 30
+    assert body["brief"]["stations"][1]["metar"]["ref"] == "metar.KOAK"
+
+
+async def test_area_ask_uses_every_station_in_the_prompt(monkeypatch) -> None:
+    install(monkeypatch, stations=[KSFO, KOAK])
+    seen: dict[str, object] = {}
+
+    async def fake_complete(*args: object, **kwargs: object):
+        seen["messages"] = args[1]
+        return completion(
+            {
+                "summary": "The two airports disagree on visibility.",
+                "claims": [
+                    {
+                        "text": "KOAK reports visibility 7 SM.",
+                        "refs": ["metar.KOAK.visibility"],
+                    }
+                ],
+                "caveats": [],
+                "refusal_kind": None,
+            }
+        )
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    response = await post(
+        "/api/area/ask",
+        {"lat": 37.62, "lon": -122.4, "question": "What is the visibility?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["refusal"] is None
+
+    messages = seen["messages"]
+    assert isinstance(messages, list)
+    system = messages[0]["content"]
+    payload = messages[-1]["content"]
+    assert "Several stations are in scope" in system
+    assert "metar.KSFO" in payload
+    assert "metar.KOAK" in payload
+
+
+async def test_area_ask_says_when_nothing_is_near(monkeypatch) -> None:
+    install(monkeypatch)
+
+    response = await post(
+        "/api/area/ask",
+        {"lat": 30, "lon": -60, "question": "What is the wind?"},
+    )
+
+    assert response.status_code == 404
 
 
 async def test_ask_falls_back_when_the_answer_is_invented(monkeypatch) -> None:

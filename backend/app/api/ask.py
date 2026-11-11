@@ -56,9 +56,23 @@ async def ask(request: models.AskRequest) -> dict[str, object]:
     ):
         return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
 
+    return await explain(bundle, question)
+
+
+async def explain(
+    bundle: dict[str, object],
+    question: str,
+    *,
+    area: bool = False,
+) -> dict[str, object]:
+    """Ask the model about a bundle, then validate or fall back.
+
+    The caller has already refused verdicts and decided whether the scope
+    check can be skipped.
+    """
     completion = await complete(
         get_settings(),
-        build_messages(bundle, question),
+        build_messages(bundle, question, area=area),
         ANSWER_SCHEMA,
         budget_seconds=ASK_BUDGET_SECONDS,
     )
