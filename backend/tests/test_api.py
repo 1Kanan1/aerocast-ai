@@ -218,6 +218,17 @@ async def test_near_lists_the_stations_inside_the_box(
     assert body["data"][0]["distance_nm"] < 3
 
 
+async def test_near_drops_a_station_past_the_radius(monkeypatch) -> None:
+    # Inside the degrees the query searches, but 95 nm from the click.
+    distant = {**KSFO, "icao": "KFAR", "name": "Far Field", "lat": 39.2}
+    install(monkeypatch, stations=[KSFO, distant])
+
+    response = await get("/api/stations/near?lat=37.62&lon=-122.4")
+
+    body = response.json()
+    assert [station["icao"] for station in body["data"]] == ["KSFO"]
+
+
 async def test_station_detail_joins_reports_and_nearby_advisories(
     monkeypatch,
 ) -> None:

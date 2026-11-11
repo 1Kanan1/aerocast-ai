@@ -148,12 +148,17 @@ export const MapIsland = clientEntry(
       })
 
       // An empty click asks what is around that point; a click on a station
-      // keeps its own handler and never opens the list.
+      // keeps its own handler and never opens the list. Either way the list
+      // only ever describes the click that opened it, so a new click closes
+      // the one already on screen.
       map.on('click', (event) => {
         let hit = map.queryRenderedFeatures(event.point, {
           layers: ['suggested-ring', 'selection-dot'],
         })
-        if (hit.length > 0) return
+        if (hit.length > 0) {
+          session.setNearby(null)
+          return
+        }
 
         let { lat, lng } = event.lngLat
         void showNearby(map, event.point.x, event.point.y, lat, lng)

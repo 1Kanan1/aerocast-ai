@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from typing import Any
 
@@ -30,8 +31,6 @@ NM_PER_DEGREE = 60.0
 #: How far a map click looks for stations to offer.
 NEARBY_NM = 80.0
 
-_NEARBY_PAD = NEARBY_NM / NM_PER_DEGREE + 0.5
-
 
 @router.get("/stations/near", response_model=models.NearbyStations)
 async def near(
@@ -39,29 +38,36 @@ async def near(
     lon: float = Query(ge=-180, le=180),
     limit: int = Query(default=5, ge=1, le=20),
 ) -> dict[str, Any]:
-    """Stations around a point on the map, nearest first."""
+    """Stations within NEARBY_NM of a point, nearest first."""
+    # A square in degrees is only a starting point: the list is chosen by the
+    # real distance below. A degree of longitude is shorter away from the
+    # equator, so the box has to widen with latitude or close stations east
+    # and west fall outside it.
+    pad_lat = NEARBY_NM / NM_PER_DEGREE + 0.5
+    pad_lon = pad_lat / max(0.05, math.cos(math.radians(lat)))
+
     rows = await fetch_all(
         f"select {STATION_COLUMNS} from stations "
         "where lat between :min_lat and :max_lat "
         "and lon between :min_lon and :max_lon",
         {
-            "min_lat": lat - _NEARBY_PAD,
-            "max_lat": lat + _NEARBY_PAD,
-            "min_lon": lon - _NEARBY_PAD,
-            "max_lon": lon + _NEARBY_PAD,
+            "min_lat": lat - pad_lat,
+            "max_lat": lat + pad_lat,
+            "min_lon": lon - pad_lon,
+            "max_lon": lon + pad_lon,
         },
     )
 
-    near_by = [
-        {
-            **row,
-            "distance_nm": round(
-                distance_nm(lat, lon, row["lat"], row["lon"]), 1
-            ),
-        }
-        for row in rows
+    found = [
+        (distance_nm(lat, lon, row["lat"], row["lon"]), row) for row in rows
     ]
-    near_by.sort(key=lambda item: item["distance_nm"])
+    found.sort(key=lambda item: item[0])
+    near_by = [
+        {**row, "distance_nm": round(distance, 1)}
+        for distance, row in found
+        if distance <= NEARBY_NM
+    ]
+
     return wrap(near_by[:limit], source="awc stations")
 
 
