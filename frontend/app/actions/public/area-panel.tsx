@@ -136,26 +136,13 @@ export const AreaPanel = clientEntry(
             ) : (
               <ul mix={listStyle}>
                 {stations.map((station) => (
-                  <li key={station.icao}>
-                    <button
-                      aria-label={`Open ${station.icao}`}
-                      mix={[
-                        rowStyle,
-                        on('click', () => void session.select(station.icao)),
-                      ]}
-                      type="button"
-                    >
-                      <span mix={rowHeadStyle}>
-                        <span mix={codeStyle}>{station.icao}</span>
-                        <span mix={nameStyle}>{station.name}</span>
-                        <span mix={distanceStyle}>
-                          {station.distance_nm} nm
-                        </span>
-                      </span>
-                      <span mix={factsStyle}>
-                        {stationFacts(station, brief)}
-                      </span>
-                    </button>
+                  <li key={station.icao} mix={rowStyle}>
+                    <span mix={rowHeadStyle}>
+                      <span mix={codeStyle}>{station.icao}</span>
+                      <span mix={nameStyle}>{station.name}</span>
+                      <span mix={distanceStyle}>{station.distance_nm} nm</span>
+                    </span>
+                    <span mix={factsStyle}>{stationFacts(station, brief)}</span>
                   </li>
                 ))}
               </ul>
@@ -164,7 +151,8 @@ export const AreaPanel = clientEntry(
             {thread.length === 0 ? (
               <p mix={hintStyle}>
                 Ask about the weather here. Answers name the station behind each
-                number instead of blending them.
+                number instead of blending them. For one station's forecast and
+                history, open it from search.
               </p>
             ) : (
               thread.map((entry, index) => (
@@ -291,20 +279,10 @@ const rowStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '4px',
-  width: '100%',
   padding: '8px 10px',
   border: '1px solid var(--line)',
   borderRadius: '10px',
   background: 'rgba(255, 255, 255, 0.02)',
-  color: 'var(--ink-0)',
-  font: 'inherit',
-  textAlign: 'left',
-  cursor: 'pointer',
-  '&:hover': { background: 'rgba(255, 255, 255, 0.06)' },
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '1px',
-  },
 })
 
 const rowHeadStyle = css({
