@@ -40,7 +40,20 @@ async def ask(request: models.AskRequest) -> dict[str, object]:
     if asks_for_verdict(question):
         return wire_answer(Answer("", (), (), fixed_refusal("decision")))
 
-    if await classify_scope(get_settings(), question) is False:
+    # A question that names the station is about that station, whatever else
+    # it says: "KSEA" alone is a request, not small talk.
+    stations = bundle.get("stations") or []
+    station = stations[0] if stations else None
+    name = station.get("name") if isinstance(station, dict) else None
+    names_station = station is not None and (
+        request.icao.upper() in question.upper()
+        or (isinstance(name, str) and name.lower() in question.lower())
+    )
+
+    if (
+        not names_station
+        and await classify_scope(get_settings(), question) is False
+    ):
         return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
 
     completion = await complete(

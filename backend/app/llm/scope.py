@@ -41,6 +41,9 @@ In scope: weather, clouds, ceiling, visibility, wind, temperature, dew point,
 pressure, flight categories (VFR, MVFR, IFR, LIFR), the station's forecast,
 its past observations, nearby advisories, and the meaning of those terms.
 
+A bare airport code or place name ("KSEA", "Seattle") is a request about that
+station's weather: in scope.
+
 Out of scope: everything else, including small talk, other subjects, weather
 elsewhere, flight planning, aircraft performance, regulations, and any
 question that needs data the bundle does not hold.

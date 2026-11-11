@@ -455,6 +455,26 @@ async def test_ask_answers_when_the_scope_check_has_no_opinion(
     assert response.json()["claims"]
 
 
+async def test_a_bare_station_code_is_answered_without_the_scope_check(
+    monkeypatch,
+) -> None:
+    install(monkeypatch)
+
+    async def fail(*args: object, **kwargs: object):
+        raise AssertionError("a station code must not be classified")
+
+    async def fake_complete(*args: object, **kwargs: object):
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "classify_scope", fail)
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    response = await post("/api/ask", {"icao": "KSFO", "question": "KSFO"})
+
+    assert response.status_code == 200
+    assert response.json()["refusal"] is None
+
+
 async def test_ask_falls_back_when_the_answer_is_invented(monkeypatch) -> None:
     install(monkeypatch)
     invented: dict[str, object] = {
