@@ -4,12 +4,7 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
 import type { BundleWind } from '#app/lib/api-types.ts'
-import {
-  AREA_NM,
-  type RadarWindow,
-  fetchRadarWindow,
-  humidityPercent,
-} from '#app/lib/radar.ts'
+import { AREA_NM, type RadarWindow, fetchRadarWindow } from '#app/lib/radar.ts'
 import type { SelectedStation } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
@@ -53,7 +48,6 @@ export const SketchLayer = clientEntry(
   function SketchLayer(handle: Handle) {
     let host: HTMLElement | undefined
     let svg: SVGSVGElement | undefined
-    let label: HTMLElement | undefined
     let frame = 0
     let radar: RadarWindow | null = null
     let radarFor: string | null = null
@@ -100,6 +94,7 @@ export const SketchLayer = clientEntry(
       ).then((result) => {
         if (controller.signal.aborted) return
         radar = result
+        session.setEchoShare(result === null ? null : result.total)
         schedule()
       })
     }
@@ -224,7 +219,7 @@ export const SketchLayer = clientEntry(
     }
 
     function draw(): void {
-      if (host === undefined || svg === undefined || label === undefined) return
+      if (host === undefined || svg === undefined) return
 
       let station = session.selected
       let anchor = session.anchor
@@ -240,9 +235,9 @@ export const SketchLayer = clientEntry(
         settleTimer = 0
         stopWind()
         windArrows = []
+        session.setEchoShare(null)
         if (windCanvas !== undefined) windCanvas.style.display = 'none'
         svg.replaceChildren()
-        label.style.display = 'none'
         return
       }
 
@@ -257,10 +252,6 @@ export const SketchLayer = clientEntry(
       let radius = AREA_NM * pxPerNm
       let ink = temperatureColor(facts.temperature?.c ?? null)
       let seed = seedOf(station.icao)
-      let panel = document.querySelector<HTMLElement>(
-        '[aria-label="Answer"][data-open="true"]',
-      )
-      let limit = host.clientWidth - (panel?.offsetWidth ?? 0) - 16
       let key = [
         station.icao,
         rainOn,
@@ -340,27 +331,6 @@ export const SketchLayer = clientEntry(
         windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${scale.toFixed(4)}) rotate(${turn.toFixed(2)}deg)`
       }
       if (Math.abs(radius - built.radius) >= 0.5) settle()
-
-      // Only what no other surface says: the station's facts are in the
-      // panel, so the field label carries the area's own numbers.
-      let humidity = humidityPercent(facts.temperature)
-      let echo = rainOn && radar !== null ? Math.round(radar.total * 100) : null
-      let lines = [
-        `humidity ${humidity === null ? 'not reported' : `${humidity}%`}${
-          echo === null ? '' : ` · echo ${echo}%`
-        }`,
-      ]
-
-      label.style.display = 'block'
-      label.style.left = `${Math.min(
-        Math.max(12, x - 150),
-        Math.max(12, limit - 320),
-      )}px`
-      label.style.top = `${Math.min(
-        y + 110,
-        host.clientHeight - lines.length * 18 - 20,
-      )}px`
-      label.textContent = lines.join('\n')
     }
 
     handle.queueTask(() => {
@@ -391,10 +361,6 @@ export const SketchLayer = clientEntry(
         <canvas
           aria-hidden="true"
           mix={[windStyle, ref((node) => (windCanvas = node))]}
-        />
-        <div
-          aria-hidden="true"
-          mix={[labelStyle, ref((node) => (label = node))]}
         />
       </div>
     )
@@ -609,19 +575,4 @@ const windStyle = css({
   position: 'absolute',
   display: 'none',
   pointerEvents: 'none',
-})
-
-const labelStyle = css({
-  position: 'absolute',
-  display: 'none',
-  padding: '5px 9px',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '8px',
-  background: 'rgba(9, 9, 10, 0.72)',
-  fontSize: '12px',
-  lineHeight: 1.5,
-  color: 'var(--ink-0)',
-  whiteSpace: 'pre',
-  backdropFilter: 'blur(6px)',
-  WebkitBackdropFilter: 'blur(6px)',
 })

@@ -2,8 +2,10 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
 import { ageLabel } from '#app/lib/format.ts'
+import { humidityPercent } from '#app/lib/radar.ts'
 import type { SelectedStation } from '#app/ui/public/session.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
+import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 const CARD_GAP = 16
 const CARD_PAD = 12
@@ -93,6 +95,12 @@ export const StationPopup = clientEntry(
       // Any exchange about this station already asked the question the card
       // would repeat, so the shortcut retires after the first one.
       let asked = station !== null && station.thread.length > 0
+      let facts = station?.facts ?? null
+      let humidity = facts === null ? null : humidityPercent(facts.temperature)
+      let echo =
+        weatherLayers.rain && session.echoShare !== null
+          ? Math.round(session.echoShare * 100)
+          : null
 
       return (
         <div
@@ -122,8 +130,22 @@ export const StationPopup = clientEntry(
               </header>
 
               {/* The conditions live in the panel, which is open whenever a
-                  station is selected. The card says which dot this is, offers
+                  station is selected. The card says which dot this is, the two
+                  numbers that belong to the area rather than the report,
                   somewhere better when the report is old, and asks. */}
+              {facts === null ? null : (
+                <dl mix={factsStyle}>
+                  <Fact
+                    label="Humidity"
+                    value={humidity === null ? 'not reported' : `${humidity}%`}
+                  />
+                  <Fact
+                    label="Echo"
+                    value={echo === null ? 'no radar' : `${echo}%`}
+                  />
+                </dl>
+              )}
+
               {session.suggested.length === 0 ? null : (
                 <div mix={[bodyStyle, suggestedStyle]}>
                   <p mix={suggestedLeadStyle}>This report is old. Nearby:</p>
@@ -177,6 +199,15 @@ export const StationPopup = clientEntry(
     }
   },
 )
+
+function Fact(handle: Handle<{ label: string; value: string }>) {
+  return () => (
+    <div mix={factStyle}>
+      <dt>{handle.props.label}</dt>
+      <dd>{handle.props.value}</dd>
+    </div>
+  )
+}
 
 const hostStyle = css({
   position: 'absolute',
@@ -252,6 +283,21 @@ const bodyStyle = css({
   flexDirection: 'column',
   gap: '8px',
   '& > p': { margin: 0 },
+})
+
+const factsStyle = css({
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: '2px 12px',
+  margin: 0,
+  padding: '2px 12px 10px',
+})
+
+const factStyle = css({
+  margin: 0,
+  fontSize: '12px',
+  '& dt': { fontSize: '10px', color: 'var(--ink-3)' },
+  '& dd': { margin: 0 },
 })
 
 const suggestedStyle = css({

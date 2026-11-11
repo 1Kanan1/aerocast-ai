@@ -78,6 +78,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   anchor: Anchor | null = null
   clarification: Clarification | null = null
   suggested: ResolveSuggestion[] = []
+  /** Share of the weather area with radar echo, 0 to 1, once it is measured. */
+  echoShare: number | null = null
   #pending: AbortController | null = null
   #ask: AbortController | null = null
   #anchorListeners = new Set<(anchor: Anchor | null) => void>()
@@ -93,6 +95,13 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   setAnchor(anchor: Anchor | null): void {
     this.anchor = anchor
     for (let listener of this.#anchorListeners) listener(anchor)
+  }
+
+  /** The sketch owns the radar window; the card reads the share from here. */
+  setEchoShare(share: number | null): void {
+    if (this.echoShare === share) return
+    this.echoShare = share
+    this.notify()
   }
 
   async select(
