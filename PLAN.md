@@ -1157,7 +1157,9 @@ the input, the station is an output, and the map becomes the context for the ans
   alternative are drawn. No severity key, no letter badges.
 - **Extent.** The camera is held inside the United States and its territories, the
   Aleutians to the Virgin Islands, because no station outside them is worth asking
-  about. The bounds are the limit, not the opening view.
+  about. Shemya, east of the antimeridian, is outside the box. Every reload opens on
+  the contiguous states with room around them; Alaska, Hawaii and the territories are
+  a pan away.
 - **Stale data.** When the chosen station is stale or missing, the nearest station with
   an observation younger than 90 minutes is offered, never substituted silently.
 - **Marker card.** Ask-first: identity, category, age, wind, visibility and clouds, plus

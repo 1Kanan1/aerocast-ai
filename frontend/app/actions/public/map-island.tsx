@@ -22,14 +22,24 @@ const PAPER = '#09090a'
 const HAZARD_INK = '#e0603f'
 const INK = '#f4f4f2'
 /**
- * The United States and its territories: the Aleutians to the Virgin
- * Islands, the North Slope to Puerto Rico. Shemya, on the far side of the
- * antimeridian, is the one station the box leaves out.
+ * The opening view: the contiguous states with room around them. Alaska,
+ * Hawaii and the territories are a pan away, inside the limit below.
  */
-const US_BOUNDS: [[number, number], [number, number]] = [
-  [-180, 17],
-  [-64, 72],
+const US_MAINLAND: [[number, number], [number, number]] = [
+  [-127, 23],
+  [-65, 50],
 ]
+/**
+ * How far the camera may travel: the country and its territories, the
+ * Aleutians to the Virgin Islands, with room around them so the opening view
+ * can sit inside the frame and panning still stops short of Europe.
+ */
+const US_LIMIT: [[number, number], [number, number]] = [
+  [-180, 12],
+  [-42, 77],
+]
+/** Room between the country and the frame on the opening view. */
+const US_PADDING = 56
 
 interface MapIslandProps {
   initial: IslandLayers
@@ -62,11 +72,11 @@ export const MapIsland = clientEntry(
       let map = new maplibre.Map({
         container,
         style: style ?? emptyStyle(),
-        center: [-96, 38],
-        zoom: 3.4,
-        minZoom: 3,
+        bounds: US_MAINLAND,
+        fitBoundsOptions: { padding: US_PADDING },
+        minZoom: 2.5,
         maxZoom: 10,
-        maxBounds: US_BOUNDS,
+        maxBounds: US_LIMIT,
         dragRotate: false,
         pitchWithRotate: false,
         attributionControl: {
