@@ -1,12 +1,7 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import { ageLabel, timeLabel } from '#app/lib/format.ts'
-import {
-  cloudsLabel,
-  visibilityLabel,
-  windLabel,
-} from '#app/lib/public/labels.ts'
+import { ageLabel } from '#app/lib/format.ts'
 import type { SelectedStation } from '#app/ui/public/session.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 
@@ -95,7 +90,6 @@ export const StationPopup = clientEntry(
 
     return () => {
       let station = session.selected ?? (closing ? last : null)
-      let facts = station?.facts ?? null
 
       return (
         <div
@@ -124,67 +118,30 @@ export const StationPopup = clientEntry(
                 </button>
               </header>
 
-              <div mix={bodyStyle}>
-                {station.loading ? (
-                  <p mix={mutedStyle}>Loading station facts…</p>
-                ) : station.error !== null ? (
-                  <p mix={mutedStyle}>{station.error}</p>
-                ) : (
-                  <>
-                    <p mix={categoryStyle}>
-                      <span>{station.category ?? 'no category'}</span>
-                      <span mix={ageStyle}>
-                        {station.source} · {ageLabel(station.ageSeconds)}
-                        {station.stale ? ' · stale' : ''}
+              {/* The conditions live in the panel, which is open whenever a
+                  station is selected. The card says which dot this is, offers
+                  somewhere better when the report is old, and asks. */}
+              {session.suggested.length === 0 ? null : (
+                <div mix={[bodyStyle, suggestedStyle]}>
+                  <p mix={suggestedLeadStyle}>This report is old. Nearby:</p>
+                  {session.suggested.map((item) => (
+                    <button
+                      key={item.icao}
+                      mix={[
+                        suggestedButtonStyle,
+                        on('click', () => void session.select(item.icao)),
+                      ]}
+                      type="button"
+                    >
+                      <span mix={suggestedCodeStyle}>{item.icao}</span>
+                      <span mix={suggestedNameStyle}>{item.name}</span>
+                      <span mix={suggestedMetaStyle}>
+                        {item.distance_nm} nm · {ageLabel(item.age_seconds)}
                       </span>
-                    </p>
-
-                    {facts === null ? (
-                      <p mix={mutedStyle}>No observation on file.</p>
-                    ) : (
-                      <dl mix={factsStyle}>
-                        <Fact label="Wind" value={windLabel(facts)} />
-                        <Fact
-                          label="Visibility"
-                          value={visibilityLabel(facts)}
-                        />
-                        <Fact label="Clouds" value={cloudsLabel(facts)} />
-                      </dl>
-                    )}
-
-                    {facts === null ? null : (
-                      <p mix={observedStyle}>
-                        Observed {timeLabel(facts.observed_at)}
-                      </p>
-                    )}
-
-                    {session.suggested.length === 0 ? null : (
-                      <div mix={suggestedStyle}>
-                        <p mix={suggestedLeadStyle}>
-                          This report is old. Nearby:
-                        </p>
-                        {session.suggested.map((item) => (
-                          <button
-                            key={item.icao}
-                            mix={[
-                              suggestedButtonStyle,
-                              on('click', () => void session.select(item.icao)),
-                            ]}
-                            type="button"
-                          >
-                            <span mix={suggestedCodeStyle}>{item.icao}</span>
-                            <span mix={suggestedNameStyle}>{item.name}</span>
-                            <span mix={suggestedMetaStyle}>
-                              {item.distance_nm} nm ·{' '}
-                              {ageLabel(item.age_seconds)}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <footer mix={footerStyle}>
                 <button
@@ -208,15 +165,6 @@ export const StationPopup = clientEntry(
     }
   },
 )
-
-function Fact(handle: Handle<{ label: string; value: string }>) {
-  return () => (
-    <div mix={factStyle}>
-      <dt>{handle.props.label}</dt>
-      <dd>{handle.props.value}</dd>
-    </div>
-  )
-}
 
 const hostStyle = css({
   position: 'absolute',
@@ -294,33 +242,6 @@ const bodyStyle = css({
   '& > p': { margin: 0 },
 })
 
-const categoryStyle = css({
-  display: 'flex',
-  alignItems: 'baseline',
-  justifyContent: 'space-between',
-  gap: '8px',
-  fontSize: '12px',
-})
-
-const ageStyle = css({ fontSize: '10px', color: 'var(--ink-3)' })
-
-const factsStyle = css({
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '6px 12px',
-  margin: 0,
-})
-
-const factStyle = css({
-  margin: 0,
-  fontSize: '12px',
-  '& dt': { fontSize: '10px', color: 'var(--ink-3)' },
-  '& dd': { margin: 0 },
-  '&:last-child': { gridColumn: '1 / -1' },
-})
-
-const observedStyle = css({ fontSize: '10px', color: 'var(--ink-3)' })
-
 const suggestedStyle = css({
   display: 'flex',
   flexDirection: 'column',
@@ -369,8 +290,6 @@ const suggestedMetaStyle = css({
   fontSize: '10px',
   color: 'var(--ink-3)',
 })
-
-const mutedStyle = css({ fontSize: '12px', color: 'var(--ink-3)' })
 
 const footerStyle = css({
   borderBlockStart: '1px solid var(--glass-border)',

@@ -1162,8 +1162,10 @@ the input, the station is an output, and the map becomes the context for the ans
   a pan away.
 - **Stale data.** When the chosen station is stale or missing, the nearest station with
   an observation younger than 90 minutes is offered, never substituted silently.
-- **Marker card.** Ask-first: identity, category, age, wind, visibility and clouds, plus
-  one "Ask about this station" button. No forecast, no history, no composer.
+- **Marker card.** Which dot this is and one way to ask: identity, the ask button, and
+  the nearby alternatives when the report is old. The conditions are in the panel, which
+  is open whenever a station is selected, so nothing is said twice. No forecast, no
+  history, no composer.
 - **Answer.** Full conditions block, then prose, then decision factors, then ASCII
   visuals: a wind arrow, ceiling and visibility bars, and a TAF timeline. Factors, not
   verdicts; a recommendation mode is nice-to-have.
@@ -1179,8 +1181,9 @@ the input, the station is an output, and the map becomes the context for the ans
   times a second, because a drift that only has to look alive should not cost the
   machine sixty frames of compositing a second. A legend with a switch beside each
   ramp shows what the rain and temperature colors mean, and both layers start on. A
-  soft bloom and a label carry the temperature, and the label adds the station wind in
-  words, the humidity from the dewpoint and the share of the area with echo.
+  soft bloom carries the temperature, and a one-line label carries only what the card
+  and the panel do not: the humidity from the dewpoint and the share of the area with
+  echo.
 - **Radar.** IEM NEXRAD base reflectivity, recolored in the browser from its own ramp to
   a cold-to-warm one: light echo is blue, heavy cores run yellow and red. One request
   set per station inside the radius, not per viewport tile. nowCOAST is the preferred

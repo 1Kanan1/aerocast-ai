@@ -5,6 +5,7 @@ import type { BundleMetar } from '#app/lib/api-types.ts'
 import { ageLabel, timeLabel } from '#app/lib/format.ts'
 import {
   ceilingLabel,
+  cloudsLabel,
   temperatureLabel,
   visibilityLabel,
   windLabel,
@@ -183,6 +184,7 @@ function Conditions(
           <Fact label="Wind" value={windLabel(facts)} />
           <Fact label="Visibility" value={visibilityLabel(facts)} />
           <Fact label="Ceiling" value={ceilingLabel(facts)} />
+          <Fact label="Clouds" value={cloudsLabel(facts)} />
           <Fact label="Temperature" value={temperatureLabel(facts)} />
           <Fact
             label="Altimeter"

@@ -43,26 +43,6 @@ const WIND_EDGE = 0.7
 /** How long the scale must hold still before the field is rebuilt at it. */
 const ZOOM_SETTLE_MS = 250
 
-/** Sixteen points, so "wind from the south-southeast" is a lookup. */
-const COMPASS = [
-  'north',
-  'north-northeast',
-  'northeast',
-  'east-northeast',
-  'east',
-  'east-southeast',
-  'southeast',
-  'south-southeast',
-  'south',
-  'south-southwest',
-  'southwest',
-  'west-southwest',
-  'west',
-  'west-northwest',
-  'northwest',
-  'north-northwest',
-]
-
 /**
  * Weather inside a real area around the station: 20 nm at map scale. The
  * boundary is only a sampling limit, so nothing is drawn for it; the fields
@@ -361,16 +341,13 @@ export const SketchLayer = clientEntry(
       }
       if (Math.abs(radius - built.radius) >= 0.5) settle()
 
+      // Only what no other surface says: the station's facts are in the
+      // panel, so the field label carries the area's own numbers.
       let humidity = humidityPercent(facts.temperature)
+      let echo = rainOn && radar !== null ? Math.round(radar.total * 100) : null
       let lines = [
-        `${station.icao} · ${station.category ?? 'no category'}`,
-        `wind ${windWords(facts.wind)} · ${temperatureWords(
-          facts.temperature?.c ?? null,
-        )}`,
         `humidity ${humidity === null ? 'not reported' : `${humidity}%`}${
-          rainOn && radar !== null
-            ? ` · radar ${Math.round(radar.total * 100)}%`
-            : ''
+          echo === null ? '' : ` · echo ${echo}%`
         }`,
       ]
 
@@ -611,21 +588,6 @@ function temperatureColor(celsius: number | null): string {
   if (celsius < 20) return '#a8b071'
   if (celsius < 30) return '#d09a4e'
   return '#c4643f'
-}
-
-function temperatureWords(celsius: number | null): string {
-  if (celsius === null) return 'temperature not reported'
-  return `${Math.round(celsius)} °C`
-}
-
-function windWords(wind: BundleWind | null): string {
-  if (wind === null) return 'not reported'
-  if (wind.is_calm) return 'calm'
-  if (wind.is_variable || wind.direction_deg === null) {
-    return `variable at ${wind.speed_kt} kt`
-  }
-  let point = COMPASS[Math.round(wind.direction_deg / 22.5) % 16]
-  return `from the ${point} at ${wind.speed_kt} kt`
 }
 
 const overlayStyle = css({
