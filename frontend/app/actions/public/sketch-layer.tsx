@@ -40,6 +40,8 @@ const BLOOM_ID = 'area-bloom'
 const WIND_FRAME_MS = 83
 const WIND_MAX_PIXELS = 2048
 const WIND_EDGE = 0.7
+/** How long the scale must hold still before the field is rebuilt at it. */
+const ZOOM_SETTLE_MS = 250
 
 /** Sixteen points, so "wind from the south-southeast" is a lookup. */
 const COMPASS = [
@@ -83,8 +85,10 @@ export const SketchLayer = clientEntry(
       key: string
       x: number
       y: number
+      radius: number
       group: SVGGElement
     } | null = null
+    let settleTimer = 0
     let windCanvas: HTMLCanvasElement | undefined
     let windContext: CanvasRenderingContext2D | null = null
     let windScale = 1
@@ -144,6 +148,16 @@ export const SketchLayer = clientEntry(
     function stopWind(): void {
       if (windFrame !== 0) window.clearTimeout(windFrame)
       windFrame = 0
+    }
+
+    /** Rebuild once, after the zoom stops changing the scale. */
+    function settle(): void {
+      if (settleTimer !== 0) window.clearTimeout(settleTimer)
+      settleTimer = window.setTimeout(() => {
+        settleTimer = 0
+        built = null
+        draw()
+      }, ZOOM_SETTLE_MS)
     }
 
     /** Redraw the field, but not on every frame the screen offers. */
@@ -242,6 +256,8 @@ export const SketchLayer = clientEntry(
         gridFor = null
         grid = null
         built = null
+        if (settleTimer !== 0) window.clearTimeout(settleTimer)
+        settleTimer = 0
         stopWind()
         windArrows = []
         if (windCanvas !== undefined) windCanvas.style.display = 'none'
@@ -267,29 +283,44 @@ export const SketchLayer = clientEntry(
       let limit = host.clientWidth - (panel?.offsetWidth ?? 0) - 16
       let key = [
         station.icao,
-        radius.toFixed(1),
         rainOn,
         tempOn,
         grid === null ? 0 : 1,
         radar === null ? 0 : 1,
       ].join('|')
 
-      // A pan only moves the drawing; rebuilding every rough arrow for it
-      // costs far more than translating the group. Rebuild on zoom, layer or
-      // data changes, and slide otherwise.
+      // Moving and zooming only change where and how big the drawing is, and
+      // rebuilding every rough arrow for that costs more than transforming it.
+      // A pan slides the drawing; a zoom scales it, and the rebuild waits
+      // until the zoom settles so a continuous gesture does not rebuild the
+      // field on every frame of it.
       if (built !== null && built.key === key) {
         let dx = x - built.x
         let dy = y - built.y
-        built.group.setAttribute(
-          'transform',
-          `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`,
-        )
-        if (windCanvas !== undefined) {
-          windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(
-            2,
-          )}px)`
+        let scale = radius / built.radius
+
+        if (Math.abs(radius - built.radius) < 0.5) {
+          built.group.setAttribute(
+            'transform',
+            `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`,
+          )
+          if (windCanvas !== undefined) {
+            windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px)`
+          }
+        } else {
+          built.group.setAttribute(
+            'transform',
+            `translate(${(x - scale * built.x).toFixed(2)} ${(y - scale * built.y).toFixed(2)}) scale(${scale.toFixed(4)})`,
+          )
+          if (windCanvas !== undefined) {
+            windCanvas.style.transformOrigin = '50% 50%'
+            windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${scale.toFixed(4)})`
+          }
+          settle()
         }
       } else {
+        clearTimeout(settleTimer)
+        settleTimer = 0
         let group = document.createElementNS(SVG_NS, 'g')
         group.append(tempDefs(x, y, radius, ink))
         let field = document.createElementNS(SVG_NS, 'g')
@@ -320,7 +351,7 @@ export const SketchLayer = clientEntry(
 
         group.append(field)
         svg.replaceChildren(group)
-        built = { key, x, y, group }
+        built = { key, x, y, radius, group }
         paintWind(
           x,
           y,
@@ -375,6 +406,7 @@ export const SketchLayer = clientEntry(
         () => {
           cancelAnimationFrame(frame)
           stopWind()
+          if (settleTimer !== 0) window.clearTimeout(settleTimer)
           radarAbort?.abort()
           gridAbort?.abort()
           unsubscribe()
