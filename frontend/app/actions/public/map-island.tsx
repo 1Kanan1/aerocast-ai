@@ -269,7 +269,7 @@ function addMarkers(map: MapLibreMap): void {
     type: 'circle',
     source: 'selection',
     paint: {
-      'circle-radius': 4,
+      'circle-radius': 7,
       'circle-color': SELECTION_INK,
     },
   })
