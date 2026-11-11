@@ -8,6 +8,8 @@ import type {
   BundleMetar,
 } from '#app/lib/api-types.ts'
 import { ageLabel } from '#app/lib/format.ts'
+import type { Blend } from '#app/lib/public/blend.ts'
+import { blendStations } from '#app/lib/public/blend.ts'
 import {
   ceilingLabel,
   visibilityLabel,
@@ -94,6 +96,14 @@ export const AreaPanel = clientEntry(
       let error = closing ? lastError : session.areaError
       let loading = closing ? lastLoading : session.areaLoading
       let thread = closing ? lastThread : session.areaThread
+      let blend = blendStations(
+        stations.map((station) => ({
+          distance_nm: station.distance_nm,
+          metar:
+            brief?.stations.find((item) => item.icao === station.icao)?.metar ??
+            null,
+        })),
+      )
 
       return (
         <aside
@@ -128,6 +138,20 @@ export const AreaPanel = clientEntry(
           <div mix={bodyStyle}>
             {error === null ? null : <p mix={mutedStyle}>{error}</p>}
 
+            {blend === null ? (
+              stations.length === 0 ? null : (
+                <p mix={mutedStyle}>
+                  None of the stations in range has a report to blend.
+                </p>
+              )
+            ) : (
+              <section aria-label="Blended conditions" mix={blendStyle}>
+                <span mix={blendKickerStyle}>Blended here</span>
+                <p mix={blendLineStyle}>{blendLine(blend)}</p>
+                <p mix={blendNoteStyle}>{blendNote(blend)}</p>
+              </section>
+            )}
+
             {loading || error !== null ? null : stations.length === 0 ? (
               <p mix={mutedStyle}>
                 No station within 30 nm of that point. Pick a spot closer to
@@ -150,9 +174,9 @@ export const AreaPanel = clientEntry(
 
             {thread.length === 0 ? (
               <p mix={hintStyle}>
-                Ask about the weather here. Answers name the station behind each
-                number instead of blending them. For one station's forecast and
-                history, open it from search.
+                Ask about the weather here. Answers quote each station by name,
+                while the summary above blends them for the point. For one
+                station's forecast and history, open it from search.
               </p>
             ) : (
               thread.map((entry, index) => (
@@ -187,6 +211,57 @@ function stationFacts(station: AreaStation, brief: Bundle | null): string {
     ceilingLabel(metar),
     ageLabel(metar.age_seconds),
   ].join(' · ')
+}
+
+function blendLine(blend: Blend): string {
+  let parts: string[] = []
+
+  if (blend.wind !== null) {
+    let wind = `wind ${blend.wind.direction_deg}° at ${blend.wind.speed_kt} kt`
+    if (blend.wind.gust_kt !== null)
+      wind += `, gusting ${blend.wind.gust_kt} kt`
+    parts.push(wind)
+  }
+
+  if (blend.visibility_sm !== null) {
+    let { value, low, high } = blend.visibility_sm
+    let range = low === high ? '' : ` (${low} to ${high})`
+    parts.push(`visibility ${trim(value)} SM${range}`)
+  }
+
+  if (blend.ceiling_ft !== null) {
+    parts.push(`ceiling ${blend.ceiling_ft.value.toLocaleString()} ft`)
+  }
+
+  if (blend.temperature_c !== null) {
+    parts.push(`${blend.temperature_c.toFixed(1)} °C`)
+  }
+
+  if (blend.humidity_pct !== null) {
+    parts.push(`humidity ${Math.round(blend.humidity_pct)}%`)
+  }
+
+  return parts.join(' · ')
+}
+
+function blendNote(blend: Blend): string {
+  let parts = ['Distance-weighted']
+  parts.push(
+    blend.used === blend.total
+      ? `from ${blend.used} report${blend.used === 1 ? '' : 's'}`
+      : `from ${blend.used} of ${blend.total} reports`,
+  )
+  if (blend.distance_nm !== null) {
+    parts.push(`nearest ${blend.distance_nm} nm`)
+  }
+  if (blend.ceiling_ft !== null && blend.ceiling_ft.reports < blend.used) {
+    parts.push(`ceiling from ${blend.ceiling_ft.reports} of ${blend.used}`)
+  }
+  return `${parts.join(' · ')}. A summary, not an observation.`
+}
+
+function trim(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
 const panelStyle = css({
@@ -315,6 +390,37 @@ const factsStyle = css({
 const hintStyle = css({
   margin: 0,
   fontSize: '12px',
+  lineHeight: 1.5,
+  color: 'var(--ink-3)',
+})
+
+const blendStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  padding: '10px 12px',
+  border: '1px solid var(--line)',
+  borderRadius: '12px',
+  background: 'rgba(126, 199, 214, 0.08)',
+})
+
+const blendKickerStyle = css({
+  fontSize: '10px',
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: 'var(--ink-3)',
+})
+
+const blendLineStyle = css({
+  margin: 0,
+  fontSize: '13px',
+  lineHeight: 1.5,
+  color: 'var(--ink-0)',
+})
+
+const blendNoteStyle = css({
+  margin: 0,
+  fontSize: '11px',
   lineHeight: 1.5,
   color: 'var(--ink-3)',
 })
