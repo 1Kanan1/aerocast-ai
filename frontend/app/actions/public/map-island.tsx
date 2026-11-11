@@ -24,7 +24,8 @@ const MOVE_DEBOUNCE_MS = 250
 const PAPER = '#09090a'
 /** The one hue on the map belongs to the hazard polygons, not the chrome. */
 const HAZARD_INK = '#e0603f'
-const INK = '#f4f4f2'
+/** The selected station's dot: a cool hue, so it is neither paper nor shadow. */
+const SELECTION_INK = '#7ec7d6'
 /**
  * The opening view: the contiguous states with room around them. Alaska,
  * Hawaii and the territories are a pan away, inside the limit below.
@@ -269,7 +270,7 @@ function addMarkers(map: MapLibreMap): void {
     source: 'selection',
     paint: {
       'circle-radius': 4,
-      'circle-color': INK,
+      'circle-color': SELECTION_INK,
     },
   })
 

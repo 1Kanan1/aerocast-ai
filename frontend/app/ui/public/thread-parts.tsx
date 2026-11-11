@@ -266,7 +266,7 @@ export function AssistantTurn(
         {entry.pending ? (
           <p aria-live="polite" mix={pendingStyle} role="status">
             <span mix={pulseStyle} />
-            Reading the observation…
+            Thinking…
           </p>
         ) : entry.stopped ? (
           <p mix={stoppedStyle}>Stopped.</p>

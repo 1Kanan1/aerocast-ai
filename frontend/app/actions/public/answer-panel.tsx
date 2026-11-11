@@ -443,11 +443,11 @@ const infoStyle = css({
   borderBlockEnd: '1px solid var(--line)',
   '&[data-collapsed="true"]': {
     overflow: 'hidden',
-    maxHeight: '72px',
+    maxHeight: '76px',
   },
-  '&[data-collapsed="true"] section': {
-    '& dl, & code, & p:nth-of-type(2)': { display: 'none' },
-  },
+  '&[data-collapsed="true"] dl': { display: 'none' },
+  '&[data-collapsed="true"] code': { display: 'none' },
+  '&[data-collapsed="true"] p + p': { display: 'none' },
 })
 
 const collapseStyle = css({
