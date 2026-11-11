@@ -22,6 +22,8 @@ const PAPER = '#09090a'
 const HAZARD_INK = '#e0603f'
 /** The selected station's dot: a cool hue, so it is neither paper nor shadow. */
 const SELECTION_INK = '#7ec7d6'
+/** Mean Earth radius in nautical miles, for the area circle. */
+const EARTH_RADIUS_NM = 3440.065
 /**
  * The opening view: the contiguous states with room around them. Alaska,
  * Hawaii and the territories are a pan away, inside the limit below.
@@ -103,6 +105,16 @@ export const MapIsland = clientEntry(
       let applySession = (): void => {
         let station = session.selected
         showSuggested(map, session.suggested)
+        showAreaWindow(
+          map,
+          session.area === null
+            ? null
+            : {
+                lat: session.area.lat,
+                lon: session.area.lon,
+                radiusNm: session.areaPayload?.radius_nm ?? null,
+              },
+        )
 
         if (station === null || station.lat === null || station.lon === null) {
           selectedPoint = null
@@ -223,6 +235,28 @@ function emptyStyle(): StyleSpecification {
 
 /** The selected station and any fresh alternative, and nothing else. */
 function addMarkers(map: MapLibreMap): void {
+  map.addSource('area-window', {
+    type: 'geojson',
+    data: emptyCollection(),
+  })
+  map.addLayer({
+    id: 'area-fill',
+    type: 'fill',
+    source: 'area-window',
+    paint: { 'fill-color': SELECTION_INK, 'fill-opacity': 0.05 },
+  })
+  map.addLayer({
+    id: 'area-ring',
+    type: 'line',
+    source: 'area-window',
+    paint: {
+      'line-color': SELECTION_INK,
+      'line-width': 1,
+      'line-opacity': 0.6,
+      'line-dasharray': [3, 3],
+    },
+  })
+
   map.addSource('suggested', {
     type: 'geojson',
     data: emptyCollection(),
@@ -330,6 +364,61 @@ function anchorAt(map: MapLibreMap, point: [number, number]): Anchor {
 function showSelection(map: MapLibreMap, point: [number, number] | null): void {
   let source = map.getSource('selection') as GeoJSONSource | undefined
   source?.setData(featureCollection(point === null ? [] : [point]))
+}
+
+/** The window around a click: a fixed circle drawn where the reader asked. */
+function showAreaWindow(
+  map: MapLibreMap,
+  area: { lat: number; lon: number; radiusNm: number | null } | null,
+): void {
+  let source = map.getSource('area-window') as GeoJSONSource | undefined
+  if (source === undefined) return
+
+  source.setData(
+    area === null || area.radiusNm === null
+      ? emptyCollection()
+      : areaWindow(area.lat, area.lon, area.radiusNm),
+  )
+}
+
+function areaWindow(
+  lat: number,
+  lon: number,
+  radiusNm: number,
+): FeatureCollection {
+  // A circle on the sphere: walk the radius round the click and connect it.
+  let steps = 72
+  let angular = radiusNm / EARTH_RADIUS_NM
+  let latRad = (lat * Math.PI) / 180
+  let lonRad = (lon * Math.PI) / 180
+  let ring: [number, number][] = []
+
+  for (let step = 0; step <= steps; step += 1) {
+    let bearing = (step / steps) * 2 * Math.PI
+    let toLat = Math.asin(
+      Math.sin(latRad) * Math.cos(angular) +
+        Math.cos(latRad) * Math.sin(angular) * Math.cos(bearing),
+    )
+    let toLon =
+      lonRad +
+      Math.atan2(
+        Math.sin(bearing) * Math.sin(angular) * Math.cos(latRad),
+        Math.cos(angular) - Math.sin(latRad) * Math.sin(toLat),
+      )
+
+    ring.push([(toLon * 180) / Math.PI, (toLat * 180) / Math.PI])
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: {},
+      },
+    ],
+  }
 }
 
 function showSuggested(map: MapLibreMap, stations: ResolveSuggestion[]): void {
