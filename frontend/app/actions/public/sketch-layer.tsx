@@ -31,6 +31,15 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 const FADE_ID = 'area-fade'
 const MASK_ID = 'area-mask'
 const BLOOM_ID = 'area-bloom'
+/**
+ * Wind is the only thing on the map that moves all the time, and a full-field
+ * repaint at sixty frames a second costs both the processor and the graphics
+ * card for no gain in a drifting field. Fifteen frames is enough for drift,
+ * and the field is small, so the work stays proportional to it.
+ */
+const WIND_FRAME_MS = 83
+const WIND_MAX_PIXELS = 2048
+const WIND_EDGE = 0.7
 
 /** Sixteen points, so "wind from the south-southeast" is a lookup. */
 const COMPASS = [
@@ -76,6 +85,11 @@ export const SketchLayer = clientEntry(
       y: number
       group: SVGGElement
     } | null = null
+    let windCanvas: HTMLCanvasElement | undefined
+    let windContext: CanvasRenderingContext2D | null = null
+    let windScale = 1
+    let windArrows: WindArrow[] = []
+    let windFrame = 0
 
     function schedule(): void {
       if (frame !== 0) return
@@ -127,6 +141,94 @@ export const SketchLayer = clientEntry(
       })
     }
 
+    function stopWind(): void {
+      if (windFrame !== 0) window.clearTimeout(windFrame)
+      windFrame = 0
+    }
+
+    /** Redraw the field, but not on every frame the screen offers. */
+    function flowWind(): void {
+      windFrame = window.setTimeout(() => {
+        windFrame = 0
+        renderWind(performance.now())
+        flowWind()
+      }, WIND_FRAME_MS)
+    }
+
+    /**
+     * One pass over the arrows: each one drifts along its own flow vector,
+     * fades in and out at the ends of its loop, and thins towards the edge of
+     * the area where the data stops.
+     */
+    function renderWind(now: number, at?: number): void {
+      let canvas = windCanvas
+      let context = windContext
+      if (canvas === undefined || context === null) return
+
+      let scale = windScale
+      context.setTransform(1, 0, 0, 1, 0, 0)
+      context.clearRect(0, 0, canvas.width, canvas.height)
+      context.lineWidth = 1.8
+      context.lineCap = 'round'
+
+      for (let arrow of windArrows) {
+        let phase =
+          at ?? (((now / 1000 / arrow.duration + arrow.phase) % 1) + 1) % 1
+        let alpha = arrow.edge * (0.25 + 0.65 * Math.sin(Math.PI * phase))
+        if (alpha < 0.02) continue
+
+        context.globalAlpha = alpha
+        context.strokeStyle = arrow.color
+        context.setTransform(
+          scale,
+          0,
+          0,
+          scale,
+          (arrow.x + arrow.ux * arrow.travel * phase) * scale,
+          (arrow.y + arrow.uy * arrow.travel * phase) * scale,
+        )
+        context.stroke(arrow.path)
+      }
+
+      context.setTransform(1, 0, 0, 1, 0, 0)
+      context.globalAlpha = 1
+    }
+
+    function paintWind(
+      x: number,
+      y: number,
+      radius: number,
+      arrows: WindArrow[],
+    ): void {
+      windArrows = arrows
+      stopWind()
+      if (windCanvas === undefined) return
+
+      if (arrows.length === 0) {
+        windCanvas.style.display = 'none'
+        return
+      }
+
+      let size = radius * 2
+      let density = Math.min(window.devicePixelRatio || 1, 2)
+      let scale = Math.max(0.75, Math.min(density, WIND_MAX_PIXELS / size))
+
+      windCanvas.style.display = 'block'
+      windCanvas.style.transform = ''
+      windCanvas.style.left = `${x - radius}px`
+      windCanvas.style.top = `${y - radius}px`
+      windCanvas.style.width = `${size}px`
+      windCanvas.style.height = `${size}px`
+      windCanvas.width = Math.round(size * scale)
+      windCanvas.height = Math.round(size * scale)
+      windScale = scale
+      windContext = windCanvas.getContext('2d')
+
+      renderWind(performance.now(), 0.5)
+      let still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      if (!still) flowWind()
+    }
+
     function draw(): void {
       if (host === undefined || svg === undefined || label === undefined) return
 
@@ -140,6 +242,9 @@ export const SketchLayer = clientEntry(
         gridFor = null
         grid = null
         built = null
+        stopWind()
+        windArrows = []
+        if (windCanvas !== undefined) windCanvas.style.display = 'none'
         svg.replaceChildren()
         label.style.display = 'none'
         return
@@ -173,13 +278,19 @@ export const SketchLayer = clientEntry(
       // costs far more than translating the group. Rebuild on zoom, layer or
       // data changes, and slide otherwise.
       if (built !== null && built.key === key) {
+        let dx = x - built.x
+        let dy = y - built.y
         built.group.setAttribute(
           'transform',
-          `translate(${(x - built.x).toFixed(2)} ${(y - built.y).toFixed(2)})`,
+          `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`,
         )
+        if (windCanvas !== undefined) {
+          windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(
+            2,
+          )}px)`
+        }
       } else {
         let group = document.createElementNS(SVG_NS, 'g')
-        let rc = rough.svg(svg)
         group.append(tempDefs(x, y, radius, ink))
         let field = document.createElementNS(SVG_NS, 'g')
         field.setAttribute('mask', `url(#${MASK_ID})`)
@@ -208,13 +319,13 @@ export const SketchLayer = clientEntry(
         }
 
         group.append(field)
-
-        let wind = document.createElementNS(SVG_NS, 'g')
-        wind.setAttribute('opacity', '0.85')
-        wind.setAttribute('mask', `url(#${MASK_ID})`)
-        wind.append(
-          ...windField(
-            rc,
+        svg.replaceChildren(group)
+        built = { key, x, y, group }
+        paintWind(
+          x,
+          y,
+          radius,
+          windArrowsFor(
             x,
             y,
             radius,
@@ -225,9 +336,6 @@ export const SketchLayer = clientEntry(
             tempOn,
           ),
         )
-        group.append(wind)
-        svg.replaceChildren(group)
-        built = { key, x, y, group }
       }
 
       let humidity = humidityPercent(facts.temperature)
@@ -266,6 +374,7 @@ export const SketchLayer = clientEntry(
         'abort',
         () => {
           cancelAnimationFrame(frame)
+          stopWind()
           radarAbort?.abort()
           gridAbort?.abort()
           unsubscribe()
@@ -278,6 +387,10 @@ export const SketchLayer = clientEntry(
     return () => (
       <div mix={[overlayStyle, ref((node) => (host = node))]}>
         <svg aria-hidden="true" mix={[svgStyle, ref((node) => (svg = node))]} />
+        <canvas
+          aria-hidden="true"
+          mix={[windStyle, ref((node) => (windCanvas = node))]}
+        />
         <div
           aria-hidden="true"
           mix={[labelStyle, ref((node) => (label = node))]}
@@ -329,9 +442,11 @@ function stop(offset: string, color: string, opacity: string): SVGElement {
  * A field of strokes across the area. Direction, speed and color come from
  * the RRFS grid, so the wind bends across the area instead of pointing one
  * way; without the grid it falls back to the station's own reading.
+ *
+ * The strokes are drawn to a canvas, so each one keeps its shape as a path
+ * that is stroked again every frame instead of being rebuilt.
  */
-function windField(
-  rc: RoughSVG,
+function windArrowsFor(
   x: number,
   y: number,
   radius: number,
@@ -340,7 +455,7 @@ function windField(
   ink: string,
   seed: number,
   colorByTemp: boolean,
-): SVGElement[] {
+): WindArrow[] {
   let fallback =
     stationWind !== null &&
     !stationWind.is_calm &&
@@ -358,17 +473,20 @@ function windField(
 
   if (grid === null && fallback === null) return []
 
+  let scratch = document.createElementNS(SVG_NS, 'svg')
+  let pen = rough.svg(scratch)
   let step = Math.min(64, Math.max(26, radius / 7))
   let inner = radius * 0.94
-  let nodes: SVGElement[] = []
+  let arrows: WindArrow[] = []
 
   for (let gy = -inner; gy <= inner; gy += step) {
     for (let gx = -inner; gx <= inner; gx += step) {
       let wobbleX = ((seed + gx * 7 + gy * 13) % 11) - 5
       let wobbleY = ((seed + gx * 11 + gy * 5) % 11) - 5
-      let px = x + gx + wobbleX
-      let py = y + gy + wobbleY
-      if ((px - x) ** 2 + (py - y) ** 2 > inner * inner) continue
+      let px = gx + wobbleX
+      let py = gy + wobbleY
+      let distance = Math.hypot(px, py)
+      if (distance > inner) continue
 
       let ux = 0
       let uy = 0
@@ -376,7 +494,7 @@ function windField(
       let color = ink
 
       if (grid !== null) {
-        let sample = sampleGrid(grid, (px - x) / radius, -(py - y) / radius)
+        let sample = sampleGrid(grid, px / radius, -py / radius)
         if (sample === null) continue
         let magnitude = Math.hypot(sample.u, sample.v)
         if (magnitude < 0.5) continue
@@ -392,14 +510,9 @@ function windField(
       }
 
       let length = Math.min(30, 12 + speed * 0.8)
-      let tipX = px + (ux * length) / 2
-      let tipY = py + (uy * length) / 2
-      let options = {
-        roughness: 0.7,
-        stroke: color,
-        strokeWidth: 1.8,
-        seed,
-      } as const
+      let tipX = (ux * length) / 2
+      let tipY = (uy * length) / 2
+      let options = { roughness: 0.7, seed } as const
       let head = (turn: number): [number, number] => {
         let cos = Math.cos(turn)
         let sin = Math.sin(turn)
@@ -409,31 +522,53 @@ function windField(
         ]
       }
 
-      let arrow = document.createElementNS(SVG_NS, 'g')
-      arrow.setAttribute('class', 'rmx-wind-arrow')
+      let path = new Path2D()
+      for (let stroke of [
+        pen.line(-tipX, -tipY, tipX, tipY, options),
+        pen.line(tipX, tipY, ...head(0.5), options),
+        pen.line(tipX, tipY, ...head(-0.5), options),
+      ]) {
+        let d = stroke.querySelector('path')?.getAttribute('d')
+        if (d !== null && d !== undefined) path.addPath(new Path2D(d))
+      }
+
       let travel = Math.max(step, 34)
       let duration = Math.max(1.2, travel / (12 + speed * 1.6))
-      let delay = (((seed + gx * 3 + gy * 5) % 100) / 100) * duration
-      arrow.setAttribute(
-        'style',
-        `--wind-x:${(ux * travel).toFixed(1)}px;--wind-y:${(uy * travel).toFixed(1)}px;animation-duration:${duration.toFixed(2)}s;animation-delay:-${delay.toFixed(2)}s`,
-      )
-      arrow.append(
-        rc.line(
-          px - (ux * length) / 2,
-          py - (uy * length) / 2,
-          tipX,
-          tipY,
-          options,
-        ),
-        rc.line(tipX, tipY, ...head(0.5), options),
-        rc.line(tipX, tipY, ...head(-0.5), options),
-      )
-      nodes.push(arrow)
+      let fade =
+        distance / radius <= WIND_EDGE
+          ? 1
+          : Math.max(0, (1 - distance / radius) / (1 - WIND_EDGE))
+
+      arrows.push({
+        path,
+        x: px + radius,
+        y: py + radius,
+        ux,
+        uy,
+        travel,
+        duration,
+        phase: ((seed + gx * 3 + gy * 5) % 100) / 100,
+        color,
+        edge: 0.85 * fade,
+      })
     }
   }
 
-  return nodes
+  return arrows
+}
+
+interface WindArrow {
+  /** Shape around its own origin, in the area's pixels. */
+  path: Path2D
+  x: number
+  y: number
+  ux: number
+  uy: number
+  travel: number
+  duration: number
+  phase: number
+  color: string
+  edge: number
 }
 
 function seedOf(icao: string): number {
@@ -482,6 +617,12 @@ const svgStyle = css({
   inset: 0,
   width: '100%',
   height: '100%',
+})
+
+const windStyle = css({
+  position: 'absolute',
+  display: 'none',
+  pointerEvents: 'none',
 })
 
 const labelStyle = css({

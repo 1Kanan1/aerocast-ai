@@ -53,20 +53,6 @@ export function Document(handle: Handle<DocumentProps>) {
 @keyframes rmx-word-in {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
-}
-@keyframes rmx-wind-flow {
-  0% { transform: translate(0, 0); opacity: 0.2; }
-  20% { opacity: 0.9; }
-  80% { opacity: 0.9; }
-  100% { transform: translate(var(--wind-x, 0px), var(--wind-y, 0px)); opacity: 0.2; }
-}
-.rmx-wind-arrow {
-  animation-name: rmx-wind-flow;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .rmx-wind-arrow { animation: none; opacity: 0.8; }
 }`}
           </style>
           <title>{title}</title>

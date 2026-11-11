@@ -1175,11 +1175,12 @@ the input, the station is an output, and the map becomes the context for the ans
   4x4 of model points around the station, so direction and speed bend across the area
   instead of pointing one way; the strokes are longer with speed, end in a small
   arrowhead, drift in the direction they point, and take their color from the local
-  temperature. A legend with a switch beside each ramp shows what the rain and
-  temperature colors mean, and both layers start on. A soft bloom
-  and a label carry the
-  temperature, and the label adds the station wind in words, the humidity from the
-  dewpoint and the share of the area with echo.
+  temperature. The field is drawn to a canvas over the area and advanced about twelve
+  times a second, because a drift that only has to look alive should not cost the
+  machine sixty frames of compositing a second. A legend with a switch beside each
+  ramp shows what the rain and temperature colors mean, and both layers start on. A
+  soft bloom and a label carry the temperature, and the label adds the station wind in
+  words, the humidity from the dewpoint and the share of the area with echo.
 - **Radar.** IEM NEXRAD base reflectivity, recolored in the browser from its own ramp to
   a cold-to-warm one: light echo is blue, heavy cores run yellow and red. One request
   set per station inside the radius, not per viewport tile. nowCOAST is the preferred
