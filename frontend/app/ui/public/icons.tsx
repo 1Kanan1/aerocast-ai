@@ -40,6 +40,24 @@ export function ArrowIcon(_handle: Handle) {
   )
 }
 
+export function ChevronIcon(_handle: Handle) {
+  return () => (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="12"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="12"
+    >
+      <path d="m6 15 6-6 6 6" />
+    </svg>
+  )
+}
+
 export function CloseIcon(_handle: Handle) {
   return () => (
     <svg

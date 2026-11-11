@@ -7,6 +7,7 @@ import type {
   BundleTaf,
 } from '#app/lib/api-types.ts'
 import { ageLabel, timeLabel } from '#app/lib/format.ts'
+import { ChevronIcon } from '#app/ui/public/icons.tsx'
 import {
   ceilingLabel,
   cloudsLabel,
@@ -49,6 +50,10 @@ export const AnswerPanel = clientEntry(
     let collapsed = false
 
     function scrollToEnd(): void {
+      // A station with no turns is showing the welcome: leave it at the top
+      // rather than parking the reader at the bottom of it.
+      let station = session.selected
+      if (station === null || station.thread.length === 0) return
       if (scroller) scroller.scrollTop = scroller.scrollHeight
     }
 
@@ -123,9 +128,17 @@ export const AnswerPanel = clientEntry(
                 ) : station.facts === null ? (
                   <p mix={mutedStyle}>No observation on file.</p>
                 ) : session.viewHour === 0 ? (
-                  <Conditions facts={station.facts} station={station} />
+                  <Conditions
+                    compact={collapsed}
+                    facts={station.facts}
+                    station={station}
+                  />
                 ) : (
-                  <TimedConditions hour={session.viewHour} station={station} />
+                  <TimedConditions
+                    compact={collapsed}
+                    hour={session.viewHour}
+                    station={station}
+                  />
                 )}
               </div>
 
@@ -142,7 +155,15 @@ export const AnswerPanel = clientEntry(
                   ]}
                   type="button"
                 >
-                  {collapsed ? '⌄' : '⌃'}
+                  <span
+                    aria-hidden="true"
+                    mix={chevronStyle}
+                    style={{
+                      transform: `rotate(${collapsed ? 180 : 0}deg)`,
+                    }}
+                  >
+                    <ChevronIcon />
+                  </span>
                 </button>
               </div>
             </>
@@ -160,14 +181,16 @@ export const AnswerPanel = clientEntry(
             {station === null ||
             station.loading ||
             station.error !== null ? null : station.thread.length === 0 ? (
-              <ThreadWelcome
-                category={station.category}
-                disabled={false}
-                icao={station.icao}
-                name={station.name}
-                onAsk={(prompt) => void session.ask(prompt)}
-                suggestions={SUGGESTIONS}
-              />
+              <div mix={welcomeStyle}>
+                <ThreadWelcome
+                  category={station.category}
+                  disabled={false}
+                  icao={station.icao}
+                  name={station.name}
+                  onAsk={(prompt) => void session.ask(prompt)}
+                  suggestions={SUGGESTIONS}
+                />
+              </div>
             ) : (
               station.thread.map((entry, index) => (
                 <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
@@ -197,51 +220,65 @@ export const AnswerPanel = clientEntry(
 
 /** The facts every answer rests on, shown once above the prose. */
 function Conditions(
-  handle: Handle<{ facts: BundleMetar; station: SelectedStation }>,
+  handle: Handle<{
+    compact: boolean
+    facts: BundleMetar
+    station: SelectedStation
+  }>,
 ) {
   return () => {
-    let { facts, station } = handle.props
+    let { compact, facts, station } = handle.props
 
     return (
       <section aria-label="Conditions" mix={conditionsStyle}>
         <p mix={conditionsHeadStyle}>
           <span mix={categoryStyle}>{station.category ?? 'no category'}</span>
           <span mix={ageStyle}>
-            {station.source} · observed {timeLabel(facts.observed_at)} ·{' '}
+            {compact ? null : (
+              <>
+                {station.source} · observed {timeLabel(facts.observed_at)}{' '}
+                ·{' '}
+              </>
+            )}
             {ageLabel(station.ageSeconds)}
             {station.stale ? ' · stale' : ''}
           </span>
         </p>
-        {station.parseStatus !== null &&
-        station.parseStatus !== 'ok' &&
-        station.upstreamCategory !== null ? (
-          <p mix={warningStyle}>
-            Our parser disagrees with AWC on this report (upstream category{' '}
-            {station.upstreamCategory}). The difference is kept visible.
-          </p>
-        ) : null}
-        <dl mix={factsStyle}>
-          <Fact label="Wind" value={windLabel(facts)} />
-          <Fact label="Visibility" value={visibilityLabel(facts)} />
-          <Fact label="Ceiling" value={ceilingLabel(facts)} />
-          <Fact label="Clouds" value={cloudsLabel(facts)} />
-          <Fact label="Temperature" value={temperatureLabel(facts)} />
-          <Fact
-            label="Altimeter"
-            value={
-              facts.altimeter_in_hg === null
-                ? 'not reported'
-                : `${facts.altimeter_in_hg} inHg`
-            }
-          />
-          <Fact
-            label="Weather"
-            value={
-              facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
-            }
-          />
-        </dl>
-        <code mix={rawStyle}>{facts.raw}</code>
+
+        {compact ? null : (
+          <>
+            {station.parseStatus !== null &&
+            station.parseStatus !== 'ok' &&
+            station.upstreamCategory !== null ? (
+              <p mix={warningStyle}>
+                Our parser disagrees with AWC on this report (upstream category{' '}
+                {station.upstreamCategory}). The difference is kept visible.
+              </p>
+            ) : null}
+            <dl mix={factsStyle}>
+              <Fact label="Wind" value={windLabel(facts)} />
+              <Fact label="Visibility" value={visibilityLabel(facts)} />
+              <Fact label="Ceiling" value={ceilingLabel(facts)} />
+              <Fact label="Clouds" value={cloudsLabel(facts)} />
+              <Fact label="Temperature" value={temperatureLabel(facts)} />
+              <Fact
+                label="Altimeter"
+                value={
+                  facts.altimeter_in_hg === null
+                    ? 'not reported'
+                    : `${facts.altimeter_in_hg} inHg`
+                }
+              />
+              <Fact
+                label="Weather"
+                value={
+                  facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
+                }
+              />
+            </dl>
+            <code mix={rawStyle}>{facts.raw}</code>
+          </>
+        )}
       </section>
     )
   }
@@ -253,10 +290,10 @@ function Conditions(
  * the data does not cover say so rather than borrowing the nearest number.
  */
 function TimedConditions(
-  handle: Handle<{ hour: number; station: SelectedStation }>,
+  handle: Handle<{ compact: boolean; hour: number; station: SelectedStation }>,
 ) {
   return () => {
-    let { hour, station } = handle.props
+    let { compact, hour, station } = handle.props
     let target = session.timelineBase + hour * HOUR_MS
 
     if (hour < 0) {
@@ -275,7 +312,7 @@ function TimedConditions(
               observed {WHEN.format(Date.parse(point.obs_time))}
             </span>
           </p>
-          <code mix={rawStyle}>{point.raw}</code>
+          {compact ? null : <code mix={rawStyle}>{point.raw}</code>}
         </section>
       )
     }
@@ -295,19 +332,23 @@ function TimedConditions(
             {period.probability === null ? '' : ` · ${period.probability}%`}
           </span>
         </p>
-        <dl mix={factsStyle}>
-          <Fact label="Wind" value={periodWindLabel(period)} />
-          <Fact label="Visibility" value={smLabel(period.visibility_sm)} />
-          <Fact label="Ceiling" value={feetLabel(period.ceiling_ft)} />
-          <Fact label="Clouds" value={cloudsOrUnknown(period.clouds)} />
-          <Fact
-            label="Weather"
-            value={
-              period.weather.length === 0 ? 'unknown' : period.weather.join(' ')
-            }
-          />
-          <Fact label="Temperature" value="unknown" />
-        </dl>
+        {compact ? null : (
+          <dl mix={factsStyle}>
+            <Fact label="Wind" value={periodWindLabel(period)} />
+            <Fact label="Visibility" value={smLabel(period.visibility_sm)} />
+            <Fact label="Ceiling" value={feetLabel(period.ceiling_ft)} />
+            <Fact label="Clouds" value={cloudsOrUnknown(period.clouds)} />
+            <Fact
+              label="Weather"
+              value={
+                period.weather.length === 0
+                  ? 'unknown'
+                  : period.weather.join(' ')
+              }
+            />
+            <Fact label="Temperature" value="unknown" />
+          </dl>
+        )}
       </section>
     )
   }
@@ -445,13 +486,11 @@ const closeStyle = css({
 const infoStyle = css({
   position: 'relative',
   flexShrink: 0,
-  maxHeight: '46%',
+  maxHeight: '360px',
   overflow: 'hidden',
   padding: '14px 20px 0',
-  '&[data-collapsed="true"]': { maxHeight: '76px' },
-  '&[data-collapsed="true"] dl': { display: 'none' },
-  '&[data-collapsed="true"] code': { display: 'none' },
-  '&[data-collapsed="true"] p + p': { display: 'none' },
+  transition: 'max-height 220ms ease',
+  '&[data-collapsed="true"]': { maxHeight: '52px' },
 })
 
 /** A zero-height seam between the conditions and the thread, for the chevron. */
@@ -462,28 +501,37 @@ const dividerStyle = css({
   zIndex: 1,
 })
 
+/** The whole seam is the button; the chevron is the handle on it. */
 const collapseStyle = css({
   position: 'absolute',
-  left: '50%',
-  top: 0,
-  width: '28px',
-  height: '28px',
+  left: 0,
+  right: 0,
+  top: '-13px',
+  height: '26px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   padding: 0,
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--ink-3)',
+  cursor: 'pointer',
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '-2px',
+  },
+})
+
+const chevronStyle = css({
+  display: 'grid',
+  placeItems: 'center',
+  width: '26px',
+  height: '26px',
   border: '1px solid var(--line)',
   borderRadius: '50%',
   background: 'var(--paper-2)',
-  color: 'var(--ink-2)',
-  font: 'inherit',
-  fontSize: '12px',
-  lineHeight: 1,
-  cursor: 'pointer',
-  transform: 'translate(-50%, -50%)',
-  transition: 'color 120ms ease, border-color 120ms ease',
-  '&:hover': { color: 'var(--ink-0)', borderColor: 'var(--ink-3)' },
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '2px',
-  },
+  transition: 'transform 200ms ease, color 120ms ease',
+  '&:hover': { color: 'var(--ink-0)' },
 })
 
 const threadStyle = css({
@@ -493,15 +541,19 @@ const threadStyle = css({
   overflowX: 'hidden',
   display: 'flex',
   flexDirection: 'column',
-  gap: '20px',
-  padding: '28px 20px 20px',
+  gap: '8px',
+  padding: '0 20px 20px',
   scrollBehavior: 'smooth',
 })
 
+const welcomeStyle = css({ paddingBlockStart: '24px' })
+
+/** Each prompt carries its own room above it, so the seam never crowds one. */
 const exchangeStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '10px',
+  paddingBlockStart: '26px',
 })
 
 const conditionsStyle = css({

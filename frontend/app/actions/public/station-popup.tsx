@@ -11,6 +11,7 @@ const CARD_GAP = 16
 const CARD_PAD = 12
 const NAVBAR_FLOOR = 84
 const CARD_EXIT_MS = 160
+const CARD_ENTER_MS = 240
 
 /** The ask-first station card: who it is, the wind, and one way to ask. */
 export const StationPopup = clientEntry(
@@ -21,6 +22,7 @@ export const StationPopup = clientEntry(
     let closingTimer: ReturnType<typeof setTimeout> | undefined
     let last: SelectedStation | null = null
     let shownIcao: string | null = null
+    let enterUntil = 0
 
     function place(anchor: Anchor | null): void {
       if (!host || anchor === null || !host.parentElement) return
@@ -103,8 +105,14 @@ export const StationPopup = clientEntry(
 
       // The card enters when it appears for a new station, not every time the
       // session changes: a click on the map should not replay the entrance.
+      // The window keeps the class through the re-renders that follow a
+      // selection, so a late render does not cut the animation short.
       let incoming = station !== null && station.icao !== shownIcao
-      if (station !== null) shownIcao = station.icao
+      if (station !== null && incoming) {
+        shownIcao = station.icao
+        enterUntil = Date.now() + CARD_ENTER_MS
+      }
+      let entering = station !== null && Date.now() < enterUntil
 
       return (
         <div
@@ -113,7 +121,7 @@ export const StationPopup = clientEntry(
             display: station === null ? 'none' : 'flex',
             animation: closing
               ? 'rmx-card-out 160ms ease-in forwards'
-              : incoming
+              : entering
                 ? 'rmx-card-in 180ms ease-out'
                 : 'none',
             pointerEvents: closing ? 'none' : undefined,

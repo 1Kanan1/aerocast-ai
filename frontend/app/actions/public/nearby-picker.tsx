@@ -134,7 +134,7 @@ const listStyle = css({
 
 const rowStyle = css({
   display: 'grid',
-  gridTemplateColumns: 'auto 1fr auto',
+  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
   alignItems: 'baseline',
   gap: '8px',
   width: '100%',
@@ -155,13 +155,18 @@ const rowStyle = css({
 
 const codeStyle = css({ fontSize: '12px', color: 'var(--ink-0)' })
 const nameStyle = css({
+  minWidth: 0,
   fontSize: '12px',
   color: 'var(--ink-2)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 })
-const distanceStyle = css({ fontSize: '10px', color: 'var(--ink-3)' })
+const distanceStyle = css({
+  fontSize: '10px',
+  color: 'var(--ink-3)',
+  whiteSpace: 'nowrap',
+})
 const emptyStyle = css({
   margin: 0,
   padding: '2px 4px 4px',
