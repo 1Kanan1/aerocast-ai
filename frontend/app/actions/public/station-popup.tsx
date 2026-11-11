@@ -90,6 +90,9 @@ export const StationPopup = clientEntry(
 
     return () => {
       let station = session.selected ?? (closing ? last : null)
+      // Any exchange about this station already asked the question the card
+      // would repeat, so the shortcut retires after the first one.
+      let asked = station !== null && station.thread.length > 0
 
       return (
         <div
@@ -146,16 +149,25 @@ export const StationPopup = clientEntry(
               <footer mix={footerStyle}>
                 <button
                   aria-label={`Ask about ${station.icao}`}
+                  disabled={asked}
                   mix={[
                     askStyle,
                     on('click', () => {
-                      let field = document.querySelector('[data-ask-field]')
-                      if (field instanceof HTMLTextAreaElement) field.focus()
+                      void session.ask(
+                        `What are the conditions at ${station.icao}?`,
+                      )
                     }),
                   ]}
+                  title={
+                    asked
+                      ? `${station.icao} is already in this conversation`
+                      : undefined
+                  }
                   type="button"
                 >
-                  Ask about {station.icao}
+                  {asked
+                    ? `Asked about ${station.icao}`
+                    : `Ask about ${station.icao}`}
                 </button>
               </footer>
             </>
@@ -309,5 +321,11 @@ const askStyle = css({
   '&:focus-visible': {
     outline: '2px solid var(--ink-2)',
     outlineOffset: '2px',
+  },
+  '&:disabled': {
+    background: 'transparent',
+    borderColor: 'var(--glass-border)',
+    color: 'var(--ink-3)',
+    cursor: 'default',
   },
 })
