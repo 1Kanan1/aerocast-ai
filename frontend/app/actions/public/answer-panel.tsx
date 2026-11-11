@@ -118,6 +118,7 @@ export const AnswerPanel = clientEntry(
           {station === null ? null : (
             <>
               <div
+                aria-hidden={collapsed ? 'true' : 'false'}
                 data-collapsed={collapsed ? 'true' : 'false'}
                 mix={infoStyle}
               >
@@ -128,17 +129,9 @@ export const AnswerPanel = clientEntry(
                 ) : station.facts === null ? (
                   <p mix={mutedStyle}>No observation on file.</p>
                 ) : session.viewHour === 0 ? (
-                  <Conditions
-                    compact={collapsed}
-                    facts={station.facts}
-                    station={station}
-                  />
+                  <Conditions facts={station.facts} station={station} />
                 ) : (
-                  <TimedConditions
-                    compact={collapsed}
-                    hour={session.viewHour}
-                    station={station}
-                  />
+                  <TimedConditions hour={session.viewHour} station={station} />
                 )}
               </div>
 
@@ -218,66 +211,52 @@ export const AnswerPanel = clientEntry(
 
 /** The facts every answer rests on, shown once above the prose. */
 function Conditions(
-  handle: Handle<{
-    compact: boolean
-    facts: BundleMetar
-    station: SelectedStation
-  }>,
+  handle: Handle<{ facts: BundleMetar; station: SelectedStation }>,
 ) {
   return () => {
-    let { compact, facts, station } = handle.props
-    if (compact) return null
+    let { facts, station } = handle.props
 
     return (
       <section aria-label="Conditions" mix={conditionsStyle}>
         <p mix={conditionsHeadStyle}>
           <span mix={categoryStyle}>{station.category ?? 'no category'}</span>
           <span mix={ageStyle}>
-            {compact ? null : (
-              <>
-                {station.source} · observed {timeLabel(facts.observed_at)}{' '}
-                ·{' '}
-              </>
-            )}
+            {station.source} · observed {timeLabel(facts.observed_at)} ·{' '}
             {ageLabel(station.ageSeconds)}
             {station.stale ? ' · stale' : ''}
           </span>
         </p>
 
-        {compact ? null : (
-          <>
-            {station.parseStatus !== null &&
-            station.parseStatus !== 'ok' &&
-            station.upstreamCategory !== null ? (
-              <p mix={warningStyle}>
-                Our parser disagrees with AWC on this report (upstream category{' '}
-                {station.upstreamCategory}). The difference is kept visible.
-              </p>
-            ) : null}
-            <dl mix={factsStyle}>
-              <Fact label="Wind" value={windLabel(facts)} />
-              <Fact label="Visibility" value={visibilityLabel(facts)} />
-              <Fact label="Ceiling" value={ceilingLabel(facts)} />
-              <Fact label="Clouds" value={cloudsLabel(facts)} />
-              <Fact label="Temperature" value={temperatureLabel(facts)} />
-              <Fact
-                label="Altimeter"
-                value={
-                  facts.altimeter_in_hg === null
-                    ? 'not reported'
-                    : `${facts.altimeter_in_hg} inHg`
-                }
-              />
-              <Fact
-                label="Weather"
-                value={
-                  facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
-                }
-              />
-            </dl>
-            <code mix={rawStyle}>{facts.raw}</code>
-          </>
-        )}
+        {station.parseStatus !== null &&
+        station.parseStatus !== 'ok' &&
+        station.upstreamCategory !== null ? (
+          <p mix={warningStyle}>
+            Our parser disagrees with AWC on this report (upstream category{' '}
+            {station.upstreamCategory}). The difference is kept visible.
+          </p>
+        ) : null}
+        <dl mix={factsStyle}>
+          <Fact label="Wind" value={windLabel(facts)} />
+          <Fact label="Visibility" value={visibilityLabel(facts)} />
+          <Fact label="Ceiling" value={ceilingLabel(facts)} />
+          <Fact label="Clouds" value={cloudsLabel(facts)} />
+          <Fact label="Temperature" value={temperatureLabel(facts)} />
+          <Fact
+            label="Altimeter"
+            value={
+              facts.altimeter_in_hg === null
+                ? 'not reported'
+                : `${facts.altimeter_in_hg} inHg`
+            }
+          />
+          <Fact
+            label="Weather"
+            value={
+              facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
+            }
+          />
+        </dl>
+        <code mix={rawStyle}>{facts.raw}</code>
       </section>
     )
   }
@@ -289,11 +268,10 @@ function Conditions(
  * the data does not cover say so rather than borrowing the nearest number.
  */
 function TimedConditions(
-  handle: Handle<{ compact: boolean; hour: number; station: SelectedStation }>,
+  handle: Handle<{ hour: number; station: SelectedStation }>,
 ) {
   return () => {
-    let { compact, hour, station } = handle.props
-    if (compact) return null
+    let { hour, station } = handle.props
     let target = session.timelineBase + hour * HOUR_MS
 
     if (hour < 0) {
@@ -312,7 +290,7 @@ function TimedConditions(
               observed {WHEN.format(Date.parse(point.obs_time))}
             </span>
           </p>
-          {compact ? null : <code mix={rawStyle}>{point.raw}</code>}
+          <code mix={rawStyle}>{point.raw}</code>
         </section>
       )
     }
@@ -332,23 +310,19 @@ function TimedConditions(
             {period.probability === null ? '' : ` · ${period.probability}%`}
           </span>
         </p>
-        {compact ? null : (
-          <dl mix={factsStyle}>
-            <Fact label="Wind" value={periodWindLabel(period)} />
-            <Fact label="Visibility" value={smLabel(period.visibility_sm)} />
-            <Fact label="Ceiling" value={feetLabel(period.ceiling_ft)} />
-            <Fact label="Clouds" value={cloudsOrUnknown(period.clouds)} />
-            <Fact
-              label="Weather"
-              value={
-                period.weather.length === 0
-                  ? 'unknown'
-                  : period.weather.join(' ')
-              }
-            />
-            <Fact label="Temperature" value="unknown" />
-          </dl>
-        )}
+        <dl mix={factsStyle}>
+          <Fact label="Wind" value={periodWindLabel(period)} />
+          <Fact label="Visibility" value={smLabel(period.visibility_sm)} />
+          <Fact label="Ceiling" value={feetLabel(period.ceiling_ft)} />
+          <Fact label="Clouds" value={cloudsOrUnknown(period.clouds)} />
+          <Fact
+            label="Weather"
+            value={
+              period.weather.length === 0 ? 'unknown' : period.weather.join(' ')
+            }
+          />
+          <Fact label="Temperature" value="unknown" />
+        </dl>
       </section>
     )
   }
@@ -489,11 +463,12 @@ const infoStyle = css({
   maxHeight: '360px',
   overflow: 'hidden',
   padding: '14px 20px 0',
-  transition: 'max-height 220ms ease, padding 220ms ease',
+  transition: 'max-height 220ms ease, padding 220ms ease, opacity 220ms ease',
   '&[data-collapsed="true"]': {
     maxHeight: '0px',
     paddingTop: '0px',
     paddingBottom: '0px',
+    opacity: 0,
   },
 })
 
