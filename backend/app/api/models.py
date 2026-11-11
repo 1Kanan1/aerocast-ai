@@ -315,6 +315,15 @@ class ResolveSuggestion(ResolveStation):
     age_seconds: int
 
 
+class NearbyStation(ResolveStation):
+    """A station around a point on the map, with how far it is."""
+
+    distance_nm: float
+
+
+class NearbyStations(Envelope[list[NearbyStation]]): ...
+
+
 class ResolveResponse(BaseModel):
     """What a free-text question resolves to, or the stations it might mean."""
 

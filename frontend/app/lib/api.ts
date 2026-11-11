@@ -4,6 +4,7 @@ import type {
   AdvisoryList,
   Health,
   MapLayersResponse,
+  NearbyStations,
   ResolveResponse,
   StationBrief,
   StationDetailResponse,
@@ -107,6 +108,17 @@ export function apiGetStations(
 ): Promise<ApiResult<StationList>> {
   return apiGet<StationList>(
     `/api/stations?q=${encodeURIComponent(query)}`,
+    signal,
+  )
+}
+
+export function apiGetNearby(
+  lat: number,
+  lon: number,
+  signal?: AbortSignal,
+): Promise<ApiResult<NearbyStations>> {
+  return apiGet<NearbyStations>(
+    `/api/stations/near?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
     signal,
   )
 }

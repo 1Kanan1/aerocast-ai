@@ -6,6 +6,7 @@ import type {
   BundleAdvisory,
   BundleMetar,
   BundleTaf,
+  NearbyStation,
   ResolveResponse,
   ResolveStation,
   ResolveSuggestion,
@@ -33,6 +34,13 @@ export interface Anchor {
   pxPerNm: number
   /** Degrees the map is turned clockwise from north. */
   bearing: number
+}
+
+/** The stations offered after a click on the map, and where it landed. */
+export interface NearbyChoice {
+  x: number
+  y: number
+  stations: NearbyStation[]
 }
 
 /** A question that matched more than one station, waiting for a choice. */
@@ -80,6 +88,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   suggested: ResolveSuggestion[] = []
   /** Share of the weather area with radar echo, 0 to 1, once it is measured. */
   echoShare: number | null = null
+  /** Stations around the last empty-map click, waiting for a choice. */
+  nearby: NearbyChoice | null = null
   #pending: AbortController | null = null
   #ask: AbortController | null = null
   #anchorListeners = new Set<(anchor: Anchor | null) => void>()
@@ -101,6 +111,12 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   setEchoShare(share: number | null): void {
     if (this.echoShare === share) return
     this.echoShare = share
+    this.notify()
+  }
+
+  /** The map reports where it was clicked and what sits around it. */
+  setNearby(choice: NearbyChoice | null): void {
+    this.nearby = choice
     this.notify()
   }
 

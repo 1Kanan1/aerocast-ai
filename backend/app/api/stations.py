@@ -12,6 +12,7 @@ from app.api import models
 from app.api.envelope import METAR_STALE_SECONDS, wrap
 from app.db.session import fetch_all, fetch_one
 from app.domain.brief import BriefAdvisory, BriefStation, build_brief
+from app.domain.geo import distance_nm
 from app.domain.metar import (
     MetarParseError,
     Observation,
@@ -25,6 +26,43 @@ STATION_COLUMNS = "icao, name, state, lat, lon, elev_m"
 
 #: Degrees of latitude, near enough for a 50 nm search.
 NM_PER_DEGREE = 60.0
+
+#: How far a map click looks for stations to offer.
+NEARBY_NM = 80.0
+
+_NEARBY_PAD = NEARBY_NM / NM_PER_DEGREE + 0.5
+
+
+@router.get("/stations/near", response_model=models.NearbyStations)
+async def near(
+    lat: float = Query(ge=-90, le=90),
+    lon: float = Query(ge=-180, le=180),
+    limit: int = Query(default=5, ge=1, le=20),
+) -> dict[str, Any]:
+    """Stations around a point on the map, nearest first."""
+    rows = await fetch_all(
+        f"select {STATION_COLUMNS} from stations "
+        "where lat between :min_lat and :max_lat "
+        "and lon between :min_lon and :max_lon",
+        {
+            "min_lat": lat - _NEARBY_PAD,
+            "max_lat": lat + _NEARBY_PAD,
+            "min_lon": lon - _NEARBY_PAD,
+            "max_lon": lon + _NEARBY_PAD,
+        },
+    )
+
+    near_by = [
+        {
+            **row,
+            "distance_nm": round(
+                distance_nm(lat, lon, row["lat"], row["lon"]), 1
+            ),
+        }
+        for row in rows
+    ]
+    near_by.sort(key=lambda item: item["distance_nm"])
+    return wrap(near_by[:limit], source="awc stations")
 
 
 @router.get("/stations", response_model=models.StationList)

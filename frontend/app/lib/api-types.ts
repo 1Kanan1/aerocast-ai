@@ -248,6 +248,20 @@ export interface NearbyAdvisory {
   distance_nm: number
 }
 
+export interface NearbyStation {
+  icao: string
+  name: string
+  state: string | null
+  lat: number
+  lon: number
+  distance_nm: number
+}
+
+export interface NearbyStations {
+  data: NearbyStation[]
+  meta: Meta
+}
+
 export interface Observation {
   station_icao: string
   obs_time: string

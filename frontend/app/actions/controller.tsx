@@ -11,6 +11,7 @@ import {
   apiGetHealth,
   apiGetHistory,
   apiGetMapLayers,
+  apiGetNearby,
   apiGetResolve,
   apiGetStation,
   apiGetStations,
@@ -124,6 +125,28 @@ export default createController(routes, {
       if (!result.ok || !result.data) {
         return Response.json(
           { error: 'search is unavailable' },
+          { status: 502 },
+        )
+      }
+
+      return Response.json(result.data, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    },
+
+    async near(context) {
+      let lat = Number(context.url.searchParams.get('lat'))
+      let lon = Number(context.url.searchParams.get('lon'))
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return Response.json({ error: 'a point is required' }, { status: 400 })
+      }
+
+      let result = await apiGetNearby(lat, lon, context.request.signal)
+
+      if (!result.ok || !result.data) {
+        return Response.json(
+          { error: 'the station search is unavailable' },
           { status: 502 },
         )
       }

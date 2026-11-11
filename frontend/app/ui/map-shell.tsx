@@ -13,6 +13,7 @@ import { AnswerPanel } from '#app/actions/public/answer-panel.tsx'
 import { AskBar } from '#app/actions/public/ask-bar.tsx'
 import { MapIsland } from '#app/actions/public/map-island.tsx'
 import { SketchLayer } from '#app/actions/public/sketch-layer.tsx'
+import { NearbyPicker } from '#app/actions/public/nearby-picker.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
 import { StationSearch } from '#app/actions/public/station-search.tsx'
 import { WeatherKey } from '#app/actions/public/weather-key.tsx'
@@ -39,6 +40,7 @@ export function MapShell(handle: Handle<MapShellProps>) {
             <MapIsland initial={island} />
             <SketchLayer />
             <StationPopup />
+            <NearbyPicker />
             <AnswerPanel />
           </div>
 

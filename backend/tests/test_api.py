@@ -198,6 +198,19 @@ async def test_station_search_wraps_its_rows(monkeypatch) -> None:
     assert [station["icao"] for station in body["data"]] == ["KSFO", "KJFK"]
 
 
+async def test_near_lists_the_stations_inside_the_box(
+    monkeypatch,
+) -> None:
+    install(monkeypatch)
+
+    response = await get("/api/stations/near?lat=37.62&lon=-122.4")
+
+    body = response.json()
+    assert response.status_code == 200
+    assert [station["icao"] for station in body["data"]] == ["KSFO"]
+    assert body["data"][0]["distance_nm"] < 3
+
+
 async def test_station_detail_joins_reports_and_nearby_advisories(
     monkeypatch,
 ) -> None:

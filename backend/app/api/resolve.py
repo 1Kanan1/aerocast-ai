@@ -8,7 +8,6 @@ that matches none says so instead of picking one.
 
 from __future__ import annotations
 
-import math
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -17,6 +16,7 @@ from fastapi import APIRouter, Query
 
 from app.api import models
 from app.db.session import fetch_all, fetch_one
+from app.domain.geo import distance_nm
 
 router = APIRouter(prefix="/api", tags=["resolve"])
 
@@ -354,7 +354,7 @@ async def suggestions(
         age = int((now - row["obs_time"]).total_seconds())
         if age > METAR_STALE_SECONDS:
             continue
-        distance = _distance_nm(lat, lon, row["lat"], row["lon"])
+        distance = distance_nm(lat, lon, row["lat"], row["lon"])
         if distance > NEARBY_NM:
             continue
         fresh.append(
@@ -368,22 +368,3 @@ async def suggestions(
     return sorted(fresh, key=lambda item: item["distance_nm"])[
         :SUGGESTION_LIMIT
     ]
-
-
-def _distance_nm(
-    lat_a: float,
-    lon_a: float,
-    lat_b: float,
-    lon_b: float,
-) -> float:
-    """Great-circle distance in nautical miles."""
-    radius_nm = 3440.065
-    phi_a = math.radians(lat_a)
-    phi_b = math.radians(lat_b)
-    delta_phi = math.radians(lat_b - lat_a)
-    delta_lambda = math.radians(lon_b - lon_a)
-    hav = (
-        math.sin(delta_phi / 2) ** 2
-        + math.cos(phi_a) * math.cos(phi_b) * math.sin(delta_lambda / 2) ** 2
-    )
-    return 2 * radius_nm * math.asin(math.sqrt(hav))

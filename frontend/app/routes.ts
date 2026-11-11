@@ -9,6 +9,8 @@ export const routes = route({
   about: '/about',
   /** Same-origin JSON proxy for the search popover. */
   search: get('/api/stations'),
+  /** Same-origin JSON proxy for the stations around a map click. */
+  near: get('/api/stations/near'),
   /** Ask-first: the station a question names, or the ones it might mean. */
   resolve: get('/api/resolve'),
   /** Same-origin JSON proxy for the map island. */
