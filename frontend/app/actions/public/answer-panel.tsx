@@ -463,11 +463,15 @@ const infoStyle = css({
   maxHeight: '360px',
   overflow: 'hidden',
   padding: '14px 20px 20px',
-  transition: 'max-height 220ms ease, padding 220ms ease, opacity 220ms ease',
+  borderBlockEnd: '1px solid var(--line)',
+  transition:
+    'max-height 220ms ease, padding 220ms ease, opacity 220ms ease, ' +
+    'border-bottom-width 220ms ease',
   '&[data-collapsed="true"]': {
     maxHeight: '0px',
     paddingTop: '0px',
     paddingBottom: '0px',
+    borderBottomWidth: '0px',
     opacity: 0,
   },
 })
@@ -537,7 +541,6 @@ const conditionsStyle = css({
   flexDirection: 'column',
   gap: '10px',
   paddingBlockEnd: '16px',
-  borderBlockEnd: '1px solid var(--line)',
 })
 
 const conditionsHeadStyle = css({
