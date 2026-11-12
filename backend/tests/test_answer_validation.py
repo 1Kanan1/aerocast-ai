@@ -9,7 +9,7 @@ from app.llm.contract import (
     ModelAnswer,
     parse_model_answer,
 )
-from app.llm.validate import InvalidAnswerError, validate_answer
+from app.llm.validate import InvalidAnswerError, claim_cap, validate_answer
 
 BUNDLE = {
     "stations": [
@@ -103,6 +103,12 @@ def test_number_from_another_fact_is_rejected():
 def test_answer_without_claims_is_rejected():
     with pytest.raises(InvalidAnswerError, match="claim count"):
         validate_answer(answer("I'm doing well, thanks.", []), BUNDLE)
+
+
+def test_claim_cap_grows_with_the_stations():
+    assert claim_cap({"stations": []}) == 12
+    assert claim_cap({"stations": [{}] * 18}) == 18
+    assert claim_cap({"stations": [{}] * 40}) == 24
 
 
 def test_refusal_gets_fixed_copy_and_drops_model_text():

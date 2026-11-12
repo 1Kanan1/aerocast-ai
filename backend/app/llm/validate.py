@@ -15,8 +15,8 @@ from app.llm.contract import Answer, DraftClaim, ModelAnswer
 from app.llm.guardrails import contains_verdict, fixed_refusal
 
 MAX_SUMMARY = 700
-#: Room for one claim per station in an area answer, within reason. A
-#: station answer needs two or three, so the cap only bites on the area.
+#: The floor for the claim cap; a bundle with more stations than this may
+#: claim once per station.
 MAX_CLAIMS = 12
 MAX_CLAIM_TEXT = 300
 MAX_CAVEATS = 3
@@ -46,7 +46,7 @@ def validate_answer(model: ModelAnswer, bundle: object) -> Answer:
     if contains_verdict(summary):
         raise InvalidAnswerError("verdict language in summary")
 
-    if not 1 <= len(model.claims) <= MAX_CLAIMS:
+    if not 1 <= len(model.claims) <= claim_cap(bundle):
         raise InvalidAnswerError("claim count out of range")
     if len(model.caveats) > MAX_CAVEATS:
         raise InvalidAnswerError("too many caveats")
@@ -87,6 +87,20 @@ def validate_answer(model: ModelAnswer, bundle: object) -> Answer:
         claims.append(DraftClaim(text, tuple(claim.refs)))
 
     return Answer(summary, tuple(claims), tuple(caveats), None)
+
+
+def claim_cap(bundle: object) -> int:
+    """A station answer needs a few claims; an area may need one per station.
+
+    The bundle's station count sets the ceiling, up to a hard stop that keeps
+    the summary readable.
+    """
+    stations = 0
+    if isinstance(bundle, dict):
+        rows = bundle.get("stations")
+        if isinstance(rows, list):
+            stations = len(rows)
+    return max(MAX_CLAIMS, min(24, stations))
 
 
 def _ref_index(bundle: object) -> dict[str, object]:
