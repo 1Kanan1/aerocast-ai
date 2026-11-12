@@ -48,7 +48,7 @@ nice-to-have in section 17, not promised.
 | Frontend runtime | Node 26.13.0 LTS, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running. Pinned in the Docker base image, CI and `.node-version` |
 | Map | MapLibre GL JS v6 | ESM only, WebGL2, no Mapbox account |
 | Basemap | OpenFreeMap `positron`, restyled monochrome | no key, no rate limit, MIT-ish terms, good enough to desaturate |
-| AI | Z.ai GLM-4.7/4.5-Flash, Gemini Flash, local Gemma 4 E2B via oMLX, template floor | free tiers plus an offline rung; one OpenAI-compatible client for all of them |
+| AI | Z.ai GLM-4.7/4.5-Flash, Gemini Flash, template floor | free tiers; one OpenAI-compatible client for all of them |
 | Deploy | Hetzner + Coolify + Caddy, `docker compose` underneath | ~EUR 4/mo, real TLS, git-push deploys |
 
 Remix never touches Postgres. FastAPI owns the database, the parsers, ingestion, and
@@ -666,7 +666,7 @@ into the same provider.
 ### Model pinning
 
 Every provider names an exact model id: `glm-4.7-flash`, `glm-4.5-flash`,
-`gemini-3.8-flash`, `mlx-community/gemma-4-e2b-it-4bit`. No `-latest` aliases anywhere.
+`gemini-3.8-flash`. No `-latest` aliases anywhere.
 
 Gemini is a ladder rather than a single id. `GEMINI_MODELS` lists the models tried in order
 behind one endpoint, because one provider can hold several usable models and the only
@@ -739,54 +739,6 @@ the default ladder is fast first: `gemini-3.5-flash-lite`, `gemini-3.6-flash`, t
 a rejected claim falls through to the next. Putting the quality model first is one env
 change when `make eval` says how much quality it actually buys, at the cost of a slower
 drawer.
-
-### The local rung
-
-One OpenAI-compatible endpoint on the developer's machine, configured by URL and model id
-rather than by vendor. That indirection earned itself: the runtime choice changed twice
-during setup, and none of it should reach application code.
-
-Default is `mlx-community/gemma-4-e2b-it-4bit` served by **oMLX** (omlx.ai) on Apple
-Silicon, at `http://127.0.0.1:8080/v1`. It exists for three reasons: no quota, no network,
-and no weather data leaving the machine.
-
-Why oMLX and not `mlx_lm.server`: the Gemma 4 E2B conversion is a vision build
-(`mlx_vlm`, 5B parameters, 3.55 GB at 4 bit) and `mlx_lm.server` is the text-only
-reference implementation. oMLX loads MLX vision models and exposes
-`/v1/chat/completions`, so the client needs no special handling.
-
-Why port 8080: FastAPI owns 8000, and oMLX's documented default is 8000. One of them has
-to move, and it is not going to be the API.
-
-Swapping runtimes is an env change, not a code change:
-
-```sh
-LOCAL_BASE_URL=http://127.0.0.1:11434/v1   # Ollama instead of oMLX
-LOCAL_MODEL=gemma4:e2b-it-qat              # GGUF QAT, the portable flavor
-```
-
-**Why not the ONNX build.** `onnx-community/gemma-4-E2B-it-qat-mobile-ONNX` ships raw ONNX
-graphs plus a hand-written numpy generation loop, with no `genai_config.json`, and
-onnxruntime-genai does not support Gemma 4's Per-Layer Embeddings yet. No off-the-shelf
-server can host it, so serving it means writing a generator and a shim, for a checkpoint
-whose quantisation is tuned for phones. Not worth it while an MLX or GGUF build is one
-command away. (`huggingworld/...` is also just a duplicate of the `onnx-community` repo
-with seven downloads, so even that choice was the wrong URL.)
-
-Three honest caveats:
-
-1. **It is last in the pool by default.** A 4 bit, 2B effective model follows the citation
-   contract less reliably than GLM or Gemini, so putting it first would make the product
-   look worse for no gain. Adding `local` to the front of `LLM_CHAIN` flips it for an
-   offline demo.
-2. **Expect more rejections, not worse answers.** The validator drops unsupported claims
-   and falls through. That is the design working, and the eval fixture should report pass
-   rates per provider so the difference is measured rather than assumed.
-3. **Long fact bundles are a risk.** If the local model truncates, Phase 5 gives local
-   providers a compressed brief (top N facts, short glossary) rather than the full one.
-
-Every local runtime is laptop-bound in practice, so `LOCAL_BASE_URL` stays empty in
-production and the chain degrades to the two hosted providers without any code change.
 
 ### Eval fixture
 
@@ -1033,9 +985,6 @@ ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
 ZAI_MODELS=glm-4.7-flash,glm-4.5-flash
 GEMINI_API_KEY=
 GEMINI_MODELS=gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.8-flash
-
-LOCAL_BASE_URL=http://127.0.0.1:8080/v1
-LOCAL_MODEL=mlx-community/gemma-4-e2b-it-4bit
 ```
 
 **The web container gets exactly one variable**, set in `compose.yaml` or the shell, not

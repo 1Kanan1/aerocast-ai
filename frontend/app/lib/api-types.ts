@@ -301,9 +301,7 @@ export interface PirepList {
 export interface ProviderStatus {
   name: string
   model: string
-  kind: "remote" | "local"
   configured: boolean
-  reachable: boolean | null
 }
 
 export interface ResolveResponse {

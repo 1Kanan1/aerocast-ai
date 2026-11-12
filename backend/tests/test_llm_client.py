@@ -52,16 +52,14 @@ def test_rungs_follow_the_chain_and_skip_unconfigured_providers():
     chain = rungs(
         settings(
             gemini_api_key=None,
-            local_base_url="http://127.0.0.1:8080/v1",
-            llm_chain="zai,gemini,local",
+            llm_chain="zai,gemini",
             zai_models="glm-a,glm-b",
         )
     )
 
-    assert [rung.name for rung in chain] == ["zai", "zai", "local"]
-    assert [rung.model for rung in chain[:2]] == ["glm-a", "glm-b"]
+    assert [rung.name for rung in chain] == ["zai", "zai"]
+    assert [rung.model for rung in chain] == ["glm-a", "glm-b"]
     assert chain[0].response_format == "json"
-    assert chain[2].response_format == "none"
 
 
 def test_zai_expands_to_its_ladder():
@@ -91,7 +89,6 @@ def test_gemini_expands_to_its_ladder():
 def test_pool_pins_models_and_interleaves_providers():
     chain = rungs(
         settings(
-            local_base_url="",
             gemini_models="gemini-a,gemini-b",
             zai_models="zai-a,zai-b",
             llm_chain="gemini/gemini-b,zai,gemini",

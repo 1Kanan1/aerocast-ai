@@ -78,19 +78,6 @@ def rungs(settings: Settings) -> list[Rung]:
                             reasoning_effort=settings.gemini_reasoning_effort,
                         )
                     )
-            case "local" if settings.local_configured:
-                for model in target.models((settings.local_model,)):
-                    found.append(
-                        Rung(
-                            name="local",
-                            model=model,
-                            base_url=settings.local_base_url or "",
-                            api_key=None,
-                            timeout=settings.llm_timeout_seconds,
-                            response_format="none",
-                        )
-                    )
-
     return found
 
 

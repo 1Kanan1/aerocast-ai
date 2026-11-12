@@ -43,10 +43,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
 
     if not settings.zai_configured and not settings.gemini_configured:
         logger.warning(
-            "no remote model configured; /ask will rely on the local provider"
+            "no model router configured; /ask will fall back to the template"
         )
-    if not settings.local_configured:
-        logger.info("local model disabled (LOCAL_BASE_URL unset)")
 
     async with scheduler.running(get_engine()):
         yield

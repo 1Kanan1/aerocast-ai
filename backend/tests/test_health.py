@@ -21,16 +21,12 @@ def _fake_providers(monkeypatch, database_ok: bool) -> None:
             {
                 "name": "zai",
                 "model": "glm-4.7-flash",
-                "kind": "remote",
                 "configured": True,
-                "reachable": None,
             },
             {
-                "name": "mlx",
-                "model": "mlx-community/gemma-4-e2b-it-4bit",
-                "kind": "local",
-                "configured": True,
-                "reachable": False,
+                "name": "gemini",
+                "model": "gemini-3.5-flash-lite",
+                "configured": False,
             },
         ]
 
@@ -50,9 +46,9 @@ async def test_health_reports_ok_when_database_reachable(monkeypatch) -> None:
     assert "zai" in body["llm"]["chain"]
     assert [provider["name"] for provider in body["llm"]["providers"]] == [
         "zai",
-        "mlx",
+        "gemini",
     ]
-    assert body["llm"]["providers"][1]["reachable"] is False
+    assert body["llm"]["providers"][1]["configured"] is False
 
 
 async def test_health_reports_degraded_when_database_unreachable(

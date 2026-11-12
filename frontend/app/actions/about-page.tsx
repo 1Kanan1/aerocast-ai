@@ -17,10 +17,7 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
     let body = health.data
     let databaseOk = body?.database.ok ?? false
     let providers = body?.llm.providers ?? []
-    let provider = providers.find(
-      (item) =>
-        item.configured && (item.kind === 'remote' || item.reachable === true),
-    )
+    let provider = providers.find((item) => item.configured)
 
     return (
       <Page active="about">

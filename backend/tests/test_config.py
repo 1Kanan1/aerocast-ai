@@ -50,8 +50,7 @@ def test_database_url_rejects_anything_not_postgres(url: str) -> None:
 @pytest.mark.parametrize(
     ("chain", "expected"),
     [
-        ("zai,gemini,mlx", ("zai", "gemini", "local")),
-        (" zai , omlx ", ("zai", "local")),
+        (" zai , gemini ", ("zai", "gemini")),
         (
             "gemini/gemini-3.5-flash-lite,zai/glm-4.5-flash",
             ("gemini/gemini-3.5-flash-lite", "zai/glm-4.5-flash"),
@@ -90,17 +89,6 @@ def test_provider_configuration_reflects_empty_keys() -> None:
     assert configured.gemini_configured is False
 
 
-def test_local_provider_configuration() -> None:
-    assert (
-        make_settings(
-            local_base_url="http://127.0.0.1:8080/v1"
-        ).local_configured
-        is True
-    )
-    assert make_settings(local_base_url="").local_configured is False
-    assert make_settings(local_base_url="").local_base_url is None
-
-
 def test_no_provider_uses_a_moving_model_alias() -> None:
     """`-latest` aliases drift without a commit. Pinned ids only."""
     settings = make_settings()
@@ -108,7 +96,6 @@ def test_no_provider_uses_a_moving_model_alias() -> None:
         *settings.zai_model_list,
         *settings.gemini_model_list,
         *(target.model for target in settings.llm_targets if target.model),
-        settings.local_model,
     ):
         assert not model.endswith("-latest"), model
         assert model.count("/") <= 1, model

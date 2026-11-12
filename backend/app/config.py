@@ -12,8 +12,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = REPO_ROOT / ".env"
 
-#: "mlx" and "omlx" are aliases for "local".
-KNOWN_PROVIDERS = frozenset({"zai", "gemini", "local", "mlx", "omlx"})
+#: Every `LLM_CHAIN` entry starts with the API router it calls. A model id may
+#: carry a vendor prefix of its own, so the router always comes first.
+KNOWN_PROVIDERS = frozenset({"zai", "gemini"})
 
 
 class Target(NamedTuple):
@@ -63,17 +64,6 @@ class Settings(BaseSettings):
     )
     gemini_reasoning_effort: str = "low"
 
-    #: Set to any OpenAI-compatible server to enable the local rung.
-    local_base_url: str | None = None
-    local_model: str = "mlx-community/gemma-4-e2b-it-4bit"
-
-    @field_validator("local_base_url", mode="before")
-    @classmethod
-    def empty_base_url_is_none(cls, value: object) -> object:
-        if isinstance(value, str) and not value.strip():
-            return None
-        return value
-
     @field_validator("database_url")
     @classmethod
     def name_the_async_driver(cls, value: str) -> str:
@@ -97,8 +87,6 @@ class Settings(BaseSettings):
             provider = provider.strip().lower()
             if provider not in KNOWN_PROVIDERS:
                 continue
-            if provider in {"mlx", "omlx"}:
-                provider = "local"
             targets.append(Target(provider, model.strip() or None))
         return tuple(targets)
 
@@ -127,10 +115,6 @@ class Settings(BaseSettings):
         return bool(
             self.gemini_api_key and self.gemini_api_key.get_secret_value()
         )
-
-    @property
-    def local_configured(self) -> bool:
-        return bool(self.local_base_url)
 
 
 @lru_cache

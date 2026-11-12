@@ -142,9 +142,7 @@ class DatabaseStatus(BaseModel):
 class ProviderStatus(BaseModel):
     name: str
     model: str
-    kind: Literal["remote", "local"]
     configured: bool
-    reachable: bool | None
 
 
 class LlmStatus(BaseModel):
