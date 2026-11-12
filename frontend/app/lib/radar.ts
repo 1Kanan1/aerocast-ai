@@ -117,6 +117,28 @@ export function radarCoverage(
 }
 
 /**
+ * The tiles are shared: neighbouring stations ask for the same ones, and each
+ * window is a square of tiles, so the overlap is large. One request per tile.
+ */
+const tileCache = new Map<string, Promise<Blob | null>>()
+const MAX_TILES = 240
+
+function fetchTile(url: string): Promise<Blob | null> {
+  let cached = tileCache.get(url)
+  if (cached !== undefined) return cached
+
+  let promise = fetch(url)
+    .then((response) => (response.ok ? response.blob() : null))
+    .catch(() => null)
+  tileCache.set(url, promise)
+  if (tileCache.size > MAX_TILES) {
+    let oldest = tileCache.keys().next()
+    if (!oldest.done) tileCache.delete(oldest.value)
+  }
+  return promise
+}
+
+/**
  * Fetch only the tiles that cover the disc around the station, composite them,
  * soften the pixel edges, recolor and measure. One request set per station,
  * and nothing outside the radius is read.
@@ -157,8 +179,7 @@ export async function fetchRadarWindow(
     for (let tileX = firstTileX; tileX <= lastTileX; tileX++) {
       let url = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/${TILE_ZOOM}/${tileX}/${tileY}.png`
       tiles.push(
-        fetch(url, { signal })
-          .then((response) => (response.ok ? response.blob() : null))
+        fetchTile(url)
           .then(async (blob) => {
             if (blob === null) return
             let bitmap = await createImageBitmap(blob)
@@ -167,6 +188,7 @@ export async function fetchRadarWindow(
               tileX * TILE_SIZE - originX,
               tileY * TILE_SIZE - originY,
             )
+            bitmap.close()
           })
           .catch(() => {}),
       )
