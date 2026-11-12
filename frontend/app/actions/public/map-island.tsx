@@ -128,6 +128,7 @@ export const MapIsland = clientEntry(
 
       let moveTimer: ReturnType<typeof setTimeout> | undefined
       let selectedPoint: [number, number] | null = null
+      let areaPoint: [number, number] | null = null
 
       // The server text is for a browser without JavaScript; from here it is
       // only a loading note until the first style is ready.
@@ -153,10 +154,17 @@ export const MapIsland = clientEntry(
         if (station === null || station.lat === null || station.lon === null) {
           selectedPoint = null
           showSelection(map, null)
-          session.setAnchor(null)
+          // The area draws its own weather from the click, so the field
+          // needs an anchor there too.
+          areaPoint =
+            session.area === null ? null : [session.area.lon, session.area.lat]
+          session.setAnchor(
+            areaPoint === null ? null : anchorAt(map, areaPoint),
+          )
           return
         }
 
+        areaPoint = null
         let point: [number, number] = [station.lon, station.lat]
         let moved =
           selectedPoint === null ||
@@ -206,10 +214,13 @@ export const MapIsland = clientEntry(
         })
       })
 
-      // Keep the station card and its highlight over the dot as the map moves.
+      // Keep the weather field over its point, and the card over its dot.
       map.on('move', () => {
-        if (selectedPoint === null) return
-        session.setAnchor(anchorAt(map, selectedPoint))
+        if (selectedPoint !== null) {
+          session.setAnchor(anchorAt(map, selectedPoint))
+        } else if (areaPoint !== null) {
+          session.setAnchor(anchorAt(map, areaPoint))
+        }
       })
 
       session.addEventListener('change', applySession, {

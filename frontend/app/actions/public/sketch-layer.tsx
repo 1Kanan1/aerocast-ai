@@ -4,8 +4,8 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
 import type { BundleWind } from '#app/lib/api-types.ts'
+import { blendStations } from '#app/lib/public/blend.ts'
 import { AREA_NM, type RadarWindow, fetchRadarWindow } from '#app/lib/radar.ts'
-import type { SelectedStation } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 import {
@@ -77,47 +77,39 @@ export const SketchLayer = clientEntry(
       })
     }
 
-    function loadRadar(station: SelectedStation): void {
-      if (station.lat === null || station.lon === null) return
-      if (radarFor === station.icao) return
+    function loadRadar(key: string, lat: number, lon: number): void {
+      if (radarFor === key) return
 
-      radarFor = station.icao
+      radarFor = key
       radar = null
       radarAbort?.abort()
       let controller = new AbortController()
       radarAbort = controller
-      void fetchRadarWindow(
-        station.lat,
-        station.lon,
-        AREA_NM,
-        controller.signal,
-      ).then((result) => {
-        if (controller.signal.aborted) return
-        radar = result
-        session.setEchoShare(result === null ? null : result.total)
-        schedule()
-      })
+      void fetchRadarWindow(lat, lon, AREA_NM, controller.signal).then(
+        (result) => {
+          if (controller.signal.aborted) return
+          radar = result
+          session.setEchoShare(result === null ? null : result.total)
+          schedule()
+        },
+      )
     }
 
-    function loadGrid(station: SelectedStation): void {
-      if (station.lat === null || station.lon === null) return
-      if (gridFor === station.icao) return
+    function loadGrid(key: string, lat: number, lon: number): void {
+      if (gridFor === key) return
 
-      gridFor = station.icao
+      gridFor = key
       grid = null
       gridAbort?.abort()
       let controller = new AbortController()
       gridAbort = controller
-      void fetchWeatherGrid(
-        station.lat,
-        station.lon,
-        AREA_NM,
-        controller.signal,
-      ).then((result) => {
-        if (controller.signal.aborted) return
-        grid = result
-        schedule()
-      })
+      void fetchWeatherGrid(lat, lon, AREA_NM, controller.signal).then(
+        (result) => {
+          if (controller.signal.aborted) return
+          grid = result
+          schedule()
+        },
+      )
     }
 
     function stopWind(): void {
@@ -218,12 +210,62 @@ export const SketchLayer = clientEntry(
       if (!still) flowWind()
     }
 
+    /** What the field describes: a chosen station, or the clicked area. */
+    function fieldSource(): {
+      key: string
+      lat: number
+      lon: number
+      temperature: number | null
+      wind: BundleWind | null
+    } | null {
+      let station = session.selected
+      if (
+        station !== null &&
+        station.facts !== null &&
+        station.lat !== null &&
+        station.lon !== null
+      ) {
+        return {
+          key: station.icao,
+          lat: station.lat,
+          lon: station.lon,
+          temperature: station.facts.temperature?.c ?? null,
+          wind: station.facts.wind,
+        }
+      }
+
+      let area = session.area
+      if (area === null) return null
+
+      let payload = session.areaPayload
+      let blend =
+        payload === null
+          ? null
+          : blendStations(
+              payload.stations.map((item) => ({
+                distance_nm: item.distance_nm,
+                metar:
+                  payload.brief?.stations.find(
+                    (entry) => entry.icao === item.icao,
+                  )?.metar ?? null,
+              })),
+            )
+
+      return {
+        key: `area:${area.lat.toFixed(3)},${area.lon.toFixed(3)}`,
+        lat: area.lat,
+        lon: area.lon,
+        temperature: blend?.temperature_c ?? null,
+        wind: null,
+      }
+    }
+
     function draw(): void {
       if (host === undefined || svg === undefined) return
 
-      let station = session.selected
+      let source = fieldSource()
       let anchor = session.anchor
-      if (station === null || station.facts === null || anchor === null) {
+      if (source === null || anchor === null) {
         radarAbort?.abort()
         radarFor = null
         radar = null
@@ -243,6 +285,7 @@ export const SketchLayer = clientEntry(
 
       let rainOn = weatherLayers.rain
       let tempOn = weatherLayers.temp
+      let windOn = weatherLayers.wind
 
       // The field is measured now: radar and model wind say nothing about an
       // hour the timeline is reading, so they step aside for it.
@@ -258,18 +301,18 @@ export const SketchLayer = clientEntry(
         return
       }
 
-      if (rainOn) loadRadar(station)
-      loadGrid(station)
+      if (rainOn) loadRadar(source.key, source.lat, source.lon)
+      loadGrid(source.key, source.lat, source.lon)
 
-      let facts = station.facts
       let { x, y, pxPerNm } = anchor
       let radius = AREA_NM * pxPerNm
-      let ink = temperatureColor(facts.temperature?.c ?? null)
-      let seed = seedOf(station.icao)
+      let ink = temperatureColor(source.temperature)
+      let seed = seedOf(source.key)
       let key = [
-        station.icao,
+        source.key,
         rainOn,
         tempOn,
+        windOn,
         grid === null ? 0 : 1,
         radar === null ? 0 : 1,
       ].join('|')
@@ -313,21 +356,27 @@ export const SketchLayer = clientEntry(
         group.append(field)
         svg.replaceChildren(group)
         built = { key, x, y, radius, group }
-        paintWind(
-          x,
-          y,
-          radius,
-          windArrowsFor(
+        if (windOn) {
+          paintWind(
             x,
             y,
             radius,
-            grid,
-            facts.wind,
-            tempOn ? ink : '#cfcfc9',
-            seed,
-            tempOn,
-          ),
-        )
+            windArrowsFor(
+              x,
+              y,
+              radius,
+              grid,
+              source.wind,
+              tempOn ? ink : '#cfcfc9',
+              seed,
+              tempOn,
+            ),
+          )
+        } else {
+          stopWind()
+          windArrows = []
+          if (windCanvas !== undefined) windCanvas.style.display = 'none'
+        }
       }
 
       // Carry the drawing to where the camera now puts the station: the same

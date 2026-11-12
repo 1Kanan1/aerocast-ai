@@ -176,6 +176,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.areaError = null
     this.areaLoading = true
     this.areaThread = []
+    this.viewHour = 0
     this.notify()
 
     let controller = new AbortController()

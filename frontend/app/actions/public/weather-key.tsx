@@ -57,6 +57,21 @@ export const WeatherKey = clientEntry(
           />
           <span mix={hintStyle}>cold → warm</span>
         </label>
+
+        <label mix={rowStyle}>
+          <input
+            aria-label="Wind layer"
+            checked={weatherLayers.wind}
+            mix={[
+              switchStyle,
+              on('change', () => weatherLayers.toggle('wind')),
+            ]}
+            role="switch"
+            type="checkbox"
+          />
+          <span mix={labelStyle}>Wind</span>
+          <span mix={hintStyle}>flow</span>
+        </label>
       </div>
     )
   },

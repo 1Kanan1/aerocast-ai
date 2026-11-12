@@ -1,9 +1,10 @@
 import { TypedEventTarget } from 'remix/component'
 
-/** Which weather layers the reader has switched on. Both start on. */
+/** Which weather layers the reader has switched on. All start on. */
 export interface WeatherLayerState {
   rain: boolean
   temp: boolean
+  wind: boolean
 }
 
 /**
@@ -13,6 +14,7 @@ export interface WeatherLayerState {
 export class WeatherLayers extends TypedEventTarget<{ change: Event }> {
   rain = true
   temp = true
+  wind = true
 
   toggle(name: keyof WeatherLayerState): void {
     this[name] = !this[name]
