@@ -105,6 +105,15 @@ def _first_station(bundle: object) -> dict[str, object] | None:
     stations = bundle.get("stations")
     if not isinstance(stations, list) or not stations:
         return None
+
+    # In an area bundle the nearest station may have no report; the template
+    # is more useful naming the first one that does.
+    for station in stations:
+        if isinstance(station, dict) and isinstance(
+            station.get("metar"), dict
+        ):
+            return station
+
     first = stations[0]
     return first if isinstance(first, dict) else None
 

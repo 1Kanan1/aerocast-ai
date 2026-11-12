@@ -39,6 +39,35 @@ def test_template_says_when_there_is_no_observation():
     assert "no observation" in template_summary(bundle(with_metar=False))
 
 
+def multi_station_bundle() -> dict[str, object]:
+    return build_brief(
+        [
+            BriefStation(
+                icao="KNEAR",
+                name="Nearest Field",
+                lat=37.62,
+                lon=-122.36,
+                observation=None,
+            ),
+            BriefStation(
+                icao="KBFI",
+                name="Boeing Field",
+                lat=47.53,
+                lon=-122.3,
+                observation=parse_metar(METAR, reference=REFERENCE),
+            ),
+        ],
+        REFERENCE,
+    )
+
+
+def test_template_prefers_a_station_that_has_a_report():
+    summary = template_summary(multi_station_bundle())
+
+    assert "KBFI" in summary
+    assert "KNEAR" not in summary
+
+
 def test_fallback_adds_a_neutral_notice():
     answer = fallback_answer(bundle())
 

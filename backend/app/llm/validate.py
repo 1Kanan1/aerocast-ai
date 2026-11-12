@@ -15,7 +15,9 @@ from app.llm.contract import Answer, DraftClaim, ModelAnswer
 from app.llm.guardrails import contains_verdict, fixed_refusal
 
 MAX_SUMMARY = 700
-MAX_CLAIMS = 6
+#: Room for one claim per station in an area answer, within reason. A
+#: station answer needs two or three, so the cap only bites on the area.
+MAX_CLAIMS = 12
 MAX_CLAIM_TEXT = 300
 MAX_CAVEATS = 3
 MAX_CAVEAT = 200
