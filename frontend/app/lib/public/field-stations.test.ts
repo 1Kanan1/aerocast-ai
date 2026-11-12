@@ -7,7 +7,11 @@ import type {
   BundleMetar,
   BundleStation,
 } from '#app/lib/api-types.ts'
-import { areaFieldStations, screenOffset } from './field-stations.ts'
+import {
+  areaFieldStations,
+  pixelsPerNm,
+  screenOffset,
+} from './field-stations.ts'
 
 function area(icao: string, lat: number, lon: number): AreaStation {
   return { icao, name: icao, state: null, lat, lon, distance_nm: 1 }
@@ -95,5 +99,16 @@ describe('screenOffset', () => {
     assert.equal(north.x, 0)
     assert.equal(north.y, -150)
     assert.equal(Math.round(east.x), 124)
+  })
+})
+
+describe('pixelsPerNm', () => {
+  it('fits the equator into 512 px at zoom 0', () => {
+    let equatorNm = 40075.016686 / 1.852
+    assert.ok(Math.abs(pixelsPerNm(0, 0) * equatorNm - 512) < 0.5)
+  })
+
+  it('doubles at 60 degrees, where a degree of longitude is half as long', () => {
+    assert.ok(Math.abs(pixelsPerNm(60, 0) / pixelsPerNm(0, 0) - 2) < 1e-9)
   })
 })

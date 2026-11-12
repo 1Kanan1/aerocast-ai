@@ -14,6 +14,7 @@ import type {
 } from '#app/lib/api-types.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
+import { pixelsPerNm } from '#app/lib/public/field-stations.ts'
 import { RADAR_ATTRIBUTION } from '#app/lib/radar.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
@@ -462,14 +463,10 @@ async function refreshAdvisories(map: MapLibreMap): Promise<void> {
 
 function anchorAt(map: MapLibreMap, point: [number, number]): Anchor {
   let projected = map.project(point)
-  // Metres per pixel at this latitude, so the weather area is a real distance
-  // on the map rather than a fixed size on the screen.
-  let metersPerPixel =
-    (156543.03392 * Math.cos((point[1] * Math.PI) / 180)) / 2 ** map.getZoom()
   return {
     x: projected.x,
     y: projected.y,
-    pxPerNm: 1852 / metersPerPixel,
+    pxPerNm: pixelsPerNm(point[1], map.getZoom()),
     bearing: map.getBearing(),
   }
 }

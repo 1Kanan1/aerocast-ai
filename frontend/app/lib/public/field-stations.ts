@@ -28,6 +28,19 @@ export function areaFieldStations(payload: AreaPayload): FieldStation[] {
   })
 }
 
+/** Earth's equatorial circumference, in metres. */
+const EARTH_CIRCUMFERENCE_M = 40075016.686
+/** MapLibre draws 512 px tiles, so the world is 512 px wide at zoom 0. */
+const TILE_PX = 512
+
+/** Screen pixels per nautical mile at a latitude and zoom. */
+export function pixelsPerNm(lat: number, zoom: number): number {
+  let metresPerPixel =
+    (EARTH_CIRCUMFERENCE_M * Math.cos((lat * Math.PI) / 180)) /
+    (TILE_PX * 2 ** zoom)
+  return 1852 / metresPerPixel
+}
+
 /**
  * Where a point sits from a centre, in screen pixels on a north-up map: east
  * is +x and south is +y. Good to a few tens of nautical miles, which is the
