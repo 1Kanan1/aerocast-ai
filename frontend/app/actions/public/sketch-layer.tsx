@@ -4,8 +4,12 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
 import type { BundleWind } from '#app/lib/api-types.ts'
-import { blendStations } from '#app/lib/public/blend.ts'
 import { AREA_NM, type RadarWindow, fetchRadarWindow } from '#app/lib/radar.ts'
+import {
+  type FieldStation,
+  areaFieldStations,
+  screenOffset,
+} from '#app/lib/public/field-stations.ts'
 import { session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 import {
@@ -24,6 +28,7 @@ const rough = roughjs as unknown as {
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const FADE_ID = 'area-fade'
+const CLIP_ID = 'area-clip'
 const MASK_ID = 'area-mask'
 const BLOOM_ID = 'area-bloom'
 /**
@@ -35,13 +40,37 @@ const BLOOM_ID = 'area-bloom'
 const WIND_FRAME_MS = 83
 const WIND_MAX_PIXELS = 2048
 const WIND_EDGE = 0.7
+/** The longest an arrow drifts, so the canvas can be sized for it. */
+const WIND_TRAVEL = 90
+/** The furthest the arrows reach past their origin, on top of the drift. */
+const WIND_STROKE = 24
 /** How long the scale must hold still before the field is rebuilt at it. */
 const ZOOM_SETTLE_MS = 250
 
+/** A station's own weather, fetched once and kept while the station is in view. */
+interface StationField {
+  grid: WeatherGrid | null
+  radar: RadarWindow | null
+  gridRequested: boolean
+  radarRequested: boolean
+  abort: AbortController
+}
+
+interface FieldFrame {
+  lat: number
+  lon: number
+  /** The circle every field is cut to. */
+  radiusNm: number
+  /** Only a lone station gets a glow; several stacked glows read as one disc. */
+  glow: boolean
+  stations: FieldStation[]
+}
+
 /**
- * Weather inside a real area around the station: 20 nm at map scale. The
- * boundary is only a sampling limit, so nothing is drawn for it; the fields
- * fade out where the data ends.
+ * Each station in the open area draws its own weather the way the station
+ * view does: a field 30 nm across around the station, with its own wind,
+ * warmth and echo. The area's circle cuts every field at its edge. With a
+ * station selected, the frame is that station's own field.
  */
 export const SketchLayer = clientEntry(
   import.meta.url,
@@ -49,12 +78,7 @@ export const SketchLayer = clientEntry(
     let host: HTMLElement | undefined
     let svg: SVGSVGElement | undefined
     let frame = 0
-    let radar: RadarWindow | null = null
-    let radarFor: string | null = null
-    let radarAbort: AbortController | null = null
-    let grid: WeatherGrid | null = null
-    let gridFor: string | null = null
-    let gridAbort: AbortController | null = null
+    let stationFields = new Map<string, StationField>()
     let built: {
       key: string
       x: number
@@ -66,6 +90,8 @@ export const SketchLayer = clientEntry(
     let windCanvas: HTMLCanvasElement | undefined
     let windContext: CanvasRenderingContext2D | null = null
     let windScale = 1
+    let windCentre = 0
+    let windRadius = 0
     let windArrows: WindArrow[] = []
     let windFrame = 0
 
@@ -77,51 +103,48 @@ export const SketchLayer = clientEntry(
       })
     }
 
-    function loadRadar(
-      key: string,
-      lat: number,
-      lon: number,
-      radiusNm: number,
-    ): void {
-      let cacheKey = `${key}|${radiusNm}`
-      if (radarFor === cacheKey) return
+    /** Start a station's fetches once; they stay cached while it is in view. */
+    function loadField(station: FieldStation, rainOn: boolean): StationField {
+      let field: StationField = stationFields.get(station.icao) ?? {
+        grid: null,
+        radar: null,
+        gridRequested: false,
+        radarRequested: false,
+        abort: new AbortController(),
+      }
+      stationFields.set(station.icao, field)
 
-      radarFor = cacheKey
-      radar = null
-      radarAbort?.abort()
-      let controller = new AbortController()
-      radarAbort = controller
-      void fetchRadarWindow(lat, lon, radiusNm, controller.signal).then(
-        (result) => {
-          if (controller.signal.aborted) return
-          radar = result
-          session.setEchoShare(result === null ? null : result.total)
-          schedule()
-        },
-      )
+      let { signal } = field.abort
+      if (!field.gridRequested) {
+        field.gridRequested = true
+        void fetchWeatherGrid(station.lat, station.lon, AREA_NM, signal).then(
+          (result) => {
+            if (signal.aborted) return
+            field.grid = result
+            schedule()
+          },
+        )
+      }
+      if (rainOn && !field.radarRequested) {
+        field.radarRequested = true
+        void fetchRadarWindow(station.lat, station.lon, AREA_NM, signal).then(
+          (result) => {
+            if (signal.aborted) return
+            field.radar = result
+            schedule()
+          },
+        )
+      }
+      return field
     }
 
-    function loadGrid(
-      key: string,
-      lat: number,
-      lon: number,
-      radiusNm: number,
-    ): void {
-      let cacheKey = `${key}|${radiusNm}`
-      if (gridFor === cacheKey) return
-
-      gridFor = cacheKey
-      grid = null
-      gridAbort?.abort()
-      let controller = new AbortController()
-      gridAbort = controller
-      void fetchWeatherGrid(lat, lon, radiusNm, controller.signal).then(
-        (result) => {
-          if (controller.signal.aborted) return
-          grid = result
-          schedule()
-        },
-      )
+    /** Stop fetching for, and forget, every station not in the keep set. */
+    function keepFields(keep: Set<string>): void {
+      for (let [icao, field] of stationFields) {
+        if (keep.has(icao)) continue
+        field.abort.abort()
+        stationFields.delete(icao)
+      }
     }
 
     function stopWind(): void {
@@ -151,7 +174,8 @@ export const SketchLayer = clientEntry(
     /**
      * One pass over the arrows: each one drifts along its own flow vector,
      * fades in and out at the ends of its loop, and thins towards the edge of
-     * the area where the data stops.
+     * its station's field. The canvas is clipped to the area's circle, so
+     * nothing is painted outside it.
      */
     function renderWind(now: number, at?: number): void {
       let canvas = windCanvas
@@ -161,6 +185,11 @@ export const SketchLayer = clientEntry(
       let scale = windScale
       context.setTransform(1, 0, 0, 1, 0, 0)
       context.clearRect(0, 0, canvas.width, canvas.height)
+      context.save()
+      context.setTransform(scale, 0, 0, scale, 0, 0)
+      context.beginPath()
+      context.arc(windCentre, windCentre, windRadius, 0, Math.PI * 2)
+      context.clip()
       context.lineWidth = 1.8
       context.lineCap = 'round'
 
@@ -183,14 +212,14 @@ export const SketchLayer = clientEntry(
         context.stroke(arrow.path)
       }
 
-      context.setTransform(1, 0, 0, 1, 0, 0)
-      context.globalAlpha = 1
+      context.restore()
     }
 
     function paintWind(
       x: number,
       y: number,
-      radius: number,
+      frameRadius: number,
+      reach: number,
       arrows: WindArrow[],
     ): void {
       windArrows = arrows
@@ -202,19 +231,22 @@ export const SketchLayer = clientEntry(
         return
       }
 
-      let size = radius * 2
+      let half = frameRadius + reach
+      let size = half * 2
       let density = Math.min(window.devicePixelRatio || 1, 2)
       let scale = Math.max(0.75, Math.min(density, WIND_MAX_PIXELS / size))
 
       windCanvas.style.display = 'block'
       windCanvas.style.transform = ''
-      windCanvas.style.left = `${x - radius}px`
-      windCanvas.style.top = `${y - radius}px`
+      windCanvas.style.left = `${x - half}px`
+      windCanvas.style.top = `${y - half}px`
       windCanvas.style.width = `${size}px`
       windCanvas.style.height = `${size}px`
       windCanvas.width = Math.round(size * scale)
       windCanvas.height = Math.round(size * scale)
       windScale = scale
+      windCentre = half
+      windRadius = frameRadius
       windContext = windCanvas.getContext('2d')
 
       renderWind(performance.now(), 0.5)
@@ -222,15 +254,8 @@ export const SketchLayer = clientEntry(
       if (!still) flowWind()
     }
 
-    /** What the field describes: a chosen station, or the clicked area. */
-    function fieldSource(): {
-      key: string
-      lat: number
-      lon: number
-      radiusNm: number
-      temperature: number | null
-      wind: BundleWind | null
-    } | null {
+    /** The stations whose fields are drawn, and the circle they are cut to. */
+    function frameSource(): FieldFrame | null {
       let station = session.selected
       if (
         station !== null &&
@@ -239,54 +264,42 @@ export const SketchLayer = clientEntry(
         station.lon !== null
       ) {
         return {
-          key: station.icao,
           lat: station.lat,
           lon: station.lon,
           radiusNm: AREA_NM,
-          temperature: station.facts.temperature?.c ?? null,
-          wind: station.facts.wind,
+          glow: true,
+          stations: [
+            {
+              icao: station.icao,
+              lat: station.lat,
+              lon: station.lon,
+              temperature: station.facts.temperature?.c ?? null,
+              wind: station.facts.wind,
+            },
+          ],
         }
       }
 
       let area = session.area
-      if (area === null) return null
-
       let payload = session.areaPayload
-      let blend =
-        payload === null
-          ? null
-          : blendStations(
-              payload.stations.map((item) => ({
-                distance_nm: item.distance_nm,
-                metar:
-                  payload.brief?.stations.find(
-                    (entry) => entry.icao === item.icao,
-                  )?.metar ?? null,
-              })),
-            )
+      if (area === null || payload === null) return null
 
       return {
-        key: `area:${area.lat.toFixed(3)},${area.lon.toFixed(3)}`,
         lat: area.lat,
         lon: area.lon,
-        radiusNm: payload?.radius_nm ?? AREA_NM,
-        temperature: blend?.temperature_c ?? null,
-        wind: null,
+        radiusNm: payload.radius_nm,
+        glow: false,
+        stations: areaFieldStations(payload),
       }
     }
 
     function draw(): void {
       if (host === undefined || svg === undefined) return
 
-      let source = fieldSource()
+      let source = frameSource()
       let anchor = session.anchor
       if (source === null || anchor === null) {
-        radarAbort?.abort()
-        radarFor = null
-        radar = null
-        gridAbort?.abort()
-        gridFor = null
-        grid = null
+        keepFields(new Set())
         built = null
         if (settleTimer !== 0) window.clearTimeout(settleTimer)
         settleTimer = 0
@@ -316,23 +329,41 @@ export const SketchLayer = clientEntry(
         return
       }
 
-      if (rainOn) {
-        loadRadar(source.key, source.lat, source.lon, source.radiusNm)
-      }
-      loadGrid(source.key, source.lat, source.lon, source.radiusNm)
+      keepFields(new Set(source.stations.map((station) => station.icao)))
+      let fields = source.stations.map((station) => ({
+        station,
+        field: loadField(station, rainOn),
+      }))
+
+      let picked =
+        session.selected === null
+          ? null
+          : (stationFields.get(session.selected.icao)?.radar ?? null)
+      session.setEchoShare(rainOn && picked !== null ? picked.total : null)
 
       let { x, y, pxPerNm } = anchor
-      let radius = source.radiusNm * pxPerNm
-      let ink = temperatureColor(source.temperature)
-      let seed = seedOf(source.key)
+      let frameRadius = source.radiusNm * pxPerNm
+      let fieldRadius = AREA_NM * pxPerNm
+      let step = windStep(fieldRadius, source.stations.length)
+      let reach = step + WIND_STROKE
       let key = [
-        source.key,
+        source.lat.toFixed(4),
+        source.lon.toFixed(4),
         source.radiusNm,
+        source.glow,
         rainOn,
         tempOn,
         windOn,
-        grid === null ? 0 : 1,
-        radar === null ? 0 : 1,
+        fields
+          .map(({ station, field }) =>
+            [
+              station.icao,
+              station.temperature,
+              field.grid === null ? 0 : 1,
+              field.radar === null ? 0 : 1,
+            ].join(':'),
+          )
+          .join(';'),
       ].join('|')
 
       // Moving, turning and zooming only change where, at what angle and how
@@ -344,52 +375,59 @@ export const SketchLayer = clientEntry(
         clearTimeout(settleTimer)
         settleTimer = 0
         let group = document.createElementNS(SVG_NS, 'g')
-        group.append(tempDefs(x, y, radius, ink))
-        let field = document.createElementNS(SVG_NS, 'g')
-        field.setAttribute('mask', `url(#${MASK_ID})`)
+        let defs = document.createElementNS(SVG_NS, 'defs')
+        let clip = document.createElementNS(SVG_NS, 'clipPath')
+        clip.setAttribute('id', CLIP_ID)
+        clip.append(circle(x, y, frameRadius))
+        defs.append(fadeGradient(), clip)
 
-        // A soft warmth bloom, so the area carries the temperature even where
-        // there is no echo.
-        if (tempOn) {
-          let bloom = document.createElementNS(SVG_NS, 'circle')
-          bloom.setAttribute('cx', String(x))
-          bloom.setAttribute('cy', String(y))
-          bloom.setAttribute('r', String(radius))
-          bloom.setAttribute('fill', `url(#${BLOOM_ID})`)
-          field.append(bloom)
-        }
+        let layer = document.createElementNS(SVG_NS, 'g')
+        layer.setAttribute('clip-path', `url(#${CLIP_ID})`)
+        let winds: WindArrow[] = []
 
-        if (rainOn && radar !== null) {
-          let image = document.createElementNS(SVG_NS, 'image')
-          image.setAttribute('href', radar.image)
-          image.setAttribute('x', String(x - radius))
-          image.setAttribute('y', String(y - radius))
-          image.setAttribute('width', String(radius * 2))
-          image.setAttribute('height', String(radius * 2))
-          image.setAttribute('preserveAspectRatio', 'none')
-          image.setAttribute('opacity', '0.7')
-          field.append(image)
-        }
-
-        group.append(field)
-        svg.replaceChildren(group)
-        built = { key, x, y, radius, group }
-        if (windOn) {
-          paintWind(
-            x,
-            y,
-            radius,
-            windArrowsFor(
-              x,
-              y,
-              radius,
-              grid,
-              source.wind,
-              tempOn ? ink : '#cfcfc9',
-              seed,
-              tempOn,
-            ),
+        for (let [index, { station, field }] of fields.entries()) {
+          let offset = screenOffset(
+            source.lat,
+            source.lon,
+            station.lat,
+            station.lon,
+            pxPerNm,
           )
+          let ink = temperatureColor(station.temperature)
+          let node = stationNode(
+            index,
+            x + offset.x,
+            y + offset.y,
+            fieldRadius,
+            ink,
+            tempOn && source.glow,
+            rainOn ? field.radar : null,
+          )
+          defs.append(node.defs)
+          layer.append(node.group)
+          if (windOn) {
+            winds.push(
+              ...windArrowsFor(
+                offset,
+                fieldRadius,
+                frameRadius,
+                step,
+                reach,
+                field.grid,
+                station.wind,
+                tempOn ? ink : '#cfcfc9',
+                seedOf(station.icao),
+                tempOn,
+              ),
+            )
+          }
+        }
+
+        group.append(defs, layer)
+        svg.replaceChildren(group)
+        built = { key, x, y, radius: frameRadius, group }
+        if (windOn) {
+          paintWind(x, y, frameRadius, reach, winds)
         } else {
           stopWind()
           windArrows = []
@@ -399,7 +437,7 @@ export const SketchLayer = clientEntry(
 
       // Carry the drawing to where the camera now puts the station: the same
       // transform whether it was just built or is being carried across a move.
-      let scale = radius / built.radius
+      let scale = frameRadius / built.radius
       let dx = x - built.x
       let dy = y - built.y
       let turn = anchor.bearing
@@ -411,7 +449,7 @@ export const SketchLayer = clientEntry(
         windCanvas.style.transformOrigin = '50% 50%'
         windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${scale.toFixed(4)}) rotate(${turn.toFixed(2)}deg)`
       }
-      if (Math.abs(radius - built.radius) >= 0.5) settle()
+      if (Math.abs(frameRadius - built.radius) >= 0.5) settle()
     }
 
     handle.queueTask(() => {
@@ -427,8 +465,7 @@ export const SketchLayer = clientEntry(
           cancelAnimationFrame(frame)
           stopWind()
           if (settleTimer !== 0) window.clearTimeout(settleTimer)
-          radarAbort?.abort()
-          gridAbort?.abort()
+          keepFields(new Set())
           unsubscribe()
         },
         { once: true },
@@ -448,34 +485,73 @@ export const SketchLayer = clientEntry(
   },
 )
 
-/** The fade, the mask and the bloom are rebuilt each draw, at the same ids. */
-function tempDefs(
+/** The fade every field's mask uses: solid inside 70% of its radius, clear at the edge. */
+function fadeGradient(): SVGElement {
+  let fade = document.createElementNS(SVG_NS, 'radialGradient')
+  fade.setAttribute('id', FADE_ID)
+  fade.append(stop('70%', '#ffffff', '1'), stop('100%', '#ffffff', '0'))
+  return fade
+}
+
+/**
+ * One station's field, north-up at its own position: a warmth bloom under the
+ * echo image, both faded before the field's edge. Masks and blooms take the
+ * station's index in their ids, so each one is its own.
+ */
+function stationNode(
+  index: number,
   x: number,
   y: number,
   radius: number,
   ink: string,
-): SVGElement {
+  bloomOn: boolean,
+  radar: RadarWindow | null,
+): { defs: SVGElement; group: SVGGElement } {
   let defs = document.createElementNS(SVG_NS, 'defs')
 
-  let fade = document.createElementNS(SVG_NS, 'radialGradient')
-  fade.setAttribute('id', FADE_ID)
-  fade.append(stop('70%', '#ffffff', '1'), stop('100%', '#ffffff', '0'))
-
   let mask = document.createElementNS(SVG_NS, 'mask')
-  mask.setAttribute('id', MASK_ID)
-  let disc = document.createElementNS(SVG_NS, 'circle')
-  disc.setAttribute('cx', String(x))
-  disc.setAttribute('cy', String(y))
-  disc.setAttribute('r', String(radius))
-  disc.setAttribute('fill', `url(#${FADE_ID})`)
-  mask.append(disc)
+  mask.setAttribute('id', `${MASK_ID}-${index}`)
+  mask.append(circle(x, y, radius, `url(#${FADE_ID})`))
 
   let bloom = document.createElementNS(SVG_NS, 'radialGradient')
-  bloom.setAttribute('id', BLOOM_ID)
+  bloom.setAttribute('id', `${BLOOM_ID}-${index}`)
   bloom.append(stop('0%', ink, '0.24'), stop('100%', ink, '0'))
+  defs.append(mask, bloom)
 
-  defs.append(fade, mask, bloom)
-  return defs
+  let group = document.createElementNS(SVG_NS, 'g')
+  group.setAttribute('mask', `url(#${MASK_ID}-${index})`)
+
+  // A soft warmth bloom, so the field carries the temperature even where
+  // there is no echo.
+  if (bloomOn) group.append(circle(x, y, radius, `url(#${BLOOM_ID}-${index})`))
+
+  if (radar !== null) {
+    let image = document.createElementNS(SVG_NS, 'image')
+    image.setAttribute('href', radar.image)
+    image.setAttribute('x', String(x - radius))
+    image.setAttribute('y', String(y - radius))
+    image.setAttribute('width', String(radius * 2))
+    image.setAttribute('height', String(radius * 2))
+    image.setAttribute('preserveAspectRatio', 'none')
+    image.setAttribute('opacity', '0.7')
+    group.append(image)
+  }
+
+  return { defs, group }
+}
+
+function circle(
+  x: number,
+  y: number,
+  radius: number,
+  fill?: string,
+): SVGElement {
+  let node = document.createElementNS(SVG_NS, 'circle')
+  node.setAttribute('cx', String(x))
+  node.setAttribute('cy', String(y))
+  node.setAttribute('r', String(radius))
+  if (fill !== undefined) node.setAttribute('fill', fill)
+  return node
 }
 
 function stop(offset: string, color: string, opacity: string): SVGElement {
@@ -487,17 +563,33 @@ function stop(offset: string, color: string, opacity: string): SVGElement {
 }
 
 /**
- * A field of strokes across the area. Direction, speed and color come from
- * the RRFS grid, so the wind bends across the area instead of pointing one
+ * The spacing between the arrows of one station's field. One station keeps the
+ * density it always had; each extra station in the same circle widens the
+ * spacing, so the arrows on screen grow with the fourth root of the station
+ * count instead of with the count itself.
+ */
+function windStep(fieldRadius: number, stations: number): number {
+  let base = Math.min(64, Math.max(26, fieldRadius / 7))
+  return Math.min(120, base * Math.max(1, stations) ** 0.25)
+}
+
+/**
+ * A field of strokes across one station's area. Direction, speed and color come from
+ * the station's RRFS grid, so the wind bends across the area instead of pointing one
  * way; without the grid it falls back to the station's own reading.
+ *
+ * `offset` places the station from the area's centre in pixels. Strokes that
+ * cannot reach the area's circle are skipped before their shapes are built.
  *
  * The strokes are drawn to a canvas, so each one keeps its shape as a path
  * that is stroked again every frame instead of being rebuilt.
  */
 function windArrowsFor(
-  x: number,
-  y: number,
+  offset: { x: number; y: number },
   radius: number,
+  frameRadius: number,
+  step: number,
+  reach: number,
   grid: WeatherGrid | null,
   stationWind: BundleWind | null,
   ink: string,
@@ -523,8 +615,9 @@ function windArrowsFor(
 
   let scratch = document.createElementNS(SVG_NS, 'svg')
   let pen = rough.svg(scratch)
-  let step = Math.min(64, Math.max(26, radius / 7))
   let inner = radius * 0.94
+  let travel = Math.max(34, Math.min(step, WIND_TRAVEL))
+  let centre = frameRadius + reach
   let arrows: WindArrow[] = []
 
   for (let gy = -inner; gy <= inner; gy += step) {
@@ -535,6 +628,8 @@ function windArrowsFor(
       let py = gy + wobbleY
       let distance = Math.hypot(px, py)
       if (distance > inner) continue
+      if (Math.hypot(offset.x + px, offset.y + py) > frameRadius + reach)
+        continue
 
       let ux = 0
       let uy = 0
@@ -580,7 +675,6 @@ function windArrowsFor(
         if (d !== null && d !== undefined) path.addPath(new Path2D(d))
       }
 
-      let travel = Math.max(step, 34)
       let duration = Math.max(1.2, travel / (12 + speed * 1.6))
       let fade =
         distance / radius <= WIND_EDGE
@@ -589,8 +683,8 @@ function windArrowsFor(
 
       arrows.push({
         path,
-        x: px + radius,
-        y: py + radius,
+        x: centre + offset.x + px,
+        y: centre + offset.y + py,
         ux,
         uy,
         travel,
