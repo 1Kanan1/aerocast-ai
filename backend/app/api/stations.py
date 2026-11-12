@@ -47,9 +47,13 @@ async def nearby_stations(
     lat: float,
     lon: float,
     radius_nm: float,
-    limit: int,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Stations inside a radius, nearest first, with their distance."""
+    """Stations inside a radius, nearest first, with their distance.
+
+    Without a limit the radius alone decides, which is what a click wants:
+    every station in the circle contributes, however many there are.
+    """
     # A square in degrees is only a starting point: the list is chosen by the
     # real distance below. A degree of longitude is shorter away from the
     # equator, so the box has to widen with latitude or close stations east
@@ -78,7 +82,7 @@ async def nearby_stations(
         for distance, row in found
         if distance <= radius_nm
     ]
-    return inside[:limit]
+    return inside if limit is None else inside[:limit]
 
 
 @router.get("/stations", response_model=models.StationList)

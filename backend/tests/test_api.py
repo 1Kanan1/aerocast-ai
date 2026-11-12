@@ -547,6 +547,25 @@ async def test_area_keeps_every_station_inside_the_radius(
     assert len(body["stations"]) == 5
 
 
+async def test_area_has_no_shortlist_of_its_own(monkeypatch) -> None:
+    crowd = [
+        {
+            **KSFO,
+            "icao": f"KT{index:02d}",
+            "name": f"Field {index}",
+            "lat": 37.615 + index * 0.004,
+            "lon": -122.4,
+        }
+        for index in range(25)
+    ]
+    install(monkeypatch, stations=crowd)
+
+    response = await get("/api/area?lat=37.62&lon=-122.4")
+
+    body = response.json()["data"]
+    assert len(body["stations"]) == 25
+
+
 async def test_area_ask_uses_every_station_in_the_prompt(monkeypatch) -> None:
     install(monkeypatch, stations=[KSFO, KOAK])
     seen: dict[str, object] = {}

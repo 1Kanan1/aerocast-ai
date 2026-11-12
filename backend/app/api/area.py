@@ -27,11 +27,6 @@ router = APIRouter(prefix="/api", tags=["area"])
 #: A click describes the stations within this radius.
 AREA_NM = 15.0
 
-#: A guard rail for the payload and the prompt, not a shortlist: every
-#: station inside the radius is shown unless a dense metro holds more than
-#: this, in which case the nearest ones win.
-AREA_STATIONS = 20
-
 
 @router.get("/area", response_model=models.AreaResponse)
 async def area(
@@ -39,7 +34,7 @@ async def area(
     lon: float = Query(ge=-180, le=180),
 ) -> dict[str, Any]:
     """The stations around a point, with the bundle they describe."""
-    rows = await nearby_stations(lat, lon, AREA_NM, AREA_STATIONS)
+    rows = await nearby_stations(lat, lon, AREA_NM)
 
     return wrap(
         {
@@ -60,9 +55,7 @@ async def area_ask(request: models.AreaAskRequest) -> dict[str, object]:
     if not question:
         raise HTTPException(status_code=422, detail="question is empty")
 
-    rows = await nearby_stations(
-        request.lat, request.lon, AREA_NM, AREA_STATIONS
-    )
+    rows = await nearby_stations(request.lat, request.lon, AREA_NM)
     if not rows:
         raise HTTPException(
             status_code=404, detail="no station within range of that point"
