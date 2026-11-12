@@ -25,7 +25,7 @@ from app.llm.scope import classify_scope
 router = APIRouter(prefix="/api", tags=["area"])
 
 #: A click describes the stations within this radius.
-AREA_NM = 30.0
+AREA_NM = 15.0
 
 #: Enough stations to show a spread, few enough to keep the prompt small.
 AREA_STATIONS = 4

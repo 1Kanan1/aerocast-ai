@@ -509,7 +509,7 @@ async def test_area_gathers_the_stations_around_a_point(monkeypatch) -> None:
         "KSFO",
         "KOAK",
     ]
-    assert body["radius_nm"] == 30
+    assert body["radius_nm"] == 15
     assert body["brief"]["stations"][1]["metar"]["ref"] == "metar.KOAK"
 
 

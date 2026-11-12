@@ -123,7 +123,7 @@ export const AreaPanel = clientEntry(
               <span mix={countStyle}>
                 {loading
                   ? 'reading the nearest stations…'
-                  : `${stations.length} station${stations.length === 1 ? '' : 's'} within ${payload?.radius_nm ?? 30} nm`}
+                  : `${stations.length} station${stations.length === 1 ? '' : 's'} within ${payload?.radius_nm ?? 15} nm`}
               </span>
             </div>
             <button
@@ -154,8 +154,8 @@ export const AreaPanel = clientEntry(
 
             {loading || error !== null ? null : stations.length === 0 ? (
               <p mix={mutedStyle}>
-                No station within 30 nm of that point. Pick a spot closer to
-                one, or search by code.
+                No station within {payload?.radius_nm ?? 15} nm of that point.
+                Pick a spot closer to one, or search by code.
               </p>
             ) : (
               <ul mix={listStyle}>

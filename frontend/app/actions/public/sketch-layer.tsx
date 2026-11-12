@@ -77,15 +77,21 @@ export const SketchLayer = clientEntry(
       })
     }
 
-    function loadRadar(key: string, lat: number, lon: number): void {
-      if (radarFor === key) return
+    function loadRadar(
+      key: string,
+      lat: number,
+      lon: number,
+      radiusNm: number,
+    ): void {
+      let cacheKey = `${key}|${radiusNm}`
+      if (radarFor === cacheKey) return
 
-      radarFor = key
+      radarFor = cacheKey
       radar = null
       radarAbort?.abort()
       let controller = new AbortController()
       radarAbort = controller
-      void fetchRadarWindow(lat, lon, AREA_NM, controller.signal).then(
+      void fetchRadarWindow(lat, lon, radiusNm, controller.signal).then(
         (result) => {
           if (controller.signal.aborted) return
           radar = result
@@ -95,15 +101,21 @@ export const SketchLayer = clientEntry(
       )
     }
 
-    function loadGrid(key: string, lat: number, lon: number): void {
-      if (gridFor === key) return
+    function loadGrid(
+      key: string,
+      lat: number,
+      lon: number,
+      radiusNm: number,
+    ): void {
+      let cacheKey = `${key}|${radiusNm}`
+      if (gridFor === cacheKey) return
 
-      gridFor = key
+      gridFor = cacheKey
       grid = null
       gridAbort?.abort()
       let controller = new AbortController()
       gridAbort = controller
-      void fetchWeatherGrid(lat, lon, AREA_NM, controller.signal).then(
+      void fetchWeatherGrid(lat, lon, radiusNm, controller.signal).then(
         (result) => {
           if (controller.signal.aborted) return
           grid = result
@@ -215,6 +227,7 @@ export const SketchLayer = clientEntry(
       key: string
       lat: number
       lon: number
+      radiusNm: number
       temperature: number | null
       wind: BundleWind | null
     } | null {
@@ -229,6 +242,7 @@ export const SketchLayer = clientEntry(
           key: station.icao,
           lat: station.lat,
           lon: station.lon,
+          radiusNm: AREA_NM,
           temperature: station.facts.temperature?.c ?? null,
           wind: station.facts.wind,
         }
@@ -255,6 +269,7 @@ export const SketchLayer = clientEntry(
         key: `area:${area.lat.toFixed(3)},${area.lon.toFixed(3)}`,
         lat: area.lat,
         lon: area.lon,
+        radiusNm: payload?.radius_nm ?? AREA_NM,
         temperature: blend?.temperature_c ?? null,
         wind: null,
       }
@@ -301,15 +316,18 @@ export const SketchLayer = clientEntry(
         return
       }
 
-      if (rainOn) loadRadar(source.key, source.lat, source.lon)
-      loadGrid(source.key, source.lat, source.lon)
+      if (rainOn) {
+        loadRadar(source.key, source.lat, source.lon, source.radiusNm)
+      }
+      loadGrid(source.key, source.lat, source.lon, source.radiusNm)
 
       let { x, y, pxPerNm } = anchor
-      let radius = AREA_NM * pxPerNm
+      let radius = source.radiusNm * pxPerNm
       let ink = temperatureColor(source.temperature)
       let seed = seedOf(source.key)
       let key = [
         source.key,
+        source.radiusNm,
         rainOn,
         tempOn,
         windOn,
