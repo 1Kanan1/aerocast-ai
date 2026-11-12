@@ -57,12 +57,11 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - FastAPI app with `/api/health`, `/api/docs`, `/api/openapi.json`, and a lifespan that
   logs database and provider status at boot.
 - Settings layer reading the repo-root `.env`: `SecretStr` for every credential,
-  `DATABASE_URL` gaining the `asyncpg` driver when the scheme omits it, ordered `LLM_CHAIN`,
-  and aliases so `mlx` and `omlx` both resolve to the local provider.
+  `DATABASE_URL` gaining the `asyncpg` driver when the scheme omits it, and an ordered
+  `LLM_CHAIN`.
 - Lazy async SQLAlchemy engine, session factory, a `ping()` that returns only the exception
   class name, and engine disposal on shutdown.
-- Provider inventory that describes each configured provider in chain order and probes the
-  local endpoint with a 500 ms timeout and a 10 s cache.
+- Provider inventory that describes each configured provider in chain order.
 
 **Domain**
 
@@ -138,11 +137,16 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   grounded answer or the deterministic template with its notice.
 - Provider client: OpenAI-compatible chat completions, pinned model ids, one attempt per
   rung, JSON schema for Gemini and JSON mode elsewhere, and a fenced-response reader.
-- `LLM_CHAIN` is one pool ordered by latency, not a provider list. Each entry is either
-  `provider/model` or a bare provider name that expands to its ladder in place, so the
-  fastest model answers first while ZAI keeps 4.7 ahead of the free 4.5 behind it.
+- `LLM_CHAIN` is one pool ordered by latency, not a provider list. Every entry starts with
+  the API router it calls: `orcarouter`, `zai` or `gemini`. `router/model` pins a model and
+  a bare router name expands to its ladder in place, so the fastest model answers first
+  while ZAI keeps 4.7 ahead of the free 4.5 behind it.
+- OrcaRouter is an OpenAI-compatible gateway at `https://api.orcarouter.ai/v1`. Its model
+  ids keep the upstream vendor prefix, and the three free models are first in the chain
+  (`deepseek/deepseek-v4.1-flash-free`, `z-ai/glm-5.3-flash-free`,
+  `deepseek/deepseek-v4-flash-free`) because they need no paid direct key.
 - Interactive answer budget: 20s for the whole chain, 8s for any rung, and a 60s cooldown
-  after a timeout or 429. The fast Gemini model is first by default, so a thinking model
+  after a timeout or 429. The free Orca model is first by default, so a thinking model
   cannot hold the drawer for a minute.
 - Answer contract: `summary`, claims with refs, caveats and a refusal reason, with a JSON
   schema the provider can enforce.
@@ -206,14 +210,12 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 - **Node is pinned to 26.13.0**, the current LTS, in the Docker base image, CI, the
   `engines` field and `frontend/.node-version`. `node:26-slim` resolves to the same digest
   today and will move; the pinned tag will not.
-- **The local rung is off by default.** `LLM_CHAIN` is `zai,gemini` and `LOCAL_BASE_URL` is
-  empty, so a fresh clone never probes a local server. Set both to re-enable it.
-- **`httpx` is a runtime dependency**, not a dev one. `providers.py` probes with it, so the
-  production image could not import the app without it. Caught by `make up`.
+- **`LLM_CHAIN` names its API router.** An entry is `orcarouter/deepseek/...`,
+  `zai/glm-...` or `gemini/gemini-...`. The router is split off once, so an Orca vendor
+  prefix such as `deepseek/` cannot be mistaken for one. An entry that names no known
+  router is dropped with a warning instead of vanishing silently.
 - **Provider chain** is now an ordered list (`LLM_CHAIN`) instead of two fixed slots, so a
-  third rung and offline ordering are configuration rather than code.
-- **Local provider renamed** from `mlx` to `local`, configured by `LOCAL_BASE_URL` and
-  `LOCAL_MODEL`. Any OpenAI-compatible server fits: oMLX, Ollama, LM Studio, llama.cpp.
+  third rung is configuration rather than code.
 - **Gemini model pinned** to `gemini-3.8-flash` instead of `gemini-flash-latest`, because an
   alias that rolls forward would move eval numbers under a frozen prompt version.
 - **Flight category requires visibility.** With no visibility group only half the definition
@@ -230,6 +232,8 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 ### Removed
 
 - PostGIS as a hard dependency.
+- The local model provider: its `LOCAL_BASE_URL` and `LOCAL_MODEL` settings, the `mlx` and
+  `omlx` aliases, and the `kind` and `reachable` health fields that only described it.
 - `LLM_PRIMARY` and `LLM_FALLBACK` environment variables (superseded by `LLM_CHAIN`).
 - The Remix starter UI: demo cards, Remix wordmark hero, and the `prompt-button.tsx` client
   entry.
@@ -238,11 +242,6 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
 
 ### Rejected after investigation
 
-- **`onnx-community/gemma-4-E2B-it-qat-mobile-ONNX` as the local model.** It ships raw ONNX
-  graphs with no `genai_config.json`, onnxruntime-genai does not support Gemma 4's Per-Layer
-  Embeddings, and no off-the-shelf server can host it. Serving it would mean writing a
-  generation loop and a shim for a checkpoint tuned for phones. The `huggingworld/...` copy
-  is also just a duplicate of the `onnx-community` repo.
 - **Open-Meteo as a weather source.** It has no METAR, TAF, PIREP or advisories, and mixing
   model grids into a screen of verified station observations would be misleading.
 

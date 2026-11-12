@@ -1,6 +1,7 @@
 import httpx
 
 from app.api import health as health_module
+from app.config import Settings
 from app.main import app
 
 
@@ -30,6 +31,11 @@ def _fake_providers(monkeypatch, database_ok: bool) -> None:
             },
         ]
 
+    # The chain comes from settings, so it is pinned here: a developer's
+    # .env must not decide what this test asserts.
+    settings = Settings(_env_file=None, llm_chain="zai/glm-4.7-flash,gemini")
+
+    monkeypatch.setattr(health_module, "get_settings", lambda: settings)
     monkeypatch.setattr(health_module, "ping", fake_ping)
     monkeypatch.setattr(health_module, "provider_statuses", fake_statuses)
 
@@ -43,7 +49,7 @@ async def test_health_reports_ok_when_database_reachable(monkeypatch) -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["database"] == {"ok": True, "error": None}
-    assert "zai" in body["llm"]["chain"]
+    assert body["llm"]["chain"] == ["zai/glm-4.7-flash", "gemini"]
     assert [provider["name"] for provider in body["llm"]["providers"]] == [
         "zai",
         "gemini",

@@ -53,6 +53,18 @@ def rungs(settings: Settings) -> list[Rung]:
 
     for target in settings.llm_targets:
         match target.provider:
+            case "orcarouter" if settings.orca_configured:
+                for model in target.models(settings.orca_model_list):
+                    found.append(
+                        Rung(
+                            name="orcarouter",
+                            model=model,
+                            base_url=settings.orca_base_url,
+                            api_key=_secret(settings.orca_api_key),
+                            timeout=settings.llm_timeout_seconds,
+                            response_format="json",
+                        )
+                    )
             case "zai" if settings.zai_configured:
                 for model in target.models(settings.zai_model_list):
                     found.append(

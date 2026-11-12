@@ -38,6 +38,20 @@ async def test_chain_order_is_preserved() -> None:
     assert described[2]["model"] == "gemini-3.5-flash-lite"
 
 
+async def test_orcarouter_keeps_the_vendor_prefix_in_the_model_id() -> None:
+    settings = make_settings(llm_chain="orcarouter", orca_api_key="secret")
+
+    described = await statuses(settings)
+
+    assert [provider["name"] for provider in described] == [
+        "orcarouter",
+        "orcarouter",
+        "orcarouter",
+    ]
+    assert described[0]["model"] == "deepseek/deepseek-v4.1-flash-free"
+    assert all(provider["configured"] is True for provider in described)
+
+
 async def test_zai_expands_into_its_model_ladder() -> None:
     settings = make_settings(
         llm_chain="zai",

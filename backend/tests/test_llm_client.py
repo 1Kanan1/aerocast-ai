@@ -20,6 +20,7 @@ def settings(**overrides: object) -> Settings:
         database_url="postgresql://user:pass@localhost:5432/aerocast",
         zai_api_key=SecretStr("zai-key"),
         gemini_api_key=SecretStr("gemini-key"),
+        orca_api_key=SecretStr("orca-key"),
         llm_chain="zai,gemini",
     )
     return defaults.model_copy(update=overrides)
@@ -72,6 +73,50 @@ def test_zai_expands_to_its_ladder():
 
     assert [rung.model for rung in chain] == ["zai-a", "zai-b"]
     assert all(rung.name == "zai" for rung in chain)
+
+
+def test_orcarouter_keeps_the_vendor_prefix_in_the_model_id():
+    chain = rungs(
+        settings(
+            llm_chain="orcarouter/deepseek/deepseek-v4.1-flash-free",
+        )
+    )
+
+    assert [(rung.name, rung.model) for rung in chain] == [
+        ("orcarouter", "deepseek/deepseek-v4.1-flash-free"),
+    ]
+    assert chain[0].base_url == "https://api.orcarouter.ai/v1"
+    assert chain[0].response_format == "json"
+
+
+def test_orcarouter_expands_to_its_ladder():
+    chain = rungs(
+        settings(
+            llm_chain="orcarouter",
+            orca_models="deepseek/orca-a,z-ai/orca-b",
+        )
+    )
+
+    assert [rung.model for rung in chain] == [
+        "deepseek/orca-a",
+        "z-ai/orca-b",
+    ]
+    assert all(rung.name == "orcarouter" for rung in chain)
+
+
+def test_the_default_chain_tries_orcarouter_before_the_direct_routers():
+    chain = rungs(
+        Settings(
+            _env_file=None,
+            llm_chain=Settings.model_fields["llm_chain"].default,
+            orca_api_key=SecretStr("orca-key"),
+            zai_api_key=SecretStr("zai-key"),
+            gemini_api_key=SecretStr("gemini-key"),
+        )
+    )
+
+    assert [rung.name for rung in chain[:3]] == ["orcarouter"] * 3
+    assert chain[3].name == "gemini"
 
 
 def test_gemini_expands_to_its_ladder():

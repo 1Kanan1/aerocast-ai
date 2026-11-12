@@ -48,7 +48,7 @@ nice-to-have in section 17, not promised.
 | Frontend runtime | Node 26.13.0 LTS, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running. Pinned in the Docker base image, CI and `.node-version` |
 | Map | MapLibre GL JS v6 | ESM only, WebGL2, no Mapbox account |
 | Basemap | OpenFreeMap `positron`, restyled monochrome | no key, no rate limit, MIT-ish terms, good enough to desaturate |
-| AI | Z.ai GLM-4.7/4.5-Flash, Gemini Flash, template floor | free tiers; one OpenAI-compatible client for all of them |
+| AI | OrcaRouter (DeepSeek V4.1/4-Flash, GLM-5.3-Flash), Z.ai GLM-4.7/4.5-Flash, Gemini Flash, template floor | free tiers; one OpenAI-compatible client for all of them |
 | Deploy | Hetzner + Coolify + Caddy, `docker compose` underneath | ~EUR 4/mo, real TLS, git-push deploys |
 
 Remix never touches Postgres. FastAPI owns the database, the parsers, ingestion, and
@@ -665,8 +665,9 @@ into the same provider.
 
 ### Model pinning
 
-Every provider names an exact model id: `glm-4.7-flash`, `glm-4.5-flash`,
-`gemini-3.8-flash`. No `-latest` aliases anywhere.
+Every provider names an exact model id: `deepseek/deepseek-v4.1-flash-free`,
+`z-ai/glm-5.3-flash-free`, `glm-4.7-flash`, `gemini-3.8-flash`. No `-latest` aliases
+anywhere.
 
 Gemini is a ladder rather than a single id. `GEMINI_MODELS` lists the models tried in order
 behind one endpoint, because one provider can hold several usable models and the only
@@ -685,16 +686,35 @@ visible failure with a published replacement, which is the failure mode you want
 commit that bumps an id should name the replacement and rerun `make eval` so the delta is
 recorded.
 
+### The API router comes first
+
+OrcaRouter is an OpenAI-compatible gateway at `https://api.orcarouter.ai/v1`. Its model
+ids are namespaced by the vendor it forwards to, so `deepseek/deepseek-v4.1-flash-free`
+is one model id, not a router and a model. That is why every `LLM_CHAIN` entry starts
+with the API router the app actually calls:
+
+```dotenv
+LLM_CHAIN=orcarouter/deepseek/deepseek-v4.1-flash-free,orcarouter/z-ai/glm-5.3-flash-free,orcarouter/deepseek/deepseek-v4-flash-free,gemini/gemini-3.5-flash-lite
+```
+
+The first segment is split off once. `orcarouter` is the router; the `deepseek` inside
+the model id is the vendor OrcaRouter calls. A first segment that names no known router
+is dropped with a warning, so a vendor prefix written in its place fails visibly instead
+of disappearing from the chain.
+
+The three free Orca models sit first because they answer without a paid direct key. The
+direct Z.ai and Gemini entries stay behind them as fallbacks.
+
 ### One pool, ordered by latency
 
 Provider-major order was the wrong shape. Measured on the same brief, Gemini 3.5-flash-lite
 answers in ~1.5s and GLM-4.5-flash in ~20s, so a chain that tries ZAI first pays 16s before
 reaching the model that actually answers quickly. `LLM_CHAIN` is therefore a single pool of
-`provider/model` entries in speed order, and a bare provider name expands to its ladder in
+`router/model` entries in speed order, and a bare router name expands to its ladder in
 place:
 
 ```dotenv
-LLM_CHAIN=gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
+LLM_CHAIN=orcarouter/deepseek/deepseek-v4.1-flash-free,orcarouter/z-ai/glm-5.3-flash-free,orcarouter/deepseek/deepseek-v4-flash-free,gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
 ```
 
 The order is hand-tuned from measurement, not learned. A model that is fast today can be
@@ -977,9 +997,12 @@ Two owners, two sets of variables. They never mix.
 AEROCAST_ENV=local
 DATABASE_URL=postgresql+asyncpg://aerocast@localhost:5432/aerocast
 
-LLM_CHAIN=gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
+LLM_CHAIN=orcarouter/deepseek/deepseek-v4.1-flash-free,orcarouter/z-ai/glm-5.3-flash-free,orcarouter/deepseek/deepseek-v4-flash-free,gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
 LLM_TIMEOUT_SECONDS=20
 
+ORCA_API_KEY=
+ORCA_BASE_URL=https://api.orcarouter.ai/v1
+ORCA_MODELS=deepseek/deepseek-v4.1-flash-free,z-ai/glm-5.3-flash-free,deepseek/deepseek-v4-flash-free
 ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
 ZAI_MODELS=glm-4.7-flash,glm-4.5-flash

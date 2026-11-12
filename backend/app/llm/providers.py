@@ -23,6 +23,15 @@ class ProviderStatus:
 def _resolve(settings: Settings, target: Target) -> list[ProviderStatus]:
     """One pool entry can expand to several rungs, e.g. a bare name."""
     match target.provider:
+        case "orcarouter":
+            return [
+                ProviderStatus(
+                    name="orcarouter",
+                    model=model,
+                    configured=settings.orca_configured,
+                )
+                for model in target.models(settings.orca_model_list)
+            ]
         case "zai":
             return [
                 ProviderStatus(

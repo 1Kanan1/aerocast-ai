@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -9,16 +10,18 @@ from typing import NamedTuple
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = REPO_ROOT / ".env"
 
 #: Every `LLM_CHAIN` entry starts with the API router it calls. A model id may
 #: carry a vendor prefix of its own, so the router always comes first.
-KNOWN_PROVIDERS = frozenset({"zai", "gemini"})
+KNOWN_PROVIDERS = frozenset({"zai", "gemini", "orcarouter"})
 
 
 class Target(NamedTuple):
-    """One pool entry. A bare provider expands to its whole ladder in place."""
+    """One pool entry. A bare router expands to its whole ladder in place."""
 
     provider: str
     model: str | None
@@ -39,9 +42,12 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://aerocast:aerocast@localhost:5432/aerocast"
     )
 
-    #: One ordered pool, fastest model first. `provider/model` pins a single
-    #: entry; a bare provider name expands to its ladder in place.
+    #: One ordered pool, fastest model first. `router/model` pins a single
+    #: entry; a bare router name expands to its ladder in place.
     llm_chain: str = (
+        "orcarouter/deepseek/deepseek-v4.1-flash-free,"
+        "orcarouter/z-ai/glm-5.3-flash-free,"
+        "orcarouter/deepseek/deepseek-v4-flash-free,"
         "gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,"
         "zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash"
     )
@@ -63,6 +69,16 @@ class Settings(BaseSettings):
         "gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.8-flash"
     )
     gemini_reasoning_effort: str = "low"
+
+    orca_api_key: SecretStr | None = None
+    orca_base_url: str = "https://api.orcarouter.ai/v1"
+    #: OrcaRouter's ladder, used when the pool names `orcarouter` without a
+    #: model. Ids keep the upstream vendor's prefix.
+    orca_models: str = (
+        "deepseek/deepseek-v4.1-flash-free,"
+        "z-ai/glm-5.3-flash-free,"
+        "deepseek/deepseek-v4-flash-free"
+    )
 
     @field_validator("database_url")
     @classmethod
@@ -86,6 +102,10 @@ class Settings(BaseSettings):
             provider, _, model = part.strip().partition("/")
             provider = provider.strip().lower()
             if provider not in KNOWN_PROVIDERS:
+                logger.warning(
+                    "LLM_CHAIN entry %r names no known router; dropping it",
+                    part.strip(),
+                )
                 continue
             targets.append(Target(provider, model.strip() or None))
         return tuple(targets)
@@ -107,6 +127,14 @@ class Settings(BaseSettings):
         )
 
     @property
+    def orca_model_list(self) -> tuple[str, ...]:
+        return tuple(
+            model.strip()
+            for model in self.orca_models.split(",")
+            if model.strip()
+        )
+
+    @property
     def zai_configured(self) -> bool:
         return bool(self.zai_api_key and self.zai_api_key.get_secret_value())
 
@@ -115,6 +143,10 @@ class Settings(BaseSettings):
         return bool(
             self.gemini_api_key and self.gemini_api_key.get_secret_value()
         )
+
+    @property
+    def orca_configured(self) -> bool:
+        return bool(self.orca_api_key and self.orca_api_key.get_secret_value())
 
 
 @lru_cache
