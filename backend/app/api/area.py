@@ -27,8 +27,10 @@ router = APIRouter(prefix="/api", tags=["area"])
 #: A click describes the stations within this radius.
 AREA_NM = 15.0
 
-#: Enough stations to show a spread, few enough to keep the prompt small.
-AREA_STATIONS = 4
+#: A guard rail for the payload and the prompt, not a shortlist: every
+#: station inside the radius is shown unless a dense metro holds more than
+#: this, in which case the nearest ones win.
+AREA_STATIONS = 20
 
 
 @router.get("/area", response_model=models.AreaResponse)

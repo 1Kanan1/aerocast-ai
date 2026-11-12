@@ -513,6 +513,40 @@ async def test_area_gathers_the_stations_around_a_point(monkeypatch) -> None:
     assert body["brief"]["stations"][1]["metar"]["ref"] == "metar.KOAK"
 
 
+async def test_area_keeps_every_station_inside_the_radius(
+    monkeypatch,
+) -> None:
+    extra = [
+        {
+            **KSFO,
+            "icao": "KA01",
+            "name": "Near One",
+            "lat": 37.63,
+            "lon": -122.4,
+        },
+        {
+            **KSFO,
+            "icao": "KA02",
+            "name": "Near Two",
+            "lat": 37.64,
+            "lon": -122.39,
+        },
+        {
+            **KSFO,
+            "icao": "KA03",
+            "name": "Near Three",
+            "lat": 37.61,
+            "lon": -122.38,
+        },
+    ]
+    install(monkeypatch, stations=[KSFO, KOAK, *extra])
+
+    response = await get("/api/area?lat=37.62&lon=-122.4")
+
+    body = response.json()["data"]
+    assert len(body["stations"]) == 5
+
+
 async def test_area_ask_uses_every_station_in_the_prompt(monkeypatch) -> None:
     install(monkeypatch, stations=[KSFO, KOAK])
     seen: dict[str, object] = {}
