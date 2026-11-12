@@ -1,7 +1,8 @@
 import type { Handle } from 'remix/component'
 import { css, on, ref } from 'remix/component'
 
-import type { ResolveStation } from '#app/lib/api-types.ts'
+import type { ResolveCandidate } from '#app/lib/api-types.ts'
+import { reportLabel } from '#app/lib/public/labels.ts'
 import type { ThreadEntry } from '#app/ui/public/session.ts'
 import {
   CheckIcon,
@@ -69,7 +70,7 @@ export function ClarificationView(
   handle: Handle<{
     message: string | null
     onChoose: (icao: string) => void
-    options: ResolveStation[]
+    options: ResolveCandidate[]
   }>,
 ) {
   return () => (
@@ -89,9 +90,16 @@ export function ClarificationView(
               type="button"
             >
               <span mix={optionCodeStyle}>{option.icao}</span>
-              <span mix={optionNameStyle}>
-                {option.name}
-                {option.state === null ? '' : `, ${option.state}`}
+              <span mix={optionTextStyle}>
+                <span mix={optionNameStyle}>
+                  {option.name}
+                  {option.state === null ? '' : `, ${option.state}`}
+                </span>
+                <span mix={optionFactsStyle}>
+                  {option.metar === null
+                    ? 'no observation on file'
+                    : reportLabel(option.metar)}
+                </span>
               </span>
             </button>
           ))}
@@ -480,9 +488,22 @@ const optionStyle = css({
 
 const optionCodeStyle = css({ fontWeight: 700 })
 
+const optionTextStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  minWidth: 0,
+})
+
 const optionNameStyle = css({
   fontSize: '13px',
   color: 'var(--ink-2)',
+})
+
+const optionFactsStyle = css({
+  fontSize: '11px',
+  lineHeight: 1.45,
+  color: 'var(--ink-3)',
 })
 
 const userRowStyle = css({

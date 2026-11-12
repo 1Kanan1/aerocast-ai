@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 
 from app.api import models
+from app.api.stations import station_metar
 from app.db.session import fetch_all, fetch_one
 from app.domain.geo import distance_nm
 
@@ -235,7 +236,9 @@ async def resolve(
 
         return {
             "station": None,
-            "candidates": [_place(row) for row in rows[:CANDIDATE_LIMIT]],
+            "candidates": [
+                await _candidate(row) for row in rows[:CANDIDATE_LIMIT]
+            ],
             "suggested": [],
             "message": f"\u201c{phrase}\u201d matches several stations.",
         }
@@ -354,6 +357,16 @@ def _place(row: dict[str, Any]) -> dict[str, Any]:
         "lat": row["lat"],
         "lon": row["lon"],
     }
+
+
+async def _candidate(row: dict[str, Any]) -> dict[str, Any]:
+    """A place, plus the report that would tell the two apart."""
+    observation = await fetch_one(
+        "select raw, obs_time from metar_observations "
+        "where station_icao = :icao order by obs_time desc limit 1",
+        {"icao": row["icao"].upper()},
+    )
+    return {**_place(row), "metar": station_metar(row, observation)}
 
 
 async def latest_age(icao: str) -> int | None:

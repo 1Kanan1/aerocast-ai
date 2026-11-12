@@ -9,6 +9,7 @@ from app.api import resolve as resolve_module
 from app.main import app
 
 NOW = datetime.now(UTC)
+METAR = "METAR KSGF 012353Z 29008KT 10SM CLR 18/09 A3001 RMK AO2"
 
 KDEN = {
     "icao": "KDEN",
@@ -67,6 +68,11 @@ class FakeDb:
                 if station["icao"] == params.get("icao"):
                     return station
             return None
+        if "raw, obs_time from metar_observations" in sql:
+            age = self.ages.get(str(params.get("icao")))
+            if age is None:
+                return None
+            return {"raw": METAR, "obs_time": NOW - timedelta(seconds=age)}
         if "obs_time from metar_observations" in sql:
             age = self.ages.get(str(params.get("icao")))
             if age is None:
@@ -150,6 +156,8 @@ async def test_a_city_with_two_airports_asks_which(monkeypatch) -> None:
     body = response.json()
     assert body["station"] is None
     assert {item["icao"] for item in body["candidates"]} == {"KSGF", "KSPI"}
+    assert all(item["metar"] is not None for item in body["candidates"])
+    assert body["candidates"][0]["metar"]["flight_category"]["value"] == "VFR"
     assert body["message"] is not None
 
 

@@ -332,9 +332,18 @@ export interface ProviderStatus {
   configured: boolean
 }
 
+export interface ResolveCandidate {
+  icao: string
+  name: string
+  state: string | null
+  lat: number
+  lon: number
+  metar: BundleMetar | null
+}
+
 export interface ResolveResponse {
   station: ResolveStation | null
-  candidates: ResolveStation[]
+  candidates: ResolveCandidate[]
   suggested: ResolveSuggestion[]
   message: string | null
 }

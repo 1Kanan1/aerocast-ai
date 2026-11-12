@@ -7,14 +7,9 @@ import type {
   Bundle,
   BundleMetar,
 } from '#app/lib/api-types.ts'
-import { ageLabel } from '#app/lib/format.ts'
 import type { Blend } from '#app/lib/public/blend.ts'
 import { blendStations } from '#app/lib/public/blend.ts'
-import {
-  ceilingLabel,
-  visibilityLabel,
-  windLabel,
-} from '#app/lib/public/labels.ts'
+import { reportLabel } from '#app/lib/public/labels.ts'
 import type { AreaPoint, ThreadEntry } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import { AssistantTurn, UserTurn } from '#app/ui/public/thread-parts.tsx'
@@ -217,13 +212,7 @@ function stationFacts(station: AreaStation, brief: Bundle | null): string {
     brief?.stations.find((item) => item.icao === station.icao)?.metar ?? null
   if (metar === null) return 'no observation on file'
 
-  return [
-    metar.flight_category.value ?? 'no category',
-    windLabel(metar),
-    visibilityLabel(metar),
-    ceilingLabel(metar),
-    ageLabel(metar.age_seconds),
-  ].join(' · ')
+  return reportLabel(metar)
 }
 
 function blendLine(blend: Blend): string {

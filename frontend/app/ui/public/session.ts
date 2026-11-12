@@ -9,8 +9,8 @@ import type {
   BundleMetar,
   BundleTaf,
   NearbyStation,
+  ResolveCandidate,
   ResolveResponse,
-  ResolveStation,
   ResolveSuggestion,
   StationDetailResponse,
   StationHistory,
@@ -63,7 +63,7 @@ export interface AreaPoint {
 export interface Clarification {
   question: string
   message: string | null
-  options: ResolveStation[]
+  options: ResolveCandidate[]
 }
 
 export interface HistoryPoint {

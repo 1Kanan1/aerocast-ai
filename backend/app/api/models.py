@@ -340,6 +340,12 @@ class ResolveStation(BaseModel):
     lon: float
 
 
+class ResolveCandidate(ResolveStation):
+    """A station the question might mean, with its newest report."""
+
+    metar: BundleMetar | None
+
+
 class ResolveSuggestion(ResolveStation):
     distance_nm: float
     age_seconds: int
@@ -358,7 +364,7 @@ class ResolveResponse(BaseModel):
     """What a free-text question resolves to, or the stations it might mean."""
 
     station: ResolveStation | None
-    candidates: list[ResolveStation]
+    candidates: list[ResolveCandidate]
     suggested: list[ResolveSuggestion]
     message: str | None
 

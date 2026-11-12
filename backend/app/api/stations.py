@@ -259,6 +259,34 @@ def _observation(row: dict[str, Any] | None) -> Observation | None:
         return None
 
 
+def station_metar(
+    station: dict[str, Any], row: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """One station's newest report in the bundle's own shape.
+
+    Built without a forecast or advisories: a candidate list only needs the
+    observation, and the bundle is the shape the client already formats.
+    """
+    observation = _observation(row)
+    if observation is None:
+        return None
+
+    bundle = build_brief(
+        [
+            BriefStation(
+                icao=station["icao"],
+                name=station["name"],
+                lat=station["lat"],
+                lon=station["lon"],
+                observation=observation,
+            )
+        ],
+        datetime.now(UTC),
+    )
+    metar = bundle["stations"][0]["metar"]
+    return metar if isinstance(metar, dict) else None
+
+
 def _taf(row: dict[str, Any] | None) -> Taf | None:
     if row is None:
         return None

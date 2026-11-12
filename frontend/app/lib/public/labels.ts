@@ -1,6 +1,18 @@
 import type { BundleMetar, BundlePeriod } from '#app/lib/api-types.ts'
+import { ageLabel } from '#app/lib/format.ts'
 
 /** Fact labels shared by the station page and the map popup. */
+
+/** The one line that stands for a report: category, wind, visibility, etc. */
+export function reportLabel(facts: BundleMetar): string {
+  return [
+    facts.flight_category.value ?? 'no category',
+    windLabel(facts),
+    visibilityLabel(facts),
+    ceilingLabel(facts),
+    ageLabel(facts.age_seconds),
+  ].join(' · ')
+}
 
 export function windLabel(facts: BundleMetar): string {
   let wind = facts.wind
