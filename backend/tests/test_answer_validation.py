@@ -215,26 +215,26 @@ def test_a_real_bundle_exposes_its_definitions_as_refs():
             [
                 claim(
                     "MVFR is a ceiling of 1,000 to 3,000 ft.",
-                    "defs.MVFR",
+                    "definitions.MVFR",
                 )
             ],
         ),
         bundle,
     )
 
-    assert result.claims[0].refs == ("defs.MVFR",)
+    assert result.claims[0].refs == ("definitions.MVFR",)
 
 
 def test_a_definition_claim_can_cite_the_definition():
     result = validate_answer(
         answer(
             "VFR still applies.",
-            [claim("VFR means a ceiling above 3,000 ft.", "defs.VFR")],
+            [claim("VFR means a ceiling above 3,000 ft.", "definitions.VFR")],
         ),
         BUNDLE,
     )
 
-    assert result.claims[0].refs == ("defs.VFR",)
+    assert result.claims[0].refs == ("definitions.VFR",)
 
 
 def test_station_identity_can_be_cited():
@@ -265,7 +265,7 @@ def test_an_unknown_definition_ref_is_rejected():
         validate_answer(
             answer(
                 "A term.",
-                [claim("LIFR is the lowest category.", "defs.NOPE")],
+                [claim("LIFR is the lowest category.", "definitions.NOPE")],
             ),
             BUNDLE,
         )

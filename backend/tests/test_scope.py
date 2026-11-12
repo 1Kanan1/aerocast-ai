@@ -38,3 +38,17 @@ async def test_a_malformed_reply_means_no_opinion(monkeypatch) -> None:
     monkeypatch.setattr(scope, "complete", fake)
 
     assert await scope.classify_scope(get_settings(), "is it VFR?") is None
+
+
+async def test_the_classifier_keeps_its_own_prompt(monkeypatch) -> None:
+    seen: dict[str, object] = {}
+
+    async def fake(*args: object, **kwargs: object) -> Completion:
+        seen.update(kwargs)
+        return reply({"in_scope": True})
+
+    monkeypatch.setattr(scope, "complete", fake)
+
+    await scope.classify_scope(get_settings(), "is it VFR?")
+
+    assert seen["hosted_prompt"] is False

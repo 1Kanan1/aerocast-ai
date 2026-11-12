@@ -72,6 +72,7 @@ async def classify_scope(
         ],
         SCOPE_SCHEMA,
         budget_seconds=budget_seconds,
+        hosted_prompt=False,
     )
     if completion is None:
         return None

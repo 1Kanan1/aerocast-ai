@@ -266,3 +266,140 @@ async def test_complete_rejects_unusable_content(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
     assert await complete(settings(), [], {}) is None
+
+
+async def test_orcarouter_binds_the_hosted_prompt_and_drops_the_system_turn(
+    monkeypatch,
+):
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        bodies.append(json)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    messages = [
+        {"role": "system", "content": "our own rules"},
+        {"role": "user", "content": "how is the wind"},
+    ]
+    await complete(
+        settings(llm_chain="orcarouter", orca_prompt="aerocast-answer-in-one"),
+        messages,
+        {},
+    )
+
+    assert bodies[0]["prompt_ref"] == {"name": "aerocast-answer-in-one"}
+    assert bodies[0]["messages"] == [messages[1]]
+
+
+async def test_the_prompt_label_is_sent_when_one_is_configured(monkeypatch):
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        bodies.append(json)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    await complete(
+        settings(
+            llm_chain="orcarouter",
+            orca_prompt="aerocast-answer-in-one",
+            orca_prompt_label="staging",
+        ),
+        [],
+        {},
+    )
+
+    assert bodies[0]["prompt_ref"] == {
+        "name": "aerocast-answer-in-one",
+        "label": "staging",
+    }
+
+
+async def test_an_empty_prompt_name_sends_no_prompt_ref(monkeypatch):
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        bodies.append(json)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    await complete(
+        settings(llm_chain="orcarouter", orca_prompt=""),
+        [{"role": "system", "content": "our own rules"}],
+        {},
+    )
+
+    assert "prompt_ref" not in bodies[0]
+    assert bodies[0]["messages"] == [
+        {"role": "system", "content": "our own rules"}
+    ]
+
+
+async def test_direct_routers_keep_the_system_prompt_and_no_prompt_ref(
+    monkeypatch,
+):
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        bodies.append(json)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    messages = [{"role": "system", "content": "our own rules"}]
+    await complete(settings(llm_chain="zai"), messages, {})
+    await complete(settings(llm_chain="gemini"), messages, {})
+
+    assert len(bodies) == 2
+    assert all("prompt_ref" not in body for body in bodies)
+    assert all(body["messages"] == messages for body in bodies)
+
+
+async def test_a_caller_that_owns_its_prompt_can_opt_out(monkeypatch):
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        bodies.append(json)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    messages = [{"role": "system", "content": "classify this"}]
+    await complete(
+        settings(llm_chain="orcarouter", orca_prompt="aerocast-answer-in-one"),
+        messages,
+        {},
+        hosted_prompt=False,
+    )
+
+    assert "prompt_ref" not in bodies[0]
+    assert bodies[0]["messages"] == messages

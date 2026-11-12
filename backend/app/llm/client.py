@@ -45,6 +45,8 @@ class Rung:
     timeout: float
     response_format: Literal["schema", "json", "none"]
     reasoning_effort: str | None = None
+    #: A gateway-hosted prompt to inject in place of `messages`' system turn.
+    prompt_ref: dict[str, str] | None = None
 
 
 def rungs(settings: Settings) -> list[Rung]:
@@ -63,6 +65,7 @@ def rungs(settings: Settings) -> list[Rung]:
                             api_key=_secret(settings.orca_api_key),
                             timeout=settings.llm_timeout_seconds,
                             response_format="json",
+                            prompt_ref=_prompt_ref(settings),
                         )
                     )
             case "zai" if settings.zai_configured:
@@ -93,13 +96,31 @@ def rungs(settings: Settings) -> list[Rung]:
     return found
 
 
+def _prompt_ref(settings: Settings) -> dict[str, str] | None:
+    """The per-request binding to OrcaRouter's prompt registry."""
+    name = settings.orca_prompt.strip()
+    if not name:
+        return None
+    ref = {"name": name}
+    label = settings.orca_prompt_label.strip()
+    if label:
+        ref["label"] = label
+    return ref
+
+
 async def complete(
     settings: Settings,
     messages: list[dict[str, str]],
     schema: dict[str, object],
     budget_seconds: float | None = None,
+    hosted_prompt: bool = True,
 ) -> Completion | None:
-    """Try each rung once. None means failure or an exhausted budget."""
+    """Try each rung once. None means failure or an exhausted budget.
+
+    `hosted_prompt=False` keeps the caller's own system message on a rung
+    that has a registry prompt bound, for callers whose prompt is not the
+    one the registry holds.
+    """
     deadline = (
         None if budget_seconds is None else time.monotonic() + budget_seconds
     )
@@ -121,7 +142,9 @@ async def complete(
         started = time.monotonic()
         try:
             async with asyncio.timeout(timeout):
-                payload = await _call(rung, messages, schema, timeout)
+                payload = await _call(
+                    rung, messages, schema, timeout, hosted_prompt
+                )
         except (
             TimeoutError,
             httpx.HTTPError,
@@ -154,12 +177,20 @@ async def _call(
     messages: list[dict[str, str]],
     schema: dict[str, object],
     timeout: float,
+    hosted_prompt: bool,
 ) -> object:
     body: dict[str, Any] = {
         "model": rung.model,
         "messages": messages,
         "temperature": 0,
     }
+    if hosted_prompt and rung.prompt_ref is not None:
+        # The gateway puts the saved prompt in front of the messages. Leaving
+        # ours in would give the model two sets of rules to reconcile.
+        body["messages"] = [
+            message for message in messages if message["role"] != "system"
+        ]
+        body["prompt_ref"] = rung.prompt_ref
     if rung.response_format == "schema":
         body["response_format"] = {
             "type": "json_schema",

@@ -79,6 +79,11 @@ class Settings(BaseSettings):
         "z-ai/glm-5.3-flash-free,"
         "deepseek/deepseek-v4-flash-free"
     )
+    #: Workspace prompt OrcaRouter injects as the system message. Editing it in
+    #: the console changes the next answer without a deploy. Empty sends ours.
+    orca_prompt: str = "aerocast-answer-in-one"
+    #: Empty lets the gateway pick the prompt's default label, `production`.
+    orca_prompt_label: str = ""
 
     @field_validator("database_url")
     @classmethod

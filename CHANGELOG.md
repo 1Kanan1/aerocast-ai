@@ -214,6 +214,14 @@ Phase 3 (read API) and Phase 4 (frontend) are complete.
   `zai/glm-...` or `gemini/gemini-...`. The router is split off once, so an Orca vendor
   prefix such as `deepseek/` cannot be mistaken for one. An entry that names no known
   router is dropped with a warning instead of vanishing silently.
+- **The answer prompt is served by OrcaRouter.** `ORCA_PROMPT` names a workspace prompt
+  (`aerocast-answer-in-one` by default); each Orca request carries it as `prompt_ref` and
+  leaves out the app's system message, so an edit in the console changes the next answer
+  with no deploy. The direct routers still get the in-app prompt, and the scope classifier
+  opts out, since the answer prompt would answer instead of classifying.
+- **Definition refs are `definitions.<KEY>`**, previously `defs.<KEY>`. The ref is now the
+  definition's path in the bundle, so a model reading the bundle can cite it without a
+  prompt that lists the alias.
 - **Provider chain** is now an ordered list (`LLM_CHAIN`) instead of two fixed slots, so a
   third rung is configuration rather than code.
 - **Gemini model pinned** to `gemini-3.8-flash` instead of `gemini-flash-latest`, because an

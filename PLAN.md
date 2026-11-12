@@ -630,8 +630,9 @@ where it matters. There are three reasons, all stored in `ai_answers.reason`:
 
 The gate is not a jargon ban. Two synthetic refs widen what an explanation may cite:
 
-- `defs.<KEY>` points at a bundled definition. A claim that explains VFR or MVFR can
-  cite it and pass the number check, because the definition text carries those numbers.
+- `definitions.<KEY>` points at a bundled definition: the ref is the definition's path
+  in the bundle. A claim that explains VFR or MVFR can cite it and pass the number
+  check, because the definition text carries those numbers.
 - `station.<ICAO>` points at the selected station's identifier and name only. It is
   deliberately not the whole station node, otherwise a weather claim could borrow the
   observation's numbers through the station ref.
@@ -704,6 +705,22 @@ of disappearing from the chain.
 
 The three free Orca models sit first because they answer without a paid direct key. The
 direct Z.ai and Gemini entries stay behind them as fallbacks.
+
+### The answer prompt lives in the gateway
+
+OrcaRouter keeps a workspace prompt registry: a named system message the gateway injects
+before forwarding. `ORCA_PROMPT` names the prompt, `ORCA_PROMPT_LABEL` pins a label, and
+every Orca request carries it as a per-request `prompt_ref`. The registry holds the text;
+the app ships no copy of it and no longer sends its own system message on those rungs. A
+wording change is an edit in the console, not a deploy, and the answer changes on the next
+call.
+
+The two prompts are not interchangeable. `prompts.SYSTEM_PROMPT` is the single-station
+prompt the direct routers still get; the registry prompt is the one that sees the fact
+bundle. Because the gateway fails open, a renamed or deleted prompt sends the request
+with no system message at all, and the template answer usually takes over. The scope
+classifier passes `hosted_prompt=False` to keep its own short prompt, since the registry
+prompt would answer the question instead of classifying it.
 
 ### One pool, ordered by latency
 
@@ -1003,6 +1020,8 @@ LLM_TIMEOUT_SECONDS=20
 ORCA_API_KEY=
 ORCA_BASE_URL=https://api.orcarouter.ai/v1
 ORCA_MODELS=deepseek/deepseek-v4.1-flash-free,z-ai/glm-5.3-flash-free,deepseek/deepseek-v4-flash-free
+ORCA_PROMPT=aerocast-answer-in-one
+ORCA_PROMPT_LABEL=
 ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
 ZAI_MODELS=glm-4.7-flash,glm-4.5-flash
