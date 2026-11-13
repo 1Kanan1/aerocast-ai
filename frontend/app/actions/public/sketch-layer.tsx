@@ -10,6 +10,7 @@ import {
   areaFieldStations,
   screenOffset,
 } from '#app/lib/public/field-stations.ts'
+import type { Anchor } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 import {
@@ -84,8 +85,14 @@ export const SketchLayer = clientEntry(
       x: number
       y: number
       radius: number
-      group: SVGGElement
+      pxPerNm: number
     } | null = null
+    /** The clip and the station layer, created once and reused by rebuilds. */
+    let stationDefs: SVGDefsElement | undefined
+    let layer: SVGGElement | undefined
+    let clip: SVGCircleElement | undefined
+    /** One station's nodes, kept across rebuilds so its echo is not decoded again. */
+    let stationNodes = new Map<string, StationNode>()
     let settleTimer = 0
     let windCanvas: HTMLCanvasElement | undefined
     let windContext: CanvasRenderingContext2D | null = null
@@ -237,7 +244,6 @@ export const SketchLayer = clientEntry(
       let scale = Math.max(0.75, Math.min(density, WIND_MAX_PIXELS / size))
 
       windCanvas.style.display = 'block'
-      windCanvas.style.transform = ''
       windCanvas.style.left = `${x - half}px`
       windCanvas.style.top = `${y - half}px`
       windCanvas.style.width = `${size}px`
@@ -293,6 +299,31 @@ export const SketchLayer = clientEntry(
       }
     }
 
+    /**
+     * Put the built drawing where the camera now is. The drawing keeps the
+     * coordinates it was built at; the overlay carries the pan, the turn and
+     * the zoom as one transform, so moving the map costs a style write and a
+     * composited layer rather than a rebuild.
+     */
+    function place(anchor: Anchor | null): void {
+      if (host === undefined) return
+      if (anchor === null || built === null) {
+        host.style.transform = ''
+        return
+      }
+
+      let scale = anchor.pxPerNm / built.pxPerNm
+      host.style.transformOrigin = `${built.x}px ${built.y}px`
+      host.style.transform =
+        `translate(${(anchor.x - built.x).toFixed(2)}px, ${(anchor.y - built.y).toFixed(2)}px) ` +
+        `rotate(${anchor.bearing.toFixed(2)}deg) scale(${scale.toFixed(4)})`
+
+      // A carried drawing is rasterised at the scale it was built at, so the
+      // zoom has to end in one rebuild. Until it does, the transform is the
+      // cheap answer.
+      if (Math.abs(scale - 1) * built.radius >= 0.5) settle()
+    }
+
     function draw(): void {
       if (host === undefined || svg === undefined) return
 
@@ -300,14 +331,7 @@ export const SketchLayer = clientEntry(
       let anchor = session.anchor
       if (source === null || anchor === null) {
         keepFields(new Set())
-        built = null
-        if (settleTimer !== 0) window.clearTimeout(settleTimer)
-        settleTimer = 0
-        stopWind()
-        windArrows = []
-        session.setEchoShare(null)
-        if (windCanvas !== undefined) windCanvas.style.display = 'none'
-        svg.replaceChildren()
+        clearDrawing()
         return
       }
 
@@ -318,14 +342,7 @@ export const SketchLayer = clientEntry(
       // The field is measured now: radar and model wind say nothing about an
       // hour the timeline is reading, so they step aside for it.
       if (session.viewHour !== 0) {
-        stopWind()
-        windArrows = []
-        if (windCanvas !== undefined) windCanvas.style.display = 'none'
-        if (settleTimer !== 0) window.clearTimeout(settleTimer)
-        settleTimer = 0
-        built = null
-        session.setEchoShare(null)
-        svg.replaceChildren()
+        clearDrawing()
         return
       }
 
@@ -366,26 +383,19 @@ export const SketchLayer = clientEntry(
           .join(';'),
       ].join('|')
 
-      // Moving, turning and zooming only change where, at what angle and how
-      // big the drawing is, and rebuilding every rough arrow for that costs
-      // more than transforming it. The drawing is always built north-up, so
-      // one transform at the end carries it; only a change of scale has to end
-      // in a rebuild, and that waits until the zoom settles.
+      // Only what the drawing is made of rebuilds it. Where the camera is
+      // does not: `place` carries the built drawing instead.
       if (built === null || built.key !== key) {
         clearTimeout(settleTimer)
         settleTimer = 0
-        let group = document.createElementNS(SVG_NS, 'g')
-        let defs = document.createElementNS(SVG_NS, 'defs')
-        let clip = document.createElementNS(SVG_NS, 'clipPath')
-        clip.setAttribute('id', CLIP_ID)
-        clip.append(circle(x, y, frameRadius))
-        defs.append(fadeGradient(), clip)
 
-        let layer = document.createElementNS(SVG_NS, 'g')
-        layer.setAttribute('clip-path', `url(#${CLIP_ID})`)
+        let frame = ensureFrame()
+        frame.clip.setAttribute('cx', String(x))
+        frame.clip.setAttribute('cy', String(y))
+        frame.clip.setAttribute('r', String(frameRadius))
         let winds: WindArrow[] = []
 
-        for (let [index, { station, field }] of fields.entries()) {
+        for (let { station, field } of fields) {
           let offset = screenOffset(
             source.lat,
             source.lon,
@@ -395,7 +405,7 @@ export const SketchLayer = clientEntry(
           )
           let ink = temperatureColor(station.temperature)
           let node = stationNode(
-            index,
+            station.icao,
             x + offset.x,
             y + offset.y,
             fieldRadius,
@@ -403,8 +413,7 @@ export const SketchLayer = clientEntry(
             tempOn && source.glow,
             rainOn ? field.radar : null,
           )
-          defs.append(node.defs)
-          layer.append(node.group)
+          frame.layer.append(node.group)
           if (windOn) {
             winds.push(
               ...windArrowsFor(
@@ -423,9 +432,15 @@ export const SketchLayer = clientEntry(
           }
         }
 
-        group.append(defs, layer)
-        svg.replaceChildren(group)
-        built = { key, x, y, radius: frameRadius, group }
+        let keep = new Set(fields.map(({ station }) => station.icao))
+        for (let [icao, node] of stationNodes) {
+          if (keep.has(icao)) continue
+          node.group.remove()
+          node.defs.remove()
+          stationNodes.delete(icao)
+        }
+
+        built = { key, x, y, radius: frameRadius, pxPerNm }
         if (windOn) {
           paintWind(x, y, frameRadius, reach, winds)
         } else {
@@ -435,25 +450,145 @@ export const SketchLayer = clientEntry(
         }
       }
 
-      // Carry the drawing to where the camera now puts the station: the same
-      // transform whether it was just built or is being carried across a move.
-      let scale = frameRadius / built.radius
-      let dx = x - built.x
-      let dy = y - built.y
-      let turn = anchor.bearing
-      built.group.setAttribute(
-        'transform',
-        `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${turn.toFixed(2)}) scale(${scale.toFixed(4)}) translate(${(-built.x).toFixed(2)} ${(-built.y).toFixed(2)})`,
-      )
-      if (windCanvas !== undefined) {
-        windCanvas.style.transformOrigin = '50% 50%'
-        windCanvas.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${scale.toFixed(4)}) rotate(${turn.toFixed(2)}deg)`
+      place(anchor)
+    }
+
+    /** Drop the drawing, and with it every node it was built from. */
+    function clearDrawing(): void {
+      built = null
+      if (settleTimer !== 0) window.clearTimeout(settleTimer)
+      settleTimer = 0
+      stopWind()
+      windArrows = []
+      session.setEchoShare(null)
+      if (windCanvas !== undefined) windCanvas.style.display = 'none'
+      if (host !== undefined) host.style.transform = ''
+      stationNodes.clear()
+      stationDefs = undefined
+      layer = undefined
+      clip = undefined
+      svg?.replaceChildren()
+    }
+
+    /** The clip and the station layer, made once and kept across rebuilds. */
+    function ensureFrame(): { layer: SVGGElement; clip: SVGCircleElement } {
+      if (layer === undefined || clip === undefined) {
+        let defs = document.createElementNS(SVG_NS, 'defs')
+        let clipping = document.createElementNS(SVG_NS, 'clipPath')
+        clipping.setAttribute('id', CLIP_ID)
+        let circleNode = circle(0, 0, 0)
+        clipping.append(circleNode)
+        defs.append(fadeGradient(), clipping)
+        stationDefs = defs
+        clip = circleNode
+        layer = document.createElementNS(SVG_NS, 'g')
+        layer.setAttribute('clip-path', `url(#${CLIP_ID})`)
+        svg?.replaceChildren(defs, layer)
       }
-      if (Math.abs(frameRadius - built.radius) >= 0.5) settle()
+      return { layer, clip }
+    }
+
+    /**
+     * One station's field at its place: a warmth bloom under the echo image,
+     * both faded before the field's edge. The nodes belong to the station and
+     * outlive a rebuild, so the echo image is decoded once and moved rather
+     * than made again at every settled zoom.
+     */
+    function stationNode(
+      icao: string,
+      x: number,
+      y: number,
+      radius: number,
+      ink: string,
+      bloomOn: boolean,
+      radar: RadarWindow | null,
+    ): StationNode {
+      let node = stationNodes.get(icao)
+      if (node === undefined) {
+        node = createStationNode(icao)
+        stationNodes.set(icao, node)
+      }
+
+      node.mask.setAttribute('cx', String(x))
+      node.mask.setAttribute('cy', String(y))
+      node.mask.setAttribute('r', String(radius))
+
+      node.bloom.setAttribute('cx', String(x))
+      node.bloom.setAttribute('cy', String(y))
+      node.bloom.setAttribute('r', String(radius))
+      node.bloom.setAttribute('display', bloomOn ? 'inline' : 'none')
+      node.from.setAttribute('stop-color', ink)
+      node.to.setAttribute('stop-color', ink)
+
+      if (radar === null) {
+        // The element stays: turning rain back on reuses the decoded echo.
+        node.image?.setAttribute('display', 'none')
+        return node
+      }
+
+      if (node.image === null) {
+        let image = document.createElementNS(SVG_NS, 'image') as SVGImageElement
+        image.setAttribute('preserveAspectRatio', 'none')
+        // The field is a wash over the map, not a layer that replaces it:
+        // echoes stay readable while labels and dots read through.
+        image.setAttribute('opacity', '0.3')
+        node.group.append(image)
+        node.image = image
+      }
+      node.image.setAttribute('display', 'inline')
+      if (node.href !== radar.image) {
+        node.image.setAttribute('href', radar.image)
+        node.href = radar.image
+      }
+      node.image.setAttribute('x', String(x - radius))
+      node.image.setAttribute('y', String(y - radius))
+      node.image.setAttribute('width', String(radius * 2))
+      node.image.setAttribute('height', String(radius * 2))
+
+      return node
+    }
+
+    function createStationNode(icao: string): StationNode {
+      let defs = document.createElementNS(SVG_NS, 'defs')
+
+      let maskNode = document.createElementNS(SVG_NS, 'mask')
+      maskNode.setAttribute('id', `${MASK_ID}-${icao}`)
+      let mask = circle(0, 0, 0, `url(#${FADE_ID})`)
+      maskNode.append(mask)
+
+      let bloomGradient = document.createElementNS(SVG_NS, 'radialGradient')
+      bloomGradient.setAttribute('id', `${BLOOM_ID}-${icao}`)
+      let from = stop('0%', '#ffffff', '0.24')
+      let to = stop('100%', '#ffffff', '0')
+      bloomGradient.append(from, to)
+      defs.append(maskNode, bloomGradient)
+      stationDefs?.append(defs)
+
+      let group = document.createElementNS(SVG_NS, 'g')
+      group.setAttribute('mask', `url(#${MASK_ID}-${icao})`)
+      let bloom = circle(0, 0, 0, `url(#${BLOOM_ID}-${icao})`)
+      group.append(bloom)
+
+      return {
+        defs,
+        group,
+        mask,
+        bloom,
+        from,
+        to,
+        image: null,
+        href: null,
+      }
     }
 
     handle.queueTask(() => {
-      let unsubscribe = session.onAnchor(schedule)
+      // The anchor moves every frame of a pan or a zoom; placing the built
+      // drawing is all that costs. A build is scheduled only when there is
+      // nothing to place yet.
+      let unsubscribe = session.onAnchor((anchor) => {
+        place(anchor)
+        if (built === null) schedule()
+      })
       session.addEventListener('change', schedule, { signal: handle.signal })
       weatherLayers.addEventListener('change', schedule, {
         signal: handle.signal,
@@ -494,52 +629,20 @@ function fadeGradient(): SVGElement {
 }
 
 /**
- * One station's field, north-up at its own position: a warmth bloom under the
- * echo image, both faded before the field's edge. Masks and blooms take the
- * station's index in their ids, so each one is its own.
+ * One station's nodes. The group and its defs stay in the document between
+ * rebuilds, so the echo image is decoded once per data URL, not once per
+ * settled zoom.
  */
-function stationNode(
-  index: number,
-  x: number,
-  y: number,
-  radius: number,
-  ink: string,
-  bloomOn: boolean,
-  radar: RadarWindow | null,
-): { defs: SVGElement; group: SVGGElement } {
-  let defs = document.createElementNS(SVG_NS, 'defs')
-
-  let mask = document.createElementNS(SVG_NS, 'mask')
-  mask.setAttribute('id', `${MASK_ID}-${index}`)
-  mask.append(circle(x, y, radius, `url(#${FADE_ID})`))
-
-  let bloom = document.createElementNS(SVG_NS, 'radialGradient')
-  bloom.setAttribute('id', `${BLOOM_ID}-${index}`)
-  bloom.append(stop('0%', ink, '0.24'), stop('100%', ink, '0'))
-  defs.append(mask, bloom)
-
-  let group = document.createElementNS(SVG_NS, 'g')
-  group.setAttribute('mask', `url(#${MASK_ID}-${index})`)
-
-  // A soft warmth bloom, so the field carries the temperature even where
-  // there is no echo.
-  if (bloomOn) group.append(circle(x, y, radius, `url(#${BLOOM_ID}-${index})`))
-
-  if (radar !== null) {
-    let image = document.createElementNS(SVG_NS, 'image')
-    image.setAttribute('href', radar.image)
-    image.setAttribute('x', String(x - radius))
-    image.setAttribute('y', String(y - radius))
-    image.setAttribute('width', String(radius * 2))
-    image.setAttribute('height', String(radius * 2))
-    image.setAttribute('preserveAspectRatio', 'none')
-    // The field is a wash over the map, not a layer that replaces it: the
-    // echoes have to stay readable while labels and station dots read through.
-    image.setAttribute('opacity', '0.3')
-    group.append(image)
-  }
-
-  return { defs, group }
+interface StationNode {
+  defs: SVGElement
+  group: SVGGElement
+  mask: SVGCircleElement
+  bloom: SVGCircleElement
+  /** The warmth bloom's gradient stops, recolored when the temperature moves. */
+  from: SVGStopElement
+  to: SVGStopElement
+  image: SVGImageElement | null
+  href: string | null
 }
 
 function circle(
@@ -547,8 +650,8 @@ function circle(
   y: number,
   radius: number,
   fill?: string,
-): SVGElement {
-  let node = document.createElementNS(SVG_NS, 'circle')
+): SVGCircleElement {
+  let node = document.createElementNS(SVG_NS, 'circle') as SVGCircleElement
   node.setAttribute('cx', String(x))
   node.setAttribute('cy', String(y))
   node.setAttribute('r', String(radius))
@@ -556,8 +659,8 @@ function circle(
   return node
 }
 
-function stop(offset: string, color: string, opacity: string): SVGElement {
-  let node = document.createElementNS(SVG_NS, 'stop')
+function stop(offset: string, color: string, opacity: string): SVGStopElement {
+  let node = document.createElementNS(SVG_NS, 'stop') as SVGStopElement
   node.setAttribute('offset', offset)
   node.setAttribute('stop-color', color)
   node.setAttribute('stop-opacity', opacity)
@@ -740,6 +843,9 @@ const overlayStyle = css({
   zIndex: 2,
   pointerEvents: 'none',
   overflow: 'hidden',
+  // The drawing is carried by one transform while the map moves; a
+  // composited layer keeps that off the main thread.
+  willChange: 'transform',
 })
 
 const svgStyle = css({
