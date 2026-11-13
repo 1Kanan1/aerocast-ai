@@ -232,9 +232,9 @@ export const MapIsland = clientEntry(
       // Keep the weather field over its point, and the card over its dot.
       map.on('move', () => {
         if (selectedPoint !== null) {
-          session.setAnchor(anchorAt(map, selectedPoint))
+          session.moveAnchor(anchorAt(map, selectedPoint))
         } else if (areaPoint !== null) {
-          session.setAnchor(anchorAt(map, areaPoint))
+          session.moveAnchor(anchorAt(map, areaPoint))
         }
       })
 
@@ -243,6 +243,7 @@ export const MapIsland = clientEntry(
       })
 
       map.on('moveend', () => {
+        session.settleAnchor()
         clearTimeout(moveTimer)
         moveTimer = setTimeout(() => {
           void refreshAdvisories(map)

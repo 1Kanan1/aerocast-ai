@@ -240,6 +240,20 @@ describe('station session', () => {
     assert.equal(session.selected, null)
   })
 
+  it('tells the listener when the camera settles', () => {
+    let session = new StationSession()
+    let settled = 0
+    let unsubscribe = session.onAnchorSettled(() => {
+      settled += 1
+    })
+
+    session.settleAnchor()
+    unsubscribe()
+    session.settleAnchor()
+
+    assert.equal(settled, 1)
+  })
+
   it('opens the area for a typed coordinate', async (t) => {
     let requested: string[] = []
     mockFetch(t, (path) => {

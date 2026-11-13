@@ -45,8 +45,15 @@ const WIND_EDGE = 0.7
 const WIND_TRAVEL = 90
 /** The furthest the arrows reach past their origin, on top of the drift. */
 const WIND_STROKE = 24
-/** How long the scale must hold still before the field is rebuilt at it. */
-const ZOOM_SETTLE_MS = 250
+/**
+ * How far the carried field may drift from the scale it was built at before
+ * it is rebuilt. Ten percent is under the point where the echo reads as
+ * magnified rather than drawn.
+ */
+const SCALE_DRIFT = 0.1
+/** Arrow shapes, shared by every field and every rebuild. Bounded by the ramp. */
+const ARROW_SHAPES = new Map<string, Path2D>()
+const ARROW_SHAPE_LIMIT = 4096
 
 /** A station's own weather, fetched once and kept while the station is in view. */
 interface StationField {
@@ -84,16 +91,16 @@ export const SketchLayer = clientEntry(
       key: string
       x: number
       y: number
-      radius: number
       pxPerNm: number
     } | null = null
+    /** True from the first frame of a gesture until the camera settles. */
+    let moving = false
     /** The clip and the station layer, created once and reused by rebuilds. */
     let stationDefs: SVGDefsElement | undefined
     let layer: SVGGElement | undefined
     let clip: SVGCircleElement | undefined
     /** One station's nodes, kept across rebuilds so its echo is not decoded again. */
     let stationNodes = new Map<string, StationNode>()
-    let settleTimer = 0
     let windCanvas: HTMLCanvasElement | undefined
     let windContext: CanvasRenderingContext2D | null = null
     let windScale = 1
@@ -159,23 +166,27 @@ export const SketchLayer = clientEntry(
       windFrame = 0
     }
 
-    /** Rebuild once, after the zoom stops changing the scale. */
-    function settle(): void {
-      if (settleTimer !== 0) window.clearTimeout(settleTimer)
-      settleTimer = window.setTimeout(() => {
-        settleTimer = 0
-        built = null
-        draw()
-      }, ZOOM_SETTLE_MS)
-    }
-
     /** Redraw the field, but not on every frame the screen offers. */
     function flowWind(): void {
+      if (windFrame !== 0) return
       windFrame = window.setTimeout(() => {
         windFrame = 0
         renderWind(performance.now())
         flowWind()
       }, WIND_FRAME_MS)
+    }
+
+    /**
+     * Start the drift again after a gesture, or after a build. Nothing to do
+     * while the map moves: the field is being carried by a transform then, so
+     * redrawing the arrows would be work whose result is about to be scaled.
+     */
+    function resumeWind(): void {
+      if (moving || windArrows.length === 0) return
+      if (windCanvas === undefined || windCanvas.style.display === 'none')
+        return
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      flowWind()
     }
 
     /**
@@ -256,8 +267,7 @@ export const SketchLayer = clientEntry(
       windContext = windCanvas.getContext('2d')
 
       renderWind(performance.now(), 0.5)
-      let still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      if (!still) flowWind()
+      resumeWind()
     }
 
     /** The stations whose fields are drawn, and the circle they are cut to. */
@@ -317,11 +327,6 @@ export const SketchLayer = clientEntry(
       host.style.transform =
         `translate(${(anchor.x - built.x).toFixed(2)}px, ${(anchor.y - built.y).toFixed(2)}px) ` +
         `rotate(${anchor.bearing.toFixed(2)}deg) scale(${scale.toFixed(4)})`
-
-      // A carried drawing is rasterised at the scale it was built at, so the
-      // zoom has to end in one rebuild. Until it does, the transform is the
-      // cheap answer.
-      if (Math.abs(scale - 1) * built.radius >= 0.5) settle()
     }
 
     function draw(): void {
@@ -386,9 +391,6 @@ export const SketchLayer = clientEntry(
       // Only what the drawing is made of rebuilds it. Where the camera is
       // does not: `place` carries the built drawing instead.
       if (built === null || built.key !== key) {
-        clearTimeout(settleTimer)
-        settleTimer = 0
-
         let frame = ensureFrame()
         frame.clip.setAttribute('cx', String(x))
         frame.clip.setAttribute('cy', String(y))
@@ -440,7 +442,7 @@ export const SketchLayer = clientEntry(
           stationNodes.delete(icao)
         }
 
-        built = { key, x, y, radius: frameRadius, pxPerNm }
+        built = { key, x, y, pxPerNm }
         if (windOn) {
           paintWind(x, y, frameRadius, reach, winds)
         } else {
@@ -456,8 +458,7 @@ export const SketchLayer = clientEntry(
     /** Drop the drawing, and with it every node it was built from. */
     function clearDrawing(): void {
       built = null
-      if (settleTimer !== 0) window.clearTimeout(settleTimer)
-      settleTimer = 0
+      moving = false
       stopWind()
       windArrows = []
       session.setEchoShare(null)
@@ -583,11 +584,36 @@ export const SketchLayer = clientEntry(
 
     handle.queueTask(() => {
       // The anchor moves every frame of a pan or a zoom; placing the built
-      // drawing is all that costs. A build is scheduled only when there is
-      // nothing to place yet.
-      let unsubscribe = session.onAnchor((anchor) => {
+      // drawing is all that costs, and the arrows stop while the field is
+      // being carried. A build is scheduled only when there is nothing to
+      // place yet, or when the camera settles at a different scale.
+      let unsubscribe = session.onAnchor((anchor, gesture) => {
+        if (gesture) {
+          // A gesture carries the field; the arrows would only be scaled a
+          // frame later, so their loop waits for the camera to stop.
+          moving = true
+          stopWind()
+        }
         place(anchor)
         if (built === null) schedule()
+      })
+      let unsubscribeSettled = session.onAnchorSettled(() => {
+        moving = false
+
+        let anchor = session.anchor
+        if (built === null || anchor === null) {
+          schedule()
+          return
+        }
+
+        let drift = Math.abs(anchor.pxPerNm / built.pxPerNm - 1)
+        if (drift >= SCALE_DRIFT) {
+          built = null
+          schedule()
+          return
+        }
+
+        resumeWind()
       })
       session.addEventListener('change', schedule, { signal: handle.signal })
       weatherLayers.addEventListener('change', schedule, {
@@ -599,9 +625,9 @@ export const SketchLayer = clientEntry(
         () => {
           cancelAnimationFrame(frame)
           stopWind()
-          if (settleTimer !== 0) window.clearTimeout(settleTimer)
           keepFields(new Set())
           unsubscribe()
+          unsubscribeSettled()
         },
         { once: true },
       )
@@ -680,6 +706,51 @@ function windStep(fieldRadius: number, stations: number): number {
 }
 
 /**
+ * One arrow's shape, cached. A shape is set by the direction it points and
+ * the speed it carries, both of which are the same at every zoom, so the same
+ * squiggle serves any rebuild. Roughness is noise: a repeated one is not
+ * something the eye picks out of a drifting field, and it keeps the expensive
+ * part of a rebuild (three rough lines per arrow) to one run per shape.
+ */
+function arrowShape(
+  ux: number,
+  uy: number,
+  length: number,
+  seed: number,
+): Path2D {
+  let key = `${seed % 7}:${Math.round(ux * 128)}:${Math.round(uy * 128)}:${Math.round(length)}`
+  let cached = ARROW_SHAPES.get(key)
+  if (cached !== undefined) return cached
+
+  let tipX = (ux * length) / 2
+  let tipY = (uy * length) / 2
+  let options = { roughness: 0.7, seed } as const
+  let head = (turn: number): [number, number] => {
+    let cos = Math.cos(turn)
+    let sin = Math.sin(turn)
+    return [
+      tipX - (ux * cos - uy * sin) * 4.5,
+      tipY - (ux * sin + uy * cos) * 4.5,
+    ]
+  }
+
+  let pen = rough.svg(document.createElementNS(SVG_NS, 'svg'))
+  let path = new Path2D()
+  for (let stroke of [
+    pen.line(-tipX, -tipY, tipX, tipY, options),
+    pen.line(tipX, tipY, ...head(0.5), options),
+    pen.line(tipX, tipY, ...head(-0.5), options),
+  ]) {
+    let d = stroke.querySelector('path')?.getAttribute('d')
+    if (d !== null && d !== undefined) path.addPath(new Path2D(d))
+  }
+
+  if (ARROW_SHAPES.size >= ARROW_SHAPE_LIMIT) ARROW_SHAPES.clear()
+  ARROW_SHAPES.set(key, path)
+  return path
+}
+
+/**
  * A field of strokes across one station's area. Direction, speed and color come from
  * the station's RRFS grid, so the wind bends across the area instead of pointing one
  * way; without the grid it falls back to the station's own reading.
@@ -719,8 +790,6 @@ function windArrowsFor(
 
   if (grid === null && fallback === null) return []
 
-  let scratch = document.createElementNS(SVG_NS, 'svg')
-  let pen = rough.svg(scratch)
   let inner = radius * 0.94
   let travel = Math.max(34, Math.min(step, WIND_TRAVEL))
   let centre = frameRadius + reach
@@ -759,27 +828,7 @@ function windArrowsFor(
       }
 
       let length = Math.min(30, 12 + speed * 0.8)
-      let tipX = (ux * length) / 2
-      let tipY = (uy * length) / 2
-      let options = { roughness: 0.7, seed } as const
-      let head = (turn: number): [number, number] => {
-        let cos = Math.cos(turn)
-        let sin = Math.sin(turn)
-        return [
-          tipX - (ux * cos - uy * sin) * 4.5,
-          tipY - (ux * sin + uy * cos) * 4.5,
-        ]
-      }
-
-      let path = new Path2D()
-      for (let stroke of [
-        pen.line(-tipX, -tipY, tipX, tipY, options),
-        pen.line(tipX, tipY, ...head(0.5), options),
-        pen.line(tipX, tipY, ...head(-0.5), options),
-      ]) {
-        let d = stroke.querySelector('path')?.getAttribute('d')
-        if (d !== null && d !== undefined) path.addPath(new Path2D(d))
-      }
+      let path = arrowShape(ux, uy, length, seed)
 
       let duration = Math.max(1.2, travel / (12 + speed * 1.6))
       let fade =

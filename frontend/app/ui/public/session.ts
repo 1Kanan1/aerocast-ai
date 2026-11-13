@@ -121,10 +121,13 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   #ask: AbortController | null = null
   #areaPending: AbortController | null = null
   #areaAsk: AbortController | null = null
-  #anchorListeners = new Set<(anchor: Anchor | null) => void>()
+  #anchorListeners = new Set<(anchor: Anchor | null, moving: boolean) => void>()
+  #settledListeners = new Set<() => void>()
 
   /** The map owns projection, so it reports the dot's screen point here. */
-  onAnchor(listener: (anchor: Anchor | null) => void): () => void {
+  onAnchor(
+    listener: (anchor: Anchor | null, moving: boolean) => void,
+  ): () => void {
     this.#anchorListeners.add(listener)
     return () => {
       this.#anchorListeners.delete(listener)
@@ -133,7 +136,25 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
 
   setAnchor(anchor: Anchor | null): void {
     this.anchor = anchor
-    for (let listener of this.#anchorListeners) listener(anchor)
+    for (let listener of this.#anchorListeners) listener(anchor, false)
+  }
+
+  /** A camera gesture moved the anchor: the map is on its way somewhere. */
+  moveAnchor(anchor: Anchor | null): void {
+    this.anchor = anchor
+    for (let listener of this.#anchorListeners) listener(anchor, true)
+  }
+
+  /** The camera has stopped: the one moment a drifting drawing is redrawn. */
+  onAnchorSettled(listener: () => void): () => void {
+    this.#settledListeners.add(listener)
+    return () => {
+      this.#settledListeners.delete(listener)
+    }
+  }
+
+  settleAnchor(): void {
+    for (let listener of this.#settledListeners) listener()
   }
 
   /** The sketch owns the radar window; the card reads the share from here. */
