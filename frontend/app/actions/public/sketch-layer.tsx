@@ -533,7 +533,9 @@ function stationNode(
     image.setAttribute('width', String(radius * 2))
     image.setAttribute('height', String(radius * 2))
     image.setAttribute('preserveAspectRatio', 'none')
-    image.setAttribute('opacity', '0.7')
+    // The field is a wash over the map, not a layer that replaces it: the
+    // echoes have to stay readable while labels and station dots read through.
+    image.setAttribute('opacity', '0.3')
     group.append(image)
   }
 
@@ -565,12 +567,13 @@ function stop(offset: string, color: string, opacity: string): SVGElement {
 /**
  * The spacing between the arrows of one station's field. One station keeps the
  * density it always had; each extra station in the same circle widens the
- * spacing, so the arrows on screen grow with the fourth root of the station
- * count instead of with the count itself.
+ * spacing with the square root of the station count, which holds the total near
+ * what a single station draws until the spacing cap. The arrows are redrawn
+ * twelve times a second, so their count is the cost.
  */
 function windStep(fieldRadius: number, stations: number): number {
   let base = Math.min(64, Math.max(26, fieldRadius / 7))
-  return Math.min(120, base * Math.max(1, stations) ** 0.25)
+  return Math.min(170, base * Math.max(1, stations) ** 0.5)
 }
 
 /**

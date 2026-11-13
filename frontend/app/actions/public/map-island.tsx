@@ -320,16 +320,28 @@ function addMarkers(
   })
 
   map.addSource('area-stations', { type: 'geojson', data: emptyCollection() })
+  // A soft dark halo lifts the dot off both the pale rain colors and the
+  // dark basemap, where a stroke alone disappears.
+  map.addLayer({
+    id: 'area-stations-halo',
+    type: 'circle',
+    source: 'area-stations',
+    paint: {
+      'circle-radius': 11,
+      'circle-color': PAPER,
+      'circle-opacity': 0.45,
+      'circle-blur': 1,
+    },
+  })
   map.addLayer({
     id: 'area-stations',
     type: 'circle',
     source: 'area-stations',
     paint: {
-      'circle-radius': 4,
-      'circle-color': '#93b8c2',
+      'circle-radius': 6,
+      'circle-color': '#eef3f4',
       'circle-stroke-color': PAPER,
-      'circle-stroke-width': 1,
-      'circle-opacity': 0.95,
+      'circle-stroke-width': 2,
     },
   })
 
