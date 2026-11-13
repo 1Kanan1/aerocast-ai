@@ -157,11 +157,30 @@ export const MapIsland = clientEntry(
           showSelection(map, null)
           // The area draws its own weather from the click, so the field
           // needs an anchor there too.
-          areaPoint =
+          let next: [number, number] | null =
             session.area === null ? null : [session.area.lon, session.area.lat]
+          let moved =
+            next !== null &&
+            (areaPoint === null ||
+              areaPoint[0] !== next[0] ||
+              areaPoint[1] !== next[1])
+          areaPoint = next
           session.setAnchor(
             areaPoint === null ? null : anchorAt(map, areaPoint),
           )
+
+          // A clicked point is already where the reader is looking. A
+          // coordinate from the search bar is somewhere, so take the map
+          // there once, at the same zoom a station search uses.
+          if (moved && next !== null && session.area?.focus === true) {
+            map.flyTo({
+              center: next,
+              zoom: Math.max(map.getZoom(), 8),
+              padding:
+                window.innerWidth > 900 ? { right: 520, top: 0 } : undefined,
+              duration: 900,
+            })
+          }
           return
         }
 
@@ -207,12 +226,7 @@ export const MapIsland = clientEntry(
         if (hit.length > 0) return
 
         let { lat, lng } = event.lngLat
-        void session.openArea({
-          x: event.point.x,
-          y: event.point.y,
-          lat,
-          lon: lng,
-        })
+        void session.openArea({ lat, lon: lng })
       })
 
       // Keep the weather field over its point, and the card over its dot.

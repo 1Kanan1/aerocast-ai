@@ -240,6 +240,36 @@ describe('station session', () => {
     assert.equal(session.selected, null)
   })
 
+  it('opens the area for a typed coordinate', async (t) => {
+    let requested: string[] = []
+    mockFetch(t, (path) => {
+      requested.push(path)
+      return Response.json({
+        data: {
+          lat: 33.9,
+          lon: -118.05,
+          radius_nm: 15,
+          stations: [],
+          brief: null,
+        },
+        meta: { source: 'aviationweather.gov' },
+      })
+    })
+    let session = new StationSession()
+
+    await session.askQuestion('33.90°N 118.05°W')
+
+    assert.equal(requested.length, 1)
+    assert.equal(requested[0], '/api/area?lat=33.9000&lon=-118.0500')
+    assert.equal(session.selected, null)
+    assert.deepEqual(session.area, {
+      lat: 33.9,
+      lon: -118.05,
+      focus: true,
+    })
+    assert.equal(session.areaLoading, false)
+  })
+
   it('stops an answer in flight', async (t) => {
     t.mock.method(
       globalThis,
