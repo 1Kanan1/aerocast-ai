@@ -635,6 +635,16 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.notify()
   }
 
+  /** The same for the area's thread, so a prompt can be rewritten there. */
+  discardAreaFrom(index: number): void {
+    if (index < 0 || index >= this.areaThread.length) return
+
+    this.#areaAsk?.abort()
+    this.#areaAsk = null
+    this.areaThread.splice(index)
+    this.notify()
+  }
+
   clear(): void {
     this.#pending?.abort()
     this.#ask?.abort()

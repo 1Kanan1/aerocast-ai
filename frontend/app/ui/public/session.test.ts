@@ -339,6 +339,35 @@ describe('station session', () => {
     )
   })
 
+  it('discards an area turn and everything after it', async (t) => {
+    mockFetch(t, (path) =>
+      path.includes('/area/ask')
+        ? Response.json({ error: 'not available' }, { status: 503 })
+        : Response.json({
+            data: {
+              lat: 47.45,
+              lon: -122.31,
+              radius_nm: 15,
+              stations: [],
+              brief: null,
+            },
+            meta: { source: 'aviationweather.gov' },
+          }),
+    )
+    let session = new StationSession()
+
+    await session.openArea({ lat: 47.45, lon: -122.31 })
+    await session.askArea('How is the wind?')
+    await session.askArea('What is the ceiling?')
+
+    session.discardAreaFrom(1)
+
+    assert.deepEqual(
+      session.areaThread.map((entry) => entry.question),
+      ['How is the wind?'],
+    )
+  })
+
   it('reports the dot anchor until the listener unsubscribes', () => {
     let session = new StationSession()
     let seen: (Anchor | null)[] = []

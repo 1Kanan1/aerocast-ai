@@ -1,5 +1,5 @@
 import type { Handle } from 'remix/component'
-import { clientEntry, css, on } from 'remix/component'
+import { clientEntry, css, on, ref } from 'remix/component'
 
 import type {
   AreaPayload,
@@ -10,6 +10,7 @@ import type {
 import type { Blend } from '#app/lib/public/blend.ts'
 import { blendStations } from '#app/lib/public/blend.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
+import { ChevronIcon } from '#app/ui/public/icons.tsx'
 import type { AreaPoint, ThreadEntry } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import { AssistantTurn, UserTurn } from '#app/ui/public/thread-parts.tsx'
@@ -25,6 +26,8 @@ const PANEL_EXIT_MS = 160
 export const AreaPanel = clientEntry(
   import.meta.url,
   function AreaPanel(handle: Handle) {
+    let collapsed = false
+    let scroller: HTMLElement | undefined
     let closing = false
     let closingTimer: ReturnType<typeof setTimeout> | undefined
     // The last live snapshot, kept so the exit animation has contents.
@@ -33,6 +36,18 @@ export const AreaPanel = clientEntry(
     let lastThread: ThreadEntry[] = []
     let lastError: string | null = null
     let lastLoading = false
+
+    function scrollToEnd(): void {
+      if (session.areaThread.length === 0) return
+      if (scroller) scroller.scrollTop = scroller.scrollHeight
+    }
+
+    function restartFrom(index: number, question: string): void {
+      let text = question.trim()
+      if (text === '') return
+      session.discardAreaFrom(index)
+      void session.askArea(text)
+    }
 
     session.addEventListener(
       'change',
@@ -48,6 +63,7 @@ export const AreaPanel = clientEntry(
           lastError = session.areaError
           lastLoading = session.areaLoading
           await handle.update()
+          scrollToEnd()
           return
         }
 
@@ -130,56 +146,86 @@ export const AreaPanel = clientEntry(
             </button>
           </header>
 
-          <div mix={bodyStyle}>
-            {error === null ? null : <p mix={mutedStyle}>{error}</p>}
+          {loading ? null : stations.length === 0 ? (
+            <p mix={emptyStyle}>
+              {error ??
+                `No station within ${payload?.radius_nm ?? 15} nm of that ` +
+                  'point. Pick a spot closer to one, or search by code.'}
+            </p>
+          ) : (
+            <>
+              <div
+                aria-hidden={collapsed ? 'true' : 'false'}
+                data-collapsed={collapsed ? 'true' : 'false'}
+                mix={infoStyle}
+              >
+                {error === null ? null : <p mix={mutedStyle}>{error}</p>}
 
-            {blend === null ? (
-              stations.length === 0 ? null : (
-                <p mix={mutedStyle}>
-                  None of the stations in range has a report to blend.
-                </p>
-              )
-            ) : (
-              <section aria-label="Blended conditions" mix={blendStyle}>
-                <span mix={blendKickerStyle}>Blended here</span>
-                <p mix={blendLineStyle}>{blendLine(blend)}</p>
-                <p mix={blendNoteStyle}>{blendNote(blend)}</p>
-              </section>
-            )}
+                {blend === null ? (
+                  <p mix={mutedStyle}>
+                    None of the stations in range has a report to blend.
+                  </p>
+                ) : (
+                  <section aria-label="Blended conditions" mix={blendStyle}>
+                    <span mix={blendKickerStyle}>Blended here</span>
+                    <p mix={blendLineStyle}>{blendLine(blend)}</p>
+                    <p mix={blendNoteStyle}>{blendNote(blend)}</p>
+                  </section>
+                )}
 
-            {loading || error !== null ? null : stations.length === 0 ? (
-              <p mix={mutedStyle}>
-                No station within {payload?.radius_nm ?? 15} nm of that point.
-                Pick a spot closer to one, or search by code.
-              </p>
-            ) : (
-              <ul mix={listStyle}>
-                {stations.map((station) => (
-                  <li key={station.icao}>
-                    <button
-                      aria-label={`Open ${station.icao}`}
-                      mix={[
-                        rowStyle,
-                        on('click', () => void session.select(station.icao)),
-                      ]}
-                      type="button"
-                    >
-                      <span mix={rowHeadStyle}>
-                        <span mix={codeStyle}>{station.icao}</span>
-                        <span mix={nameStyle}>{station.name}</span>
-                        <span mix={distanceStyle}>
-                          {station.distance_nm} nm
+                <ul mix={listStyle}>
+                  {stations.map((station) => (
+                    <li key={station.icao}>
+                      <button
+                        aria-label={`Open ${station.icao}`}
+                        mix={[
+                          rowStyle,
+                          on('click', () => void session.select(station.icao)),
+                        ]}
+                        type="button"
+                      >
+                        <span mix={rowHeadStyle}>
+                          <span mix={codeStyle}>{station.icao}</span>
+                          <span mix={nameStyle}>{station.name}</span>
+                          <span mix={distanceStyle}>
+                            {station.distance_nm} nm
+                          </span>
                         </span>
-                      </span>
-                      <span mix={factsStyle}>
-                        {stationFacts(station, brief)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                        <span mix={factsStyle}>
+                          {stationFacts(station, brief)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
+              <div mix={dividerStyle}>
+                <button
+                  aria-expanded={!collapsed}
+                  aria-label={collapsed ? 'Show stations' : 'Hide stations'}
+                  mix={[
+                    collapseStyle,
+                    on('click', () => {
+                      collapsed = !collapsed
+                      handle.update()
+                    }),
+                  ]}
+                  type="button"
+                >
+                  <span
+                    aria-hidden="true"
+                    mix={chevronStyle}
+                    style={{ transform: `rotate(${collapsed ? 180 : 0}deg)` }}
+                  >
+                    <ChevronIcon />
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+
+          <div mix={[threadStyle, ref((node) => (scroller = node))]}>
             {thread.length === 0 ? (
               <p mix={hintStyle}>
                 Ask about the weather here. Answers quote each station by name,
@@ -189,7 +235,10 @@ export const AreaPanel = clientEntry(
             ) : (
               thread.map((entry, index) => (
                 <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
-                  <UserTurn question={entry.question} />
+                  <UserTurn
+                    onEdit={(next) => restartFrom(index, next)}
+                    question={entry.question}
+                  />
                   <AssistantTurn entry={entry} showName={index === 0} />
                 </div>
               ))
@@ -331,7 +380,84 @@ const closeStyle = css({
   },
 })
 
-const bodyStyle = css({
+/**
+ * The blended summary sits still under the header, always in view: it is the
+ * one line that answers "what is it like here". The chevron below it folds the
+ * station list, which is the part that can run long.
+ */
+/**
+ * The summary and its stations stay put while the thread scrolls under them.
+ * The chevron folds the block to nothing, and the block scrolls inside a
+ * capped height, giving way before the thread when the window is short. Its
+ * scrollbar is hidden: the seam is the cue that there is more.
+ */
+const infoStyle = css({
+  flex: '0 1 auto',
+  minHeight: 0,
+  maxHeight: 'min(360px, 55vh)',
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+  padding: '20px',
+  borderBlockEnd: '1px solid var(--line)',
+  scrollbarWidth: 'none',
+  transition:
+    'max-height 220ms ease, padding 220ms ease, opacity 220ms ease, ' +
+    'border-bottom-width 220ms ease',
+  '&::-webkit-scrollbar': { display: 'none' },
+  '&[data-collapsed="true"]': {
+    maxHeight: '0px',
+    paddingTop: '0px',
+    paddingBottom: '0px',
+    borderBottomWidth: '0px',
+    opacity: 0,
+  },
+})
+
+/** A zero-height seam between the summary and the list, for the chevron. */
+const dividerStyle = css({
+  position: 'relative',
+  height: 0,
+  flexShrink: 0,
+  zIndex: 1,
+})
+
+/** The whole seam is the button; the chevron is the handle on it. */
+const collapseStyle = css({
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  top: '-13px',
+  height: '26px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--ink-3)',
+  cursor: 'pointer',
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '-2px',
+  },
+})
+
+const chevronStyle = css({
+  display: 'grid',
+  placeItems: 'center',
+  width: '26px',
+  height: '26px',
+  border: '1px solid var(--line)',
+  borderRadius: '50%',
+  background: 'var(--paper-2)',
+  transition: 'transform 200ms ease, color 120ms ease',
+  '&:hover': { color: 'var(--ink-0)' },
+})
+
+const threadStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',
@@ -438,6 +564,16 @@ const blendNoteStyle = css({
 })
 
 const mutedStyle = css({ margin: 0, fontSize: '12px', color: 'var(--ink-3)' })
+
+/** A point with nothing in range needs a line, not a fold with nothing in it. */
+const emptyStyle = css({
+  flexShrink: 0,
+  margin: 0,
+  padding: '20px 20px 16px',
+  fontSize: '12px',
+  lineHeight: 1.5,
+  color: 'var(--ink-3)',
+})
 
 const exchangeStyle = css({
   display: 'flex',
