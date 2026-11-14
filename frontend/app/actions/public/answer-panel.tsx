@@ -494,18 +494,22 @@ const closeStyle = css({
 /**
  * The conditions stay put while the thread scrolls under them. The chevron
  * sits on the divider between the two, and folds the block to its headline.
- * Nothing here scrolls: it clips, so a long block cannot take the panel.
+ * A long report scrolls inside the block, with no scrollbar shown: the seam
+ * is the cue that there is more.
  */
 const infoStyle = css({
   position: 'relative',
   flexShrink: 0,
   maxHeight: '360px',
-  overflow: 'hidden',
+  overflowY: 'auto',
+  overflowX: 'hidden',
   padding: '14px 20px 20px',
   borderBlockEnd: '1px solid var(--line)',
+  scrollbarWidth: 'none',
   transition:
     'max-height 220ms ease, padding 220ms ease, opacity 220ms ease, ' +
     'border-bottom-width 220ms ease',
+  '&::-webkit-scrollbar': { display: 'none' },
   '&[data-collapsed="true"]': {
     maxHeight: '0px',
     paddingTop: '0px',
