@@ -2,6 +2,7 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, on } from 'remix/component'
 
 import { SendIcon, StopIcon } from '#app/ui/public/icons.tsx'
+import { askHistory } from '#app/ui/public/ask-history.ts'
 import { session } from '#app/ui/public/session.ts'
 
 /** The ask-first composer: it floats over the map and needs no station. */
@@ -9,6 +10,49 @@ export const AskBar = clientEntry(
   import.meta.url,
   function AskBar(handle: Handle) {
     let draft = ''
+    /** Where in the history the field is, or null while it holds a draft. */
+    let recalled: number | null = null
+    /** The draft the reader had before walking into the history. */
+    let draftBefore = ''
+
+    function fill(field: HTMLTextAreaElement, value: string): void {
+      field.value = value
+      draft = value
+      field.style.height = 'auto'
+      field.style.height = `${Math.min(field.scrollHeight, 108)}px`
+      field.setSelectionRange(value.length, value.length)
+      handle.update()
+    }
+
+    function recallOlder(field: HTMLTextAreaElement): void {
+      let items = askHistory.items
+      if (items.length === 0) return
+
+      if (recalled === null) {
+        draftBefore = field.value
+        recalled = items.length - 1
+      } else if (recalled > 0) {
+        recalled -= 1
+      } else {
+        return
+      }
+
+      fill(field, items[recalled])
+    }
+
+    function recallNewer(field: HTMLTextAreaElement): void {
+      if (recalled === null) return
+      let items = askHistory.items
+
+      if (recalled < items.length - 1) {
+        recalled += 1
+        fill(field, items[recalled])
+        return
+      }
+
+      recalled = null
+      fill(field, draftBefore)
+    }
 
     session.addEventListener('change', () => handle.update(), {
       signal: handle.signal,
@@ -37,8 +81,15 @@ export const AskBar = clientEntry(
                 let question = draft.trim()
                 if (question === '') return
 
+                // The composer remembers only what was typed into it, and
+                // remembers it before the question goes anywhere: the answer
+                // may fail, but the words were still asked.
+                askHistory.record(question)
+
                 let field = event.currentTarget.elements.namedItem('question')
                 draft = ''
+                recalled = null
+                draftBefore = ''
                 event.currentTarget.reset()
                 if (field instanceof HTMLTextAreaElement) {
                   field.style.height = 'auto'
@@ -54,6 +105,7 @@ export const AskBar = clientEntry(
               maxLength={400}
               mix={[
                 on('input', (event) => {
+                  recalled = null
                   draft = event.currentTarget.value
                   let field = event.currentTarget
                   field.style.height = 'auto'
@@ -61,9 +113,40 @@ export const AskBar = clientEntry(
                   handle.update()
                 }),
                 on('keydown', (event) => {
-                  if (event.key !== 'Enter' || event.shiftKey) return
-                  event.preventDefault()
-                  event.currentTarget.form?.requestSubmit()
+                  let field = event.currentTarget
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    field.form?.requestSubmit()
+                    return
+                  }
+
+                  // Up walks back through earlier questions, Down walks
+                  // forward and then restores the draft. A one-line value has
+                  // nowhere for the caret to go, so the arrows are free
+                  // whatever the caret is doing; a multi-line draft keeps the
+                  // caret's own movement on its first and last line.
+                  let multiline = field.value.includes('\n')
+                  let atStart = field.selectionStart === 0
+                  let atEnd = field.selectionStart === field.value.length
+
+                  if (
+                    event.key === 'ArrowUp' &&
+                    (recalled !== null || !multiline || atStart)
+                  ) {
+                    if (askHistory.items.length === 0) return
+                    event.preventDefault()
+                    recallOlder(field)
+                    return
+                  }
+
+                  if (
+                    event.key === 'ArrowDown' &&
+                    recalled !== null &&
+                    (!multiline || atEnd)
+                  ) {
+                    event.preventDefault()
+                    recallNewer(field)
+                  }
                 }),
               ]}
               name="question"
@@ -75,6 +158,7 @@ export const AskBar = clientEntry(
                     : 'Ask about the weather anywhere…'
               }
               rows={1}
+              title="Press the up arrow to reuse an earlier question"
             />
             {pending ? (
               <button
