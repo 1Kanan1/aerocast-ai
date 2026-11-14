@@ -103,6 +103,7 @@ export const SketchLayer = clientEntry(
   import.meta.url,
   function SketchLayer(handle: Handle) {
     let host: HTMLElement | undefined
+    let carrier: HTMLElement | undefined
     let svg: SVGSVGElement | undefined
     let frame = 0
     let stationFields = new Map<string, StationField>()
@@ -356,20 +357,24 @@ export const SketchLayer = clientEntry(
 
     /**
      * Put the built drawing where the camera now is. The drawing keeps the
-     * coordinates it was built at; the overlay carries the pan, the turn and
-     * the zoom as one transform, so moving the map costs a style write and a
-     * composited layer rather than a rebuild.
+     * coordinates it was built at; an inner layer carries the pan, the turn
+     * and the zoom as one transform, so moving the map costs a style write
+     * and a composited layer rather than a rebuild.
+     *
+     * The transform sits on the inner layer, not on the clipping box: a
+     * transformed box carries its own clip with it, which would leave part of
+     * the screen bare as soon as the field is panned off centre.
      */
     function place(anchor: Anchor | null): void {
-      if (host === undefined) return
+      if (carrier === undefined) return
       if (anchor === null || built === null) {
-        host.style.transform = ''
+        carrier.style.transform = ''
         return
       }
 
       let scale = anchor.pxPerNm / built.pxPerNm
-      host.style.transformOrigin = `${built.x}px ${built.y}px`
-      host.style.transform =
+      carrier.style.transformOrigin = `${built.x}px ${built.y}px`
+      carrier.style.transform =
         `translate(${(anchor.x - built.x).toFixed(2)}px, ${(anchor.y - built.y).toFixed(2)}px) ` +
         `rotate(${anchor.bearing.toFixed(2)}deg) scale(${scale.toFixed(4)})`
     }
@@ -522,7 +527,7 @@ export const SketchLayer = clientEntry(
       rainStreaks = []
       session.setEchoShare(null)
       if (windCanvas !== undefined) windCanvas.style.display = 'none'
-      if (host !== undefined) host.style.transform = ''
+      if (carrier !== undefined) carrier.style.transform = ''
       stationNodes.clear()
       stationDefs = undefined
       layer = undefined
@@ -665,11 +670,16 @@ export const SketchLayer = clientEntry(
 
     return () => (
       <div mix={[overlayStyle, ref((node) => (host = node))]}>
-        <svg aria-hidden="true" mix={[svgStyle, ref((node) => (svg = node))]} />
-        <canvas
-          aria-hidden="true"
-          mix={[windStyle, ref((node) => (windCanvas = node))]}
-        />
+        <div mix={[carryStyle, ref((node) => (carrier = node))]}>
+          <svg
+            aria-hidden="true"
+            mix={[svgStyle, ref((node) => (svg = node))]}
+          />
+          <canvas
+            aria-hidden="true"
+            mix={[windStyle, ref((node) => (windCanvas = node))]}
+          />
+        </div>
       </div>
     )
   },
@@ -994,9 +1004,16 @@ const overlayStyle = css({
   inset: 0,
   zIndex: 2,
   pointerEvents: 'none',
+  // The clip belongs to the viewport-sized box; the drawing moves inside it.
   overflow: 'hidden',
-  // The drawing is carried by one transform while the map moves; a
-  // composited layer keeps that off the main thread.
+})
+
+/** The layer the camera transform rides on: size of the viewport, no clip. */
+const carryStyle = css({
+  position: 'absolute',
+  inset: 0,
+  pointerEvents: 'none',
+  // One composited layer keeps the move off the main thread.
   willChange: 'transform',
 })
 
