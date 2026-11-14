@@ -42,11 +42,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     else:
         logger.error("database connection failed: %s", database_error)
 
-    if not (
-        settings.orca_configured
-        or settings.zai_configured
-        or settings.gemini_configured
-    ):
+    if not (settings.zai_configured or settings.gemini_configured):
         logger.warning(
             "no model router configured; /ask will fall back to the template"
         )

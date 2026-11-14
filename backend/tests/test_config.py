@@ -55,13 +55,6 @@ def test_database_url_rejects_anything_not_postgres(url: str) -> None:
             "gemini/gemini-3.5-flash-lite,zai/glm-4.5-flash",
             ("gemini/gemini-3.5-flash-lite", "zai/glm-4.5-flash"),
         ),
-        (
-            "orcarouter/deepseek/deepseek-v4.1-flash-free,zai",
-            (
-                "orcarouter/deepseek/deepseek-v4.1-flash-free",
-                "zai",
-            ),
-        ),
         ("zai,,gemini", ("zai", "gemini")),
     ],
 )
@@ -87,7 +80,7 @@ def test_unknown_providers_are_dropped_from_the_pool() -> None:
 
 
 def test_a_vendor_prefix_without_its_router_names_nothing(caplog) -> None:
-    """An Orca id looks like `vendor/model`; on its own it names no router."""
+    """A model id looks like `vendor/model`; on its own it names no router."""
     settings = make_settings(llm_chain="deepseek/deepseek-v4.1-flash-free")
 
     assert settings.llm_targets == ()
@@ -95,19 +88,13 @@ def test_a_vendor_prefix_without_its_router_names_nothing(caplog) -> None:
 
 
 def test_provider_configuration_reflects_empty_keys() -> None:
-    settings = make_settings(
-        zai_api_key="", gemini_api_key="", orca_api_key=""
-    )
+    settings = make_settings(zai_api_key="", gemini_api_key="")
     assert settings.zai_configured is False
     assert settings.gemini_configured is False
-    assert settings.orca_configured is False
 
-    configured = make_settings(
-        zai_api_key="secret", gemini_api_key="", orca_api_key="secret"
-    )
+    configured = make_settings(zai_api_key="secret", gemini_api_key="")
     assert configured.zai_configured is True
     assert configured.gemini_configured is False
-    assert configured.orca_configured is True
 
 
 def test_no_provider_uses_a_moving_model_alias() -> None:
@@ -116,7 +103,6 @@ def test_no_provider_uses_a_moving_model_alias() -> None:
     for model in (
         *settings.zai_model_list,
         *settings.gemini_model_list,
-        *settings.orca_model_list,
         *(target.model for target in settings.llm_targets if target.model),
     ):
         assert not model.endswith("-latest"), model

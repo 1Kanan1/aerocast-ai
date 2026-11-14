@@ -48,7 +48,7 @@ nice-to-have in section 17, not promised.
 | Frontend runtime | Node 26.13.0 LTS, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running. Pinned in the Docker base image, CI and `.node-version` |
 | Map | MapLibre GL JS v6 | ESM only, WebGL2, no Mapbox account |
 | Basemap | OpenFreeMap `positron`, restyled monochrome | no key, no rate limit, MIT-ish terms, good enough to desaturate |
-| AI | OrcaRouter (DeepSeek V4.1/4-Flash, GLM-5.3-Flash), Z.ai GLM-4.7/4.5-Flash, Gemini Flash, template floor | free tiers; one OpenAI-compatible client for all of them |
+| AI | Z.ai GLM-4.5/4.7-Flash, Gemini Flash, template floor | free tiers; one OpenAI-compatible client, smartest model first, 35s for the whole answer |
 | Deploy | Hetzner + Coolify + Caddy, `docker compose` underneath | ~EUR 4/mo, real TLS, git-push deploys |
 
 Remix never touches Postgres. FastAPI owns the database, the parsers, ingestion, and
@@ -581,7 +581,7 @@ question
      -> no match: say so, no model call
   -> pre-check: does it ask for a decision? (regex)  -> fixed refusal, no model call
   -> cache: sha256(brief_hash + normalized_question + prompt_version)
-  -> pool: LLM_CHAIN order, fastest model first, then the template floor
+  -> pool: LLM_CHAIN order, smartest model first, then the template floor
   -> validate
   -> store in ai_answers
   -> respond
@@ -597,7 +597,12 @@ question
       "refs": ["metar.KSFO.ceiling"] }
   ],
   "caveats": ["Observation is 6 minutes old."],
-  "refusal": null
+  "refusal": null,
+  "notice": null,
+  // The model that wrote it and the wait it cost; null on a refusal or the
+  // template fallback, which no model wrote.
+  "model": "glm-4.5-flash",
+  "elapsed_ms": 21400
 }
 ```
 
@@ -689,59 +694,41 @@ recorded.
 
 ### The API router comes first
 
-OrcaRouter is an OpenAI-compatible gateway at `https://api.orcarouter.ai/v1`. Its model
-ids are namespaced by the vendor it forwards to, so `deepseek/deepseek-v4.1-flash-free`
-is one model id, not a router and a model. That is why every `LLM_CHAIN` entry starts
-with the API router the app actually calls:
+Every `LLM_CHAIN` entry starts with the API router the app calls, because a model id may
+carry a vendor prefix of its own. Only two routers are known, `zai` and `gemini`:
 
 ```dotenv
-LLM_CHAIN=orcarouter/deepseek/deepseek-v4.1-flash-free,orcarouter/z-ai/glm-5.3-flash-free,orcarouter/deepseek/deepseek-v4-flash-free,gemini/gemini-3.5-flash-lite
+LLM_CHAIN=zai/glm-4.5-flash,gemini/gemini-3.6-flash,zai/glm-4.7-flash,gemini/gemini-3.5-flash-lite,gemini/gemini-3.8-flash
 ```
 
-The first segment is split off once. `orcarouter` is the router; the `deepseek` inside
-the model id is the vendor OrcaRouter calls. A first segment that names no known router
-is dropped with a warning, so a vendor prefix written in its place fails visibly instead
-of disappearing from the chain.
+The first segment is split off once. A first segment that names no known router is dropped
+with a warning, so a vendor prefix written in its place fails visibly instead of
+disappearing from the chain. A bare router name expands to that router's ladder in place,
+which keeps the ladder in one setting.
 
-The three free Orca models sit first because they answer without a paid direct key. The
-direct Z.ai and Gemini entries stay behind them as fallbacks.
+### One pool, ordered by intelligence
 
-### The answer prompt lives in the gateway
-
-OrcaRouter keeps a workspace prompt registry: a named system message the gateway injects
-before forwarding. `ORCA_PROMPT` names the prompt, `ORCA_PROMPT_LABEL` pins a label, and
-every Orca request carries it as a per-request `prompt_ref`. The registry holds the text;
-the app ships no copy of it and no longer sends its own system message on those rungs. A
-wording change is an edit in the console, not a deploy, and the answer changes on the next
-call.
-
-The two prompts are not interchangeable. `prompts.SYSTEM_PROMPT` is the single-station
-prompt the direct routers still get; the registry prompt is the one that sees the fact
-bundle. Because the gateway fails open, a renamed or deleted prompt sends the request
-with no system message at all, and the template answer usually takes over. The scope
-classifier passes `hosted_prompt=False` to keep its own short prompt, since the registry
-prompt would answer the question instead of classifying it.
-
-### One pool, ordered by latency
-
-Provider-major order was the wrong shape. Measured on the same brief, Gemini 3.5-flash-lite
-answers in ~1.5s and GLM-4.5-flash in ~20s, so a chain that tries ZAI first pays 16s before
-reaching the model that actually answers quickly. `LLM_CHAIN` is therefore a single pool of
-`router/model` entries in speed order, and a bare router name expands to its ladder in
-place:
+The chain is ordered by how good the answer is, then by speed on a tie. `glm-4.5-flash` is
+first despite taking 15 to 27s, because it is the only model measured that puts the values
+and the observation age into the summary a reader sees; `gemini-3.6-flash` is second at 4
+to 43s; `gemini-3.5-flash-lite` is fourth at ~2s because its summaries restate the topic
+rather than answer it.
 
 ```dotenv
-LLM_CHAIN=orcarouter/deepseek/deepseek-v4.1-flash-free,orcarouter/z-ai/glm-5.3-flash-free,orcarouter/deepseek/deepseek-v4-flash-free,gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
+LLM_CHAIN=zai/glm-4.5-flash,gemini/gemini-3.6-flash,zai/glm-4.7-flash,gemini/gemini-3.5-flash-lite,gemini/gemini-3.8-flash
 ```
 
-The order is hand-tuned from measurement, not learned. A model that is fast today can be
-slow tomorrow — ZAI's free tier returned 1305 instantly at one point and took 23s an hour
-later — so the list is one line to reorder when a provider shifts. What stays automatic is
-failure handling: any rung that times out or returns 429 sits out for 60s, so a slow or
-overloaded provider is demoted without an edit.
+The order is hand-tuned from measurement, not learned, and the free tiers move under it:
+on 2026-11-14 ZAI returned 429 or 1305 on most attempts and `gemini-3.8-flash` answered
+none, while the same models answered minutes apart. What stays automatic is failure
+handling: any rung that times out or returns 429 sits out for 60s, so an overloaded
+provider is demoted without an edit. The scope classifier keeps its own cooldown
+namespace, so its 4s timeout cannot bench the rung the answer is about to use.
 
 `ai_answers.model` stores the id that produced each answer, so results stay attributable
-after a bump.
+after a bump. The API returns that id with the answer, and the panel prints it beside the
+answer's actions with the time the reader waited, so a slow or degraded chain is visible
+in the product rather than only in the logs.
 
 ### Provider behaviour, measured
 
@@ -764,18 +751,17 @@ disagreed twice.
   explicitly, per provider. The Z.ai `thinking` parameter is Z.ai-specific and must not be
   sent to Gemini.
 
-Consequence for timeouts: they are per provider, not global, and capped again per request.
-`/api/ask` gives the whole chain 20s and no single rung more than 8s, so a thinking model
-cannot hold the drawer for a minute. The longer provider timeouts remain for
-non-interactive callers. A rung that times out or returns 429 is skipped for 60s, which
-keeps a hung provider from costing every request.
+Consequence for timeouts: there is one cap, not a provider budget plus a request budget.
+`/api/ask` and `/api/area/ask` give the whole answer 35s, and no rung may hold the request
+longer than that, so a thinking model cannot hold the drawer for a minute. A rung that
+times out or returns 429 is skipped for 60s, which keeps a hung provider from costing
+every request.
 
-Consequence for the fallback rung: a 63s explanation is not an interactive experience, so
-the default ladder is fast first: `gemini-3.5-flash-lite`, `gemini-3.6-flash`, then
-`gemini-3.8-flash`. The first rung that answers inside its budget wins, and a timeout or
-a rejected claim falls through to the next. Putting the quality model first is one env
-change when `make eval` says how much quality it actually buys, at the cost of a slower
-drawer.
+Consequence for the ladder: a 63s explanation is not an interactive experience, so the
+intelligence-first order costs 15 to 27s on the first request. That is a deliberate trade:
+the faster models were measured dodging the question in their summaries while putting the
+values only in claims the panel does not render. If `make eval` later says the fast model
+is good enough, moving it up is one env change.
 
 ### Eval fixture
 
@@ -795,10 +781,9 @@ single most persuasive artifact in the repo and it costs about half a day.
 the brief endpoint, and returns the answer contract. The request path is:
 
 1. Verdict regex. A match returns fixed refusal copy without a provider call.
-2. Pool from `LLM_CHAIN`, fastest model first. One attempt per rung, pinned model ids,
-   per-provider timeouts, a 20s request budget and an 8s cap per rung. Gemini uses the
-   JSON schema response format; the others ask for JSON. A rung that times out or returns
-   429 is skipped for 60s.
+2. Pool from `LLM_CHAIN`, smartest model first. One attempt per rung, pinned model ids, no
+   per-provider timeout, and 35s for the whole answer. Gemini uses the JSON schema response
+   format; Z.ai asks for JSON. A rung that times out or returns 429 is skipped for 60s.
 3. Parse and validate. Unknown refs, invented numbers, verdict language, too many claims
    or a refusal that carries claims all reject the draft.
 4. On rejection or an unreachable chain, the deterministic template and its notice.
@@ -1014,19 +999,13 @@ Two owners, two sets of variables. They never mix.
 AEROCAST_ENV=local
 DATABASE_URL=postgresql+asyncpg://aerocast@localhost:5432/aerocast
 
-LLM_CHAIN=orcarouter/deepseek/deepseek-v4.1-flash-free,orcarouter/z-ai/glm-5.3-flash-free,orcarouter/deepseek/deepseek-v4-flash-free,gemini/gemini-3.5-flash-lite,gemini/gemini-3.6-flash,zai/glm-4.7-flash,zai/glm-4.5-flash,gemini/gemini-3.8-flash
-LLM_TIMEOUT_SECONDS=20
+LLM_CHAIN=zai/glm-4.5-flash,gemini/gemini-3.6-flash,zai/glm-4.7-flash,gemini/gemini-3.5-flash-lite,gemini/gemini-3.8-flash
 
-ORCA_API_KEY=
-ORCA_BASE_URL=https://api.orcarouter.ai/v1
-ORCA_MODELS=deepseek/deepseek-v4.1-flash-free,z-ai/glm-5.3-flash-free,deepseek/deepseek-v4-flash-free
-ORCA_PROMPT=aerocast-answer-in-one
-ORCA_PROMPT_LABEL=
 ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
-ZAI_MODELS=glm-4.7-flash,glm-4.5-flash
+ZAI_MODELS=glm-4.5-flash,glm-4.7-flash
 GEMINI_API_KEY=
-GEMINI_MODELS=gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.8-flash
+GEMINI_MODELS=gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.8-flash
 ```
 
 **The web container gets exactly one variable**, set in `compose.yaml` or the shell, not

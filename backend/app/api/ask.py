@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from app.api import models
 from app.api.stations import station_bundle
 from app.config import get_settings
-from app.llm.client import complete
+from app.llm.client import RUNG_BUDGET_SECONDS, complete
 from app.llm.contract import (
     ANSWER_SCHEMA,
     Answer,
@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["ask"])
 
-ASK_BUDGET_SECONDS = 20.0
+#: The whole answer, not one rung: the reader waits once, not per model.
+ASK_BUDGET_SECONDS = RUNG_BUDGET_SECONDS
 
 
 @router.post("/ask", response_model=models.Answer)

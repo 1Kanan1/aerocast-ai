@@ -5,6 +5,7 @@ import pytest
 from pydantic import SecretStr
 
 from app.config import Settings
+from app.llm import client as client_module
 from app.llm.client import complete, reset_cooldowns, rungs
 
 
@@ -17,10 +18,10 @@ def clear_cooldowns():
 
 def settings(**overrides: object) -> Settings:
     defaults = Settings(
+        _env_file=None,
         database_url="postgresql://user:pass@localhost:5432/aerocast",
         zai_api_key=SecretStr("zai-key"),
         gemini_api_key=SecretStr("gemini-key"),
-        orca_api_key=SecretStr("orca-key"),
         llm_chain="zai,gemini",
     )
     return defaults.model_copy(update=overrides)
@@ -75,48 +76,23 @@ def test_zai_expands_to_its_ladder():
     assert all(rung.name == "zai" for rung in chain)
 
 
-def test_orcarouter_keeps_the_vendor_prefix_in_the_model_id():
-    chain = rungs(
-        settings(
-            llm_chain="orcarouter/deepseek/deepseek-v4.1-flash-free",
-        )
-    )
-
-    assert [(rung.name, rung.model) for rung in chain] == [
-        ("orcarouter", "deepseek/deepseek-v4.1-flash-free"),
-    ]
-    assert chain[0].base_url == "https://api.orcarouter.ai/v1"
-    assert chain[0].response_format == "json"
-
-
-def test_orcarouter_expands_to_its_ladder():
-    chain = rungs(
-        settings(
-            llm_chain="orcarouter",
-            orca_models="deepseek/orca-a,z-ai/orca-b",
-        )
-    )
-
-    assert [rung.model for rung in chain] == [
-        "deepseek/orca-a",
-        "z-ai/orca-b",
-    ]
-    assert all(rung.name == "orcarouter" for rung in chain)
-
-
-def test_the_default_chain_tries_orcarouter_before_the_direct_routers():
+def test_the_default_chain_puts_the_smarter_models_first():
     chain = rungs(
         Settings(
             _env_file=None,
             llm_chain=Settings.model_fields["llm_chain"].default,
-            orca_api_key=SecretStr("orca-key"),
             zai_api_key=SecretStr("zai-key"),
             gemini_api_key=SecretStr("gemini-key"),
         )
     )
 
-    assert [rung.name for rung in chain[:3]] == ["orcarouter"] * 3
-    assert chain[3].name == "gemini"
+    assert [(rung.name, rung.model) for rung in chain] == [
+        ("zai", "glm-4.5-flash"),
+        ("gemini", "gemini-3.6-flash"),
+        ("zai", "glm-4.7-flash"),
+        ("gemini", "gemini-3.5-flash-lite"),
+        ("gemini", "gemini-3.8-flash"),
+    ]
 
 
 def test_gemini_expands_to_its_ladder():
@@ -268,95 +244,29 @@ async def test_complete_rejects_unusable_content(monkeypatch):
     assert await complete(settings(), [], {}) is None
 
 
-async def test_orcarouter_binds_the_hosted_prompt_and_drops_the_system_turn(
+async def test_a_scope_timeout_does_not_bench_the_rung_for_the_answer(
     monkeypatch,
 ):
-    bodies: list[dict[str, object]] = []
+    attempted: list[str] = []
 
-    async def fake_post(
-        client: httpx.AsyncClient,
-        url: str,
-        json: dict[str, object],
-        headers: dict[str, str],
-    ) -> FakeResponse:
-        bodies.append(json)
-        return FakeResponse(answer_payload())
+    async def fake_call(rung, messages, schema, timeout):
+        attempted.append(rung.model)
+        if len(attempted) == 1:
+            raise TimeoutError
+        return answer_payload()
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    monkeypatch.setattr(client_module, "_call", fake_call)
+    one_rung = settings(gemini_api_key=None, zai_models="only-model")
 
-    messages = [
-        {"role": "system", "content": "our own rules"},
-        {"role": "user", "content": "how is the wind"},
-    ]
-    await complete(
-        settings(llm_chain="orcarouter", orca_prompt="aerocast-answer-in-one"),
-        messages,
-        {},
-    )
+    assert await complete(one_rung, [], {}, 1, namespace="scope") is None
 
-    assert bodies[0]["prompt_ref"] == {"name": "aerocast-answer-in-one"}
-    assert bodies[0]["messages"] == [messages[1]]
+    completion = await complete(one_rung, [], {})
+
+    assert completion is not None
+    assert attempted == ["only-model", "only-model"]
 
 
-async def test_the_prompt_label_is_sent_when_one_is_configured(monkeypatch):
-    bodies: list[dict[str, object]] = []
-
-    async def fake_post(
-        client: httpx.AsyncClient,
-        url: str,
-        json: dict[str, object],
-        headers: dict[str, str],
-    ) -> FakeResponse:
-        bodies.append(json)
-        return FakeResponse(answer_payload())
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-
-    await complete(
-        settings(
-            llm_chain="orcarouter",
-            orca_prompt="aerocast-answer-in-one",
-            orca_prompt_label="staging",
-        ),
-        [],
-        {},
-    )
-
-    assert bodies[0]["prompt_ref"] == {
-        "name": "aerocast-answer-in-one",
-        "label": "staging",
-    }
-
-
-async def test_an_empty_prompt_name_sends_no_prompt_ref(monkeypatch):
-    bodies: list[dict[str, object]] = []
-
-    async def fake_post(
-        client: httpx.AsyncClient,
-        url: str,
-        json: dict[str, object],
-        headers: dict[str, str],
-    ) -> FakeResponse:
-        bodies.append(json)
-        return FakeResponse(answer_payload())
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-
-    await complete(
-        settings(llm_chain="orcarouter", orca_prompt=""),
-        [{"role": "system", "content": "our own rules"}],
-        {},
-    )
-
-    assert "prompt_ref" not in bodies[0]
-    assert bodies[0]["messages"] == [
-        {"role": "system", "content": "our own rules"}
-    ]
-
-
-async def test_direct_routers_keep_the_system_prompt_and_no_prompt_ref(
-    monkeypatch,
-):
+async def test_every_rung_receives_the_system_prompt(monkeypatch):
     bodies: list[dict[str, object]] = []
 
     async def fake_post(
@@ -375,31 +285,4 @@ async def test_direct_routers_keep_the_system_prompt_and_no_prompt_ref(
     await complete(settings(llm_chain="gemini"), messages, {})
 
     assert len(bodies) == 2
-    assert all("prompt_ref" not in body for body in bodies)
     assert all(body["messages"] == messages for body in bodies)
-
-
-async def test_a_caller_that_owns_its_prompt_can_opt_out(monkeypatch):
-    bodies: list[dict[str, object]] = []
-
-    async def fake_post(
-        client: httpx.AsyncClient,
-        url: str,
-        json: dict[str, object],
-        headers: dict[str, str],
-    ) -> FakeResponse:
-        bodies.append(json)
-        return FakeResponse(answer_payload())
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-
-    messages = [{"role": "system", "content": "classify this"}]
-    await complete(
-        settings(llm_chain="orcarouter", orca_prompt="aerocast-answer-in-one"),
-        messages,
-        {},
-        hosted_prompt=False,
-    )
-
-    assert "prompt_ref" not in bodies[0]
-    assert bodies[0]["messages"] == messages
