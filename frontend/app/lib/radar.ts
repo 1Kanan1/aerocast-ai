@@ -32,22 +32,59 @@ const ECHO_RAMP: {
   { from: [230, 60, 50], to: [184, 66, 58] },
 ]
 
+/**
+ * A droplet of echo, placed once per radar fetch and moved thereafter. The
+ * position is a fraction of the window's half-size, so a zoom only scales it;
+ * the level carries the intensity, and every draw property is set from it.
+ */
+export interface RadarDrop {
+  /** -1 to 1 across the window, north up. */
+  x: number
+  y: number
+  /** Which of the echo levels it belongs to: 0 lightest to 3 heaviest. */
+  level: number
+  /** Where in its fall loop it starts, 0 to 1. */
+  phase: number
+  /** How far it may fall before leaving its own echo, as a fraction of the half-size. */
+  travel: number
+}
+
 export interface RadarWindow {
-  /** PNG data URL of the recolored window, transparent where there is no echo. */
-  image: string
   /** Share of the disc with an echo, 0 to 1. */
   total: number
   /** Share of each sector with an echo, north first, clockwise. */
   sectors: number[]
+  /** The echo as droplets, already placed in window coordinates. */
+  drops: RadarDrop[]
 }
 
-/** Rewrite each echo pixel to the nearest step of the window ramp. */
-export function recolorEchoes(pixels: Uint8ClampedArray): void {
+/** The echo steps folded into levels, so that each level can look different. */
+export const ECHO_LEVELS = 4
+
+/** The level a ramp step belongs to, 0 lightest to 3 heaviest. */
+export function echoLevel(step: number): number {
+  return Math.min(
+    ECHO_LEVELS - 1,
+    Math.floor((step * ECHO_LEVELS) / ECHO_RAMP.length),
+  )
+}
+
+/**
+ * Share of a cell's samples that become drops, per level. The gaps are wide
+ * on purpose: a level has to be told apart from its neighbour at a glance,
+ * so light echo is nearly bare and heavy echo is nearly solid.
+ */
+const DENSITY = [0.06, 0.2, 0.45, 0.7]
+
+/**
+ * Read the window as echo steps: 0 for clear, then 1 to 11 along the ramp.
+ * The colours themselves are not painted any more, so this only names what
+ * each pixel is worth.
+ */
+export function echoSteps(pixels: Uint8ClampedArray): Uint8Array {
+  let steps = new Uint8Array(pixels.length / 4)
   for (let index = 0; index < pixels.length; index += 4) {
-    if (pixels[index + 3] < 24) {
-      pixels[index + 3] = 0
-      continue
-    }
+    if (pixels[index + 3] < 24) continue
 
     let red = pixels[index]
     let green = pixels[index + 1]
@@ -67,11 +104,105 @@ export function recolorEchoes(pixels: Uint8ClampedArray): void {
       }
     }
 
-    let to = ECHO_RAMP[best].to
-    pixels[index] = to[0]
-    pixels[index + 1] = to[1]
-    pixels[index + 2] = to[2]
+    steps[index / 4] = best + 1
   }
+  return steps
+}
+
+/** How many pixels one drop stands for; the window is read at this size. */
+const DROP_CELL = 3
+
+/** The furthest a drop may fall before it would leave its own colour. */
+const DROP_RUN = 8
+
+/**
+ * The direction the rain falls in, as a unit vector in window pixels. Kept
+ * here because the drops have to be checked against it: a drop is coloured by
+ * the echo it sits in, so it may only fall as far as that echo reaches.
+ */
+export const RAIN_FALL = {
+  ux: Math.sin(0.22),
+  uy: Math.cos(0.22),
+}
+
+/**
+ * Turn the echo into droplets. Light echo gives few, small drops; a heavy
+ * core gives many, larger ones, which is what makes the field read as rain
+ * rather than as a coloured wash. The scatter is a hash of the cell, so the
+ * same window always produces the same drops and a test can say so.
+ */
+export function radarDrops(
+  steps: Uint8Array,
+  width: number,
+  half: number,
+): RadarDrop[] {
+  let drops: RadarDrop[] = []
+  let heaviest = ECHO_RAMP.length - 1
+
+  for (let y = 0; y < width; y += DROP_CELL) {
+    for (let x = 0; x < width; x += DROP_CELL) {
+      let echo = 0
+      let sum = 0
+      let seen = 0
+
+      for (let dy = 0; dy < DROP_CELL; dy++) {
+        for (let dx = 0; dx < DROP_CELL; dx++) {
+          let px = x + dx
+          let py = y + dy
+          if (px >= width || py >= width) continue
+          seen += 1
+          let step = steps[py * width + px]
+          if (step === 0) continue
+          echo += 1
+          sum += step - 1
+        }
+      }
+
+      if (echo === 0 || seen === 0) continue
+      let strength = sum / echo / heaviest
+      let cell = echoLevel(Math.round(strength * heaviest))
+      if (scatter(x, y) > DENSITY[cell]) continue
+
+      let across = x + DROP_CELL * scatter(y, x)
+      let down = y + DROP_CELL * scatter(x + 7, y + 13)
+      if (Math.hypot(across - half, down - half) > half) continue
+
+      // The drop takes the colour of the pixel it lands on, not the cell's
+      // average, so it can never sit in one echo wearing another's colour.
+      let px = Math.round(across)
+      let py = Math.round(down)
+      let echoStep = steps[py * width + px]
+      if (echoStep === 0) continue
+
+      // Then it may only fall while the echo under it stays that colour.
+      let run = 0
+      for (let ahead = 1; ahead <= DROP_RUN; ahead++) {
+        let sx = Math.round(across + RAIN_FALL.ux * ahead)
+        let sy = Math.round(down + RAIN_FALL.uy * ahead)
+        if (sx < 0 || sy < 0 || sx >= width || sy >= width) break
+        if (steps[sy * width + sx] !== echoStep) break
+        run = ahead
+      }
+      if (run === 0) continue
+
+      drops.push({
+        x: (across - half) / half,
+        y: (down - half) / half,
+        level: echoLevel(echoStep - 1),
+        phase: scatter(x + 11, y + 17),
+        travel: run / half,
+      })
+    }
+  }
+
+  return drops
+}
+
+/** A stable 0..1 from a cell coordinate: same window, same drops. */
+function scatter(x: number, y: number): number {
+  let hash = (x * 374761393 + y * 668265263) | 0
+  hash = (hash ^ (hash >>> 13)) * 1274126177
+  return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296
 }
 
 /** Count echo pixels inside the disc, overall and per compass sector. */
@@ -140,8 +271,9 @@ function fetchTile(url: string): Promise<Blob | null> {
 
 /**
  * Fetch only the tiles that cover the disc around the station, composite them,
- * soften the pixel edges, recolor and measure. One request set per station,
- * and nothing outside the radius is read.
+ * soften the pixel edges, then measure the coverage and place the echo as
+ * droplets. One request set per station, and nothing outside the radius is
+ * read.
  */
 export async function fetchRadarWindow(
   lat: number,
@@ -218,12 +350,11 @@ export async function fetchRadarWindow(
       half,
       radius,
     )
-    recolorEchoes(image.data)
-    smooth.putImageData(image, 0, 0)
+    let steps = echoSteps(image.data)
 
     return {
-      image: smooth.canvas.toDataURL('image/png'),
       ...coverage,
+      drops: radarDrops(steps, soft.width, half),
     }
   } catch {
     return null

@@ -4,7 +4,11 @@ import { clientEntry, css, on } from 'remix/component'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 const RAIN_SCALE =
-  'linear-gradient(90deg, #d6ecf7, #90c7e3, #60b0aa, #96c07a, #e8d778, #e8a35a, #d9674f)'
+  'linear-gradient(90deg,' +
+  ' rgba(219, 234, 243, 0.32) 0 25%,' +
+  ' rgba(219, 234, 243, 0.55) 25% 50%,' +
+  ' rgba(219, 234, 243, 0.75) 50% 75%,' +
+  ' rgba(219, 234, 243, 0.9) 75% 100%)'
 const TEMP_SCALE =
   'linear-gradient(90deg, #5f8fb8, #6f9f9a, #a8b071, #d09a4e, #c4643f)'
 

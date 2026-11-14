@@ -4,7 +4,13 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
 import type { BundleWind } from '#app/lib/api-types.ts'
-import { AREA_NM, type RadarWindow, fetchRadarWindow } from '#app/lib/radar.ts'
+import {
+  AREA_NM,
+  RAIN_FALL,
+  type RadarDrop,
+  type RadarWindow,
+  fetchRadarWindow,
+} from '#app/lib/radar.ts'
 import {
   type FieldStation,
   areaFieldStations,
@@ -45,6 +51,19 @@ const WIND_EDGE = 0.7
 const WIND_TRAVEL = 90
 /** The furthest the arrows reach past their origin, on top of the drift. */
 const WIND_STROKE = 24
+/** Per echo level: streak length, width, fall speed and solidity. */
+const RAIN_LENGTH = [4.5, 7, 10, 13]
+const RAIN_WIDTHS = [0.6, 0.85, 1.1, 1.3]
+const RAIN_SPEED = [16, 34, 58, 86]
+const RAIN_ALPHA = [0.32, 0.55, 0.75, 0.9]
+/** The furthest a drop falls on screen, however large the field is. */
+const RAIN_TRAVEL = 20
+/**
+ * Rain is one pale colour, not a ramp. The echo already reads through its
+ * density and length, and the colour channel belongs to the arrows: a field
+ * with two coloured mark types is two fields.
+ */
+const RAIN_COLOR = '#dbeaf3'
 /**
  * How far the carried field may drift from the scale it was built at before
  * it is rebuilt. Ten percent is under the point where the echo reads as
@@ -107,6 +126,7 @@ export const SketchLayer = clientEntry(
     let windCentre = 0
     let windRadius = 0
     let windArrows: WindArrow[] = []
+    let rainStreaks: RainStreak[] = []
     let windFrame = 0
 
     function schedule(): void {
@@ -171,7 +191,7 @@ export const SketchLayer = clientEntry(
       if (windFrame !== 0) return
       windFrame = window.setTimeout(() => {
         windFrame = 0
-        renderWind(performance.now())
+        renderField(performance.now())
         flowWind()
       }, WIND_FRAME_MS)
     }
@@ -179,10 +199,11 @@ export const SketchLayer = clientEntry(
     /**
      * Start the drift again after a gesture, or after a build. Nothing to do
      * while the map moves: the field is being carried by a transform then, so
-     * redrawing the arrows would be work whose result is about to be scaled.
+     * redrawing the rain and arrows would be work about to be scaled.
      */
     function resumeWind(): void {
-      if (moving || windArrows.length === 0) return
+      if (moving || (windArrows.length === 0 && rainStreaks.length === 0))
+        return
       if (windCanvas === undefined || windCanvas.style.display === 'none')
         return
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -190,12 +211,13 @@ export const SketchLayer = clientEntry(
     }
 
     /**
-     * One pass over the arrows: each one drifts along its own flow vector,
-     * fades in and out at the ends of its loop, and thins towards the edge of
-     * its station's field. The canvas is clipped to the area's circle, so
-     * nothing is painted outside it.
+     * One pass over the field: rain first, then the arrows over it. A drop
+     * falls along its own line, fading in and out at the ends of its loop;
+     * an arrow drifts along its flow vector. Both thin towards the edge of
+     * their station's field, and the canvas is clipped to the area's circle,
+     * so nothing is painted outside it.
      */
-    function renderWind(now: number, at?: number): void {
+    function renderField(now: number, at?: number): void {
       let canvas = windCanvas
       let context = windContext
       if (canvas === undefined || context === null) return
@@ -208,8 +230,29 @@ export const SketchLayer = clientEntry(
       context.beginPath()
       context.arc(windCentre, windCentre, windRadius, 0, Math.PI * 2)
       context.clip()
-      context.lineWidth = 1.8
       context.lineCap = 'round'
+
+      for (let streak of rainStreaks) {
+        let phase =
+          at ?? (((now / 1000 / streak.duration + streak.phase) % 1) + 1) % 1
+        let alpha =
+          streak.edge * streak.alpha * (0.15 + 0.85 * Math.sin(Math.PI * phase))
+        if (alpha < 0.02) continue
+
+        let head = phase * streak.travel
+        context.globalAlpha = alpha
+        context.strokeStyle = streak.color
+        context.lineWidth = streak.width
+        context.beginPath()
+        context.moveTo(
+          streak.x + streak.ux * (head - streak.length),
+          streak.y + streak.uy * (head - streak.length),
+        )
+        context.lineTo(streak.x + streak.ux * head, streak.y + streak.uy * head)
+        context.stroke()
+      }
+
+      context.lineWidth = 1.8
 
       for (let arrow of windArrows) {
         let phase =
@@ -233,18 +276,20 @@ export const SketchLayer = clientEntry(
       context.restore()
     }
 
-    function paintWind(
+    function paintField(
       x: number,
       y: number,
       frameRadius: number,
       reach: number,
       arrows: WindArrow[],
+      rain: RainStreak[],
     ): void {
       windArrows = arrows
+      rainStreaks = rain
       stopWind()
       if (windCanvas === undefined) return
 
-      if (arrows.length === 0) {
+      if (arrows.length === 0 && rain.length === 0) {
         windCanvas.style.display = 'none'
         return
       }
@@ -266,7 +311,7 @@ export const SketchLayer = clientEntry(
       windRadius = frameRadius
       windContext = windCanvas.getContext('2d')
 
-      renderWind(performance.now(), 0.5)
+      renderField(performance.now(), 0.5)
       resumeWind()
     }
 
@@ -396,6 +441,8 @@ export const SketchLayer = clientEntry(
         frame.clip.setAttribute('cy', String(y))
         frame.clip.setAttribute('r', String(frameRadius))
         let winds: WindArrow[] = []
+        let rain: RainStreak[] = []
+        let centre = frameRadius + reach
 
         for (let { station, field } of fields) {
           let offset = screenOffset(
@@ -413,9 +460,19 @@ export const SketchLayer = clientEntry(
             fieldRadius,
             ink,
             tempOn && source.glow,
-            rainOn ? field.radar : null,
           )
           frame.layer.append(node.group)
+          if (rainOn && field.radar !== null) {
+            rain.push(
+              ...rainFor(
+                offset,
+                fieldRadius,
+                frameRadius,
+                centre,
+                field.radar.drops,
+              ),
+            )
+          }
           if (windOn) {
             winds.push(
               ...windArrowsFor(
@@ -443,11 +500,12 @@ export const SketchLayer = clientEntry(
         }
 
         built = { key, x, y, pxPerNm }
-        if (windOn) {
-          paintWind(x, y, frameRadius, reach, winds)
+        if (windOn || rainOn) {
+          paintField(x, y, frameRadius, reach, winds, rain)
         } else {
           stopWind()
           windArrows = []
+          rainStreaks = []
           if (windCanvas !== undefined) windCanvas.style.display = 'none'
         }
       }
@@ -461,6 +519,7 @@ export const SketchLayer = clientEntry(
       moving = false
       stopWind()
       windArrows = []
+      rainStreaks = []
       session.setEchoShare(null)
       if (windCanvas !== undefined) windCanvas.style.display = 'none'
       if (host !== undefined) host.style.transform = ''
@@ -490,10 +549,8 @@ export const SketchLayer = clientEntry(
     }
 
     /**
-     * One station's field at its place: a warmth bloom under the echo image,
-     * both faded before the field's edge. The nodes belong to the station and
-     * outlive a rebuild, so the echo image is decoded once and moved rather
-     * than made again at every settled zoom.
+     * One station's field at its place: the warmth bloom, faded before the
+     * field's edge. Its rain is drawn on the field canvas, not here.
      */
     function stationNode(
       icao: string,
@@ -502,7 +559,6 @@ export const SketchLayer = clientEntry(
       radius: number,
       ink: string,
       bloomOn: boolean,
-      radar: RadarWindow | null,
     ): StationNode {
       let node = stationNodes.get(icao)
       if (node === undefined) {
@@ -520,31 +576,6 @@ export const SketchLayer = clientEntry(
       node.bloom.setAttribute('display', bloomOn ? 'inline' : 'none')
       node.from.setAttribute('stop-color', ink)
       node.to.setAttribute('stop-color', ink)
-
-      if (radar === null) {
-        // The element stays: turning rain back on reuses the decoded echo.
-        node.image?.setAttribute('display', 'none')
-        return node
-      }
-
-      if (node.image === null) {
-        let image = document.createElementNS(SVG_NS, 'image') as SVGImageElement
-        image.setAttribute('preserveAspectRatio', 'none')
-        // The field is a wash over the map, not a layer that replaces it:
-        // echoes stay readable while labels and dots read through.
-        image.setAttribute('opacity', '0.3')
-        node.group.append(image)
-        node.image = image
-      }
-      node.image.setAttribute('display', 'inline')
-      if (node.href !== radar.image) {
-        node.image.setAttribute('href', radar.image)
-        node.href = radar.image
-      }
-      node.image.setAttribute('x', String(x - radius))
-      node.image.setAttribute('y', String(y - radius))
-      node.image.setAttribute('width', String(radius * 2))
-      node.image.setAttribute('height', String(radius * 2))
 
       return node
     }
@@ -577,8 +608,6 @@ export const SketchLayer = clientEntry(
         bloom,
         from,
         to,
-        image: null,
-        href: null,
       }
     }
 
@@ -656,8 +685,8 @@ function fadeGradient(): SVGElement {
 
 /**
  * One station's nodes. The group and its defs stay in the document between
- * rebuilds, so the echo image is decoded once per data URL, not once per
- * settled zoom.
+ * rebuilds, so a settled zoom moves the same paths instead of building them
+ * again.
  */
 interface StationNode {
   defs: SVGElement
@@ -667,8 +696,82 @@ interface StationNode {
   /** The warmth bloom's gradient stops, recolored when the temperature moves. */
   from: SVGStopElement
   to: SVGStopElement
-  image: SVGImageElement | null
-  href: string | null
+}
+
+/**
+ * One drop as the field canvas draws it: a short streak that falls along its
+ * own line, fading in and out as it goes, with the same edge fade the arrows
+ * have.
+ */
+interface RainStreak {
+  /** Where it sits when its loop starts, in canvas pixels. */
+  x: number
+  y: number
+  ux: number
+  uy: number
+  length: number
+  width: number
+  /** Pixels the drop falls over one loop. */
+  travel: number
+  /** One loop, in seconds. */
+  duration: number
+  /** Where in the loop it starts, 0 to 1. */
+  phase: number
+  color: string
+  /** How solid it draws, set by its echo level. */
+  alpha: number
+  edge: number
+}
+
+/** The rain of one station, placed relative to the area's centre. */
+function rainFor(
+  offset: { x: number; y: number },
+  fieldRadius: number,
+  frameRadius: number,
+  centre: number,
+  drops: RadarDrop[],
+): RainStreak[] {
+  let ux = RAIN_FALL.ux
+  let uy = RAIN_FALL.uy
+  let rain: RainStreak[] = []
+
+  for (let drop of drops) {
+    // Only the part of the field inside the circle is worth drawing.
+    let x = offset.x + drop.x * fieldRadius
+    let y = offset.y + drop.y * fieldRadius
+    if (Math.hypot(x, y) > frameRadius + 4) continue
+
+    let away = Math.hypot(drop.x, drop.y)
+    let fade = away <= WIND_EDGE ? 1 : Math.max(0, (1 - away) / (1 - WIND_EDGE))
+    if (fade === 0) continue
+
+    let travel = Math.min(RAIN_TRAVEL, drop.travel * fieldRadius)
+    let level = drop.level
+
+    rain.push({
+      x: centre + x,
+      y: centre + y,
+      ux,
+      uy,
+      length: RAIN_LENGTH[level],
+      width: RAIN_WIDTHS[level],
+      // A drop falls only as far as its own echo reaches, so a colour never
+      // drifts into a cluster of another colour.
+      travel,
+      // Heavy echo falls fast and light echo drifts; the level sets the speed
+      // and a little scatter keeps a cluster from pulsing in unison.
+      duration: Math.max(
+        0.18,
+        travel / (RAIN_SPEED[level] * (0.92 + 0.16 * drop.phase)),
+      ),
+      phase: drop.phase,
+      color: RAIN_COLOR,
+      alpha: RAIN_ALPHA[level],
+      edge: 0.8 * fade,
+    })
+  }
+
+  return rain
 }
 
 function circle(

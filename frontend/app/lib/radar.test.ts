@@ -1,7 +1,15 @@
 import * as assert from 'remix/assert'
 import { describe, it } from 'remix/test'
 
-import { SECTORS, radarCoverage, recolorEchoes } from './radar.ts'
+import {
+  RAIN_FALL,
+  SECTORS,
+  radarCoverage,
+  ECHO_LEVELS,
+  echoLevel,
+  radarDrops,
+  echoSteps,
+} from './radar.ts'
 
 function pixels(
   size: number,
@@ -66,35 +74,126 @@ describe('radar coverage', () => {
   })
 })
 
-describe('echo colors', () => {
-  it('warms the ramp as the echo strengthens and clears transparency', () => {
+describe('echo steps', () => {
+  it('reports the ramp step each pixel took, and none for clear pixels', () => {
     let pixels = new Uint8ClampedArray([
-      16,
-      196,
-      22,
-      255, // green, moderate
-      0,
-      0,
-      0,
-      0, // transparent
       170,
       176,
       180,
-      255, // grey, light
+      255, // lightest
+      0,
+      0,
+      0,
+      0, // clear
+      16,
+      196,
+      22,
+      255, // moderate
       230,
       60,
       50,
-      255, // red, heavy
+      255, // heaviest
     ])
 
-    recolorEchoes(pixels)
+    let steps = echoSteps(pixels)
 
-    // Warmth is red minus blue: light stays cold, heavy turns hot.
-    let warmth = (index: number) => pixels[index] - pixels[index + 2]
+    assert.equal(steps[0], 1)
+    assert.equal(steps[1], 0)
+    assert.equal(steps[2], 7)
+    assert.equal(steps[3], 11)
+    assert.equal(pixels[0], 170, 'the window is read, not repainted')
+  })
+})
 
-    assert.equal(pixels[7], 0, 'transparent stays transparent')
-    assert.ok(warmth(8) < warmth(0), 'light echo is colder than moderate')
-    assert.ok(warmth(0) < warmth(12), 'heavy echo is hotter than moderate')
-    assert.ok(pixels[10] > pixels[8], 'light echo stays blue')
+describe('radar drops', () => {
+  it('places nothing where there is no echo', () => {
+    let size = 30
+    let steps = new Uint8Array(size * size)
+
+    assert.deepEqual(radarDrops(steps, size, size / 2), [])
+  })
+
+  it('places drops only inside the echoed area, within the disc', () => {
+    let size = 60
+    let half = size / 2
+    let steps = new Uint8Array(size * size)
+    // Well inside the north-west quadrant, so no cell jitter can cross it.
+    for (let y = 0; y < half - 12; y++) {
+      for (let x = 0; x < half - 12; x++) steps[y * size + x] = 6
+    }
+
+    let drops = radarDrops(steps, size, half)
+
+    assert.ok(drops.length > 0)
+    for (let drop of drops) {
+      assert.ok(drop.x < 0 && drop.y < 0, 'drops follow the echo, north-west')
+      assert.ok(Math.hypot(drop.x, drop.y) <= 1, 'drops stay inside the disc')
+      // The window is a solid step 6, which is level 1.
+      assert.equal(drop.level, echoLevel(5))
+    }
+  })
+
+  it('sets a separate level for each band of echo', () => {
+    let size = 60
+    let half = size / 2
+    let light = new Uint8Array(size * size)
+    let heavy = new Uint8Array(size * size)
+    for (let y = 10; y < 50; y++) {
+      for (let x = 10; x < 50; x++) {
+        light[y * size + x] = 1
+        heavy[y * size + x] = 11
+      }
+    }
+
+    let lightDrops = radarDrops(light, size, half)
+    let heavyDrops = radarDrops(heavy, size, half)
+
+    assert.ok(lightDrops.every((drop) => drop.level === 0))
+    assert.ok(heavyDrops.every((drop) => drop.level === ECHO_LEVELS - 1))
+    // The light band is nearly bare; the heavy one is most of it.
+    assert.ok(heavyDrops.length > lightDrops.length * 4)
+  })
+
+  it('gives the same drops for the same window', () => {
+    let size = 40
+    let steps = new Uint8Array(size * size).fill(4)
+
+    assert.deepEqual(
+      radarDrops(steps, size, size / 2),
+      radarDrops(steps, size, size / 2),
+    )
+  })
+
+  it('keeps a drop inside the echo it takes its level from', () => {
+    let size = 60
+    let half = size / 2
+    let steps = new Uint8Array(size * size)
+    // Two clusters side by side: light on the west, heavy on the east.
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) steps[y * size + x] = x < half ? 2 : 9
+    }
+
+    let drops = radarDrops(steps, size, half)
+    assert.ok(drops.length > 0)
+
+    for (let drop of drops) {
+      let startX = drop.x * half + half
+      let startY = drop.y * half + half
+      let start = steps[Math.round(startY) * size + Math.round(startX)]
+      assert.equal(
+        drop.level,
+        echoLevel(start - 1),
+        'the drop sits in its echo',
+      )
+
+      let endX = Math.round(startX + RAIN_FALL.ux * drop.travel * half)
+      let endY = Math.round(startY + RAIN_FALL.uy * drop.travel * half)
+      assert.equal(
+        steps[endY * size + endX],
+        start,
+        'and falls no further than that echo',
+      )
+      assert.ok(drop.travel > 0, 'a drop that could not fall was dropped')
+    }
   })
 })
