@@ -7,6 +7,7 @@ nearest stations, each still speaking for itself.
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -51,6 +52,7 @@ async def area(
 @router.post("/area/ask", response_model=models.Answer)
 async def area_ask(request: models.AreaAskRequest) -> dict[str, object]:
     """Answer a question about a point from the stations around it."""
+    started = time.monotonic()
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="question is empty")
@@ -65,7 +67,7 @@ async def area_ask(request: models.AreaAskRequest) -> dict[str, object]:
         return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
 
     bundle = await area_brief(rows)
-    return await explain(bundle, question, area=True)
+    return await explain(bundle, question, area=True, started=started)
 
 
 async def area_brief(rows: list[dict[str, Any]]) -> dict[str, Any]:

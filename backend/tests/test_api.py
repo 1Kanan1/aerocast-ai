@@ -414,6 +414,46 @@ async def test_ask_returns_a_validated_answer(monkeypatch) -> None:
     assert body["summary"] == "KSFO is MVFR."
     assert body["claims"][0]["refs"] == ["metar.KSFO.ceiling"]
     assert body["notice"] is None
+    assert body["model"] == "test-model"
+    assert isinstance(body["elapsed_ms"], int)
+    assert body["elapsed_ms"] >= 0
+
+
+async def test_ask_names_no_model_for_its_own_words(monkeypatch) -> None:
+    install(monkeypatch)
+
+    async def fake_complete(*args: object, **kwargs: object):
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    verdict = await post(
+        "/api/ask", {"icao": "KSFO", "question": "Is it safe to fly?"}
+    )
+    assert verdict.json()["model"] is None
+    assert verdict.json()["elapsed_ms"] is None
+
+    async def invented(*args: object, **kwargs: object):
+        return completion(
+            {
+                **grounded_answer(),
+                "claims": [
+                    {
+                        "text": "The ceiling is 12,000 ft.",
+                        "refs": ["metar.KSFO.ceiling"],
+                    }
+                ],
+            }
+        )
+
+    monkeypatch.setattr(ask_module, "complete", invented)
+
+    fallback = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+    assert fallback.json()["notice"]
+    assert fallback.json()["model"] is None
+    assert fallback.json()["elapsed_ms"] is None
 
 
 async def test_ask_refuses_a_verdict_without_a_model(monkeypatch) -> None:

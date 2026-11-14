@@ -380,3 +380,5 @@ class Answer(BaseModel):
     caveats: list[str]
     refusal: str | None
     notice: str | None
+    model: str | None = None
+    elapsed_ms: int | None = None

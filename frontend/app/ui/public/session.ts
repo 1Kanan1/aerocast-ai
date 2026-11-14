@@ -282,7 +282,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
         signal: controller.signal,
       })
       let payload = (await response.json().catch(() => null)) as
-        | (Partial<Answer> & { error?: string })
+        | (Partial<Answer> & { error?: string; elapsed_ms?: number | null })
         | null
 
       if (!response.ok || payload === null) {
@@ -297,6 +297,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
           caveats: payload.caveats ?? [],
           refusal: null,
           notice: payload.notice ?? null,
+          model: payload.model ?? null,
+          elapsedMs: payload.elapsed_ms ?? null,
         }
       } else {
         entry.problem = 'The explanation layer returned an unexpected answer.'
@@ -490,7 +492,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
         signal: controller.signal,
       })
       let payload = (await response.json().catch(() => null)) as
-        | (Partial<Answer> & { error?: string })
+        | (Partial<Answer> & { error?: string; elapsed_ms?: number | null })
         | null
 
       if (!response.ok || payload === null) {
@@ -505,6 +507,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
           caveats: payload.caveats ?? [],
           refusal: null,
           notice: payload.notice ?? null,
+          model: payload.model ?? null,
+          elapsedMs: payload.elapsed_ms ?? null,
         }
       } else {
         entry.problem = 'The explanation layer returned an unexpected answer.'

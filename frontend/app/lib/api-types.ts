@@ -24,6 +24,8 @@ export interface Answer {
   caveats: string[]
   refusal: string | null
   notice: string | null
+  model?: string | null
+  elapsed_ms?: number | null
 }
 
 export interface AnswerClaim {

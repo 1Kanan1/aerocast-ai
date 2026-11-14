@@ -2,6 +2,7 @@ import type { Handle } from 'remix/component'
 import { css, on, ref } from 'remix/component'
 
 import type { ResolveCandidate } from '#app/lib/api-types.ts'
+import { modelLabel, tookLabel } from '#app/lib/format.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
 import type { ThreadEntry } from '#app/ui/public/session.ts'
 import {
@@ -328,9 +329,32 @@ export function AssistantTurn(
                 <RefreshIcon />
               </button>
             )}
+            {entry.answer === null ? null : (
+              <AnswerCredit answer={entry.answer} />
+            )}
           </div>
         )}
       </article>
+    )
+  }
+}
+
+/**
+ * The model behind an answer and the time its call took, beside the actions.
+ * A refusal or the template fallback has neither, and prints nothing.
+ */
+function AnswerCredit(
+  handle: Handle<{ answer: NonNullable<ThreadEntry['answer']> }>,
+) {
+  return () => {
+    let { model, elapsedMs } = handle.props.answer
+    if (model === null) return null
+
+    return (
+      <p mix={creditStyle}>
+        {modelLabel(model)}
+        {elapsedMs === null ? '' : ` · ${tookLabel(elapsedMs)}`}
+      </p>
     )
   }
 }
@@ -690,6 +714,14 @@ const answerFooterStyle = css({
   alignItems: 'center',
   gap: '2px',
   marginBlockStart: '-6px',
+})
+
+const creditStyle = css({
+  margin: 0,
+  marginInlineStart: '4px',
+  fontSize: '11px',
+  color: 'var(--ink-3)',
+  whiteSpace: 'nowrap',
 })
 
 const turnActionStyle = css({

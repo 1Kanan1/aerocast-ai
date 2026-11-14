@@ -29,6 +29,11 @@ class Answer:
     caveats: tuple[str, ...]
     refusal: str | None
     notice: str | None = None
+    #: The model that produced the answer, and how long the reader waited for
+    #: it, failed rungs included. Both are absent on a refusal or a template
+    #: fallback, which no model wrote.
+    model: str | None = None
+    elapsed_ms: int | None = None
 
 
 ANSWER_SCHEMA: dict[str, object] = {
@@ -73,6 +78,8 @@ def wire_answer(model: Answer) -> dict[str, object]:
         "caveats": list(model.caveats),
         "refusal": model.refusal,
         "notice": model.notice,
+        "model": model.model,
+        "elapsed_ms": model.elapsed_ms,
     }
 
 

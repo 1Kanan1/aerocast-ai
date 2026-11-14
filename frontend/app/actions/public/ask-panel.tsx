@@ -6,6 +6,7 @@ import { AnswerView } from '#app/ui/answer.tsx'
 
 interface AskResponse extends Partial<Answer> {
   error?: string
+  elapsed_ms?: number | null
 }
 
 /** Intercepts the ordinary form post so the answer appears without a reload. */
@@ -56,6 +57,8 @@ export const AskPanel = clientEntry(
                   caveats: payload.caveats ?? [],
                   refusal: null,
                   notice: payload.notice ?? null,
+                  model: payload.model ?? null,
+                  elapsedMs: payload.elapsed_ms ?? null,
                 }
               } else {
                 problem = 'The explanation layer returned an unexpected answer.'

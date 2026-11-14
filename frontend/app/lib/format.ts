@@ -25,3 +25,22 @@ export function windowLabel(from: string, to: string): string {
     ? `${start} → ${end.slice(11)}`
     : `${start} → ${end}`
 }
+
+/** How long a model call took: fine enough to tell two fast rungs apart. */
+export function tookLabel(ms: number): string {
+  let seconds = ms / 1000
+  if (seconds < 9.95) return `${seconds.toFixed(1)}s`
+
+  let total = Math.round(seconds)
+  if (total < 60) return `${total}s`
+
+  let minutes = Math.floor(total / 60)
+  let rest = total % 60
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`
+}
+
+/** A gateway model id carries its vendor twice; the model is the last part. */
+export function modelLabel(model: string): string {
+  let name = model.slice(model.lastIndexOf('/') + 1)
+  return name === '' ? model : name
+}

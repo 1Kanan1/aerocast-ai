@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from dataclasses import replace
 
 from fastapi import APIRouter, HTTPException
 
@@ -31,6 +33,7 @@ ASK_BUDGET_SECONDS = 20.0
 
 @router.post("/ask", response_model=models.Answer)
 async def ask(request: models.AskRequest) -> dict[str, object]:
+    started = time.monotonic()
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="question is empty")
@@ -56,7 +59,7 @@ async def ask(request: models.AskRequest) -> dict[str, object]:
     ):
         return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
 
-    return await explain(bundle, question)
+    return await explain(bundle, question, started=started)
 
 
 async def explain(
@@ -64,12 +67,15 @@ async def explain(
     question: str,
     *,
     area: bool = False,
+    started: float | None = None,
 ) -> dict[str, object]:
     """Ask the model about a bundle, then validate or fall back.
 
     The caller has already refused verdicts and decided whether the scope
-    check can be skipped.
+    check can be skipped. `started` is when the request arrived, so the
+    answer can say how long the reader waited, failed rungs included.
     """
+    began = time.monotonic() if started is None else started
     completion = await complete(
         get_settings(),
         build_messages(bundle, question, area=area),
@@ -92,5 +98,13 @@ async def explain(
             error,
         )
         answer = fallback_answer(bundle)
+    else:
+        # Only a model-written answer names its model: the fallback and a
+        # refusal are AeroCast's own words, not a completion.
+        answer = replace(
+            answer,
+            model=completion.model,
+            elapsed_ms=int((time.monotonic() - began) * 1000),
+        )
 
     return wire_answer(answer)
