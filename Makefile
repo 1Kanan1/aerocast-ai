@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install hooks db db-down api web test lint fmt types crosscheck up down
+.PHONY: help install hooks db db-down api web test lint fmt types types-check check crosscheck up down
 
 help: ## show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -60,6 +60,16 @@ fmt: ## format the backend and frontend
 types: ## regenerate frontend/app/lib/api-types.ts from the schema
 	cd backend && uv run python -m app.tools.openapi_types \
 		../frontend/app/lib/api-types.ts
+
+types-check: ## fail when api-types.ts no longer matches the schema
+	@tmp=$${TMPDIR:-/tmp}/aerocast-api-types.ts; \
+	cd backend && uv run python -m app.tools.openapi_types "$$tmp" && \
+	cd .. && diff -u frontend/app/lib/api-types.ts "$$tmp"
+
+check: ## every gate the hook and CI run
+	$(MAKE) lint
+	$(MAKE) test
+	$(MAKE) types-check
 
 up: ## run the whole stack in containers
 	docker compose up --build

@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": ["node", "remix/assets/types/hmr"],
     "module": "NodeNext",

@@ -5,33 +5,15 @@ on:
   pull_request:
 
 jobs:
-  backend:
+  check:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run ty check
-      - run: uv run pytest -q
-      - run: uv run python -m app.tools.openapi_types ../frontend/app/lib/api-types.ts
-      - run: git diff --exit-code -- ../frontend/app/lib/api-types.ts
-
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
           node-version: "26.13.0"
-      - run: bun install --frozen-lockfile
-      - run: bun run typecheck
-      - run: bun run test
+      - run: cd backend && uv sync --frozen
+      - run: cd frontend && bun install --frozen-lockfile
+      - run: make check
