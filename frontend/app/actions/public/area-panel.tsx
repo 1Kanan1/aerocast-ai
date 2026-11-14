@@ -239,7 +239,14 @@ export const AreaPanel = clientEntry(
                     onEdit={(next) => restartFrom(index, next)}
                     question={entry.question}
                   />
-                  <AssistantTurn entry={entry} showName={index === 0} />
+                  <AssistantTurn
+                    entry={entry}
+                    onRegenerate={() => {
+                      let question = thread[index]?.question
+                      if (question !== undefined) restartFrom(index, question)
+                    }}
+                    showName={index === 0}
+                  />
                 </div>
               ))
             )}
