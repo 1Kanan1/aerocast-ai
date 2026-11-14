@@ -18,6 +18,7 @@ import { pixelsPerNm } from '#app/lib/public/field-stations.ts'
 import { RADAR_ATTRIBUTION } from '#app/lib/radar.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
+import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
@@ -212,10 +213,26 @@ export const MapIsland = clientEntry(
         if (signal.aborted) return
 
         addAdvisoryLayers(map, handle.props.initial)
+        showAdvisories(map, weatherLayers.advisories)
         addMarkers(map, maplibre)
         applySession()
         fallback?.remove()
       })
+
+      // The hazard polygons carry their own switch. Off means no requests as
+      // the map moves; switching on fetches the current view at once, and a
+      // switch for another layer leaves them as they are.
+      let hazardsShown = weatherLayers.advisories
+      weatherLayers.addEventListener(
+        'change',
+        () => {
+          if (weatherLayers.advisories === hazardsShown) return
+          hazardsShown = weatherLayers.advisories
+          showAdvisories(map, hazardsShown)
+          if (hazardsShown) void refreshAdvisories(map)
+        },
+        { signal: handle.signal },
+      )
 
       // An empty click asks about the place around it; a click on a station
       // keeps its own handler and never opens the area.
@@ -245,6 +262,7 @@ export const MapIsland = clientEntry(
       map.on('moveend', () => {
         session.settleAnchor()
         clearTimeout(moveTimer)
+        if (!weatherLayers.advisories) return
         moveTimer = setTimeout(() => {
           void refreshAdvisories(map)
         }, MOVE_DEBOUNCE_MS)
@@ -439,6 +457,15 @@ function addMarkers(
     let icao = event.features?.[0]?.properties?.icao
     if (typeof icao === 'string') void session.select(icao)
   })
+}
+
+/** Hazard polygons are a layer like any other: the key can switch them off. */
+function showAdvisories(map: MapLibreMap, visible: boolean): void {
+  let visibility: 'visible' | 'none' = visible ? 'visible' : 'none'
+  for (let id of ['advisories-fill', 'advisories-outline']) {
+    if (map.getLayer(id) === undefined) continue
+    map.setLayoutProperty(id, 'visibility', visibility)
+  }
 }
 
 function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {

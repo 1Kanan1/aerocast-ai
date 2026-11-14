@@ -11,6 +11,8 @@ const RAIN_SCALE =
   ' rgba(219, 234, 243, 0.9) 75% 100%)'
 const TEMP_SCALE =
   'linear-gradient(90deg, #5f8fb8, #6f9f9a, #a8b071, #d09a4e, #c4643f)'
+const HAZARD_SWATCH =
+  'repeating-linear-gradient(45deg, rgba(224, 96, 63, 0.9) 0 1px, transparent 1px 5px)'
 
 /** The colour key, with a switch per layer beside its ramp. */
 export const WeatherKey = clientEntry(
@@ -76,6 +78,29 @@ export const WeatherKey = clientEntry(
           <span mix={labelStyle}>Wind</span>
           <span mix={hintStyle}>flow</span>
         </label>
+
+        <label mix={rowStyle}>
+          <input
+            aria-label="Advisories layer"
+            checked={weatherLayers.advisories}
+            mix={[
+              switchStyle,
+              on('change', () => weatherLayers.toggle('advisories')),
+            ]}
+            role="switch"
+            type="checkbox"
+          />
+          <span mix={labelStyle}>Hazards</span>
+          <span
+            aria-hidden="true"
+            mix={barStyle}
+            style={{
+              background: HAZARD_SWATCH,
+              backgroundColor: 'rgba(224, 96, 63, 0.12)',
+            }}
+          />
+          <span mix={hintStyle}>airmet · sigmet</span>
+        </label>
       </div>
     )
   },
@@ -110,7 +135,7 @@ const rowStyle = css({
 })
 
 const labelStyle = css({
-  width: '26px',
+  width: '44px',
   color: 'var(--ink-2)',
 })
 
