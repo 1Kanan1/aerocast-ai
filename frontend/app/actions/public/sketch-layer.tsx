@@ -746,7 +746,6 @@ function rainFor(
   let rain: RainStreak[] = []
 
   for (let drop of drops) {
-    // Only the part of the field inside the circle is worth drawing.
     let x = offset.x + drop.x * fieldRadius
     let y = offset.y + drop.y * fieldRadius
     if (Math.hypot(x, y) > frameRadius + 4) continue

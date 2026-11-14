@@ -30,12 +30,11 @@ export const AreaPanel = clientEntry(
     let scroller: HTMLElement | undefined
     let closing = false
     let closingTimer: ReturnType<typeof setTimeout> | undefined
-    // The last live snapshot, kept so the exit animation has contents.
-    let lastPoint: AreaPoint | null = null
-    let lastPayload: AreaPayload | null = null
-    let lastThread: ThreadEntry[] = []
-    let lastError: string | null = null
-    let lastLoading = false
+    let exitPoint: AreaPoint | null = null
+    let exitPayload: AreaPayload | null = null
+    let exitThread: ThreadEntry[] = []
+    let exitError: string | null = null
+    let exitLoading = false
 
     function scrollToEnd(): void {
       if (session.areaThread.length === 0) return
@@ -57,17 +56,17 @@ export const AreaPanel = clientEntry(
         if (open) {
           clearTimeout(closingTimer)
           closing = false
-          lastPoint = session.area
-          lastPayload = session.areaPayload
-          lastThread = session.areaThread
-          lastError = session.areaError
-          lastLoading = session.areaLoading
+          exitPoint = session.area
+          exitPayload = session.areaPayload
+          exitThread = session.areaThread
+          exitError = session.areaError
+          exitLoading = session.areaLoading
           await handle.update()
           scrollToEnd()
           return
         }
 
-        if (lastPoint === null || closing) {
+        if (exitPoint === null || closing) {
           await handle.update()
           return
         }
@@ -76,9 +75,9 @@ export const AreaPanel = clientEntry(
         await handle.update()
         closingTimer = setTimeout(() => {
           closing = false
-          lastPoint = null
-          lastPayload = null
-          lastThread = []
+          exitPoint = null
+          exitPayload = null
+          exitThread = []
           handle.update()
         }, PANEL_EXIT_MS)
       },
@@ -98,15 +97,15 @@ export const AreaPanel = clientEntry(
     })
 
     return () => {
-      let point = session.area ?? (closing ? lastPoint : null)
+      let point = session.area ?? (closing ? exitPoint : null)
       if (point === null) return null
 
-      let payload = closing ? lastPayload : session.areaPayload
+      let payload = closing ? exitPayload : session.areaPayload
       let stations = payload?.stations ?? []
       let brief = payload?.brief ?? null
-      let error = closing ? lastError : session.areaError
-      let loading = closing ? lastLoading : session.areaLoading
-      let thread = closing ? lastThread : session.areaThread
+      let error = closing ? exitError : session.areaError
+      let loading = closing ? exitLoading : session.areaLoading
+      let thread = closing ? exitThread : session.areaThread
       let blend = blendStations(
         stations.map((station) => ({
           distance_nm: station.distance_nm,

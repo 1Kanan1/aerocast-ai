@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-# Magnus coefficients over water. The same pair the card has always used.
+# Magnus coefficients over water.
 _A = 17.625
 _B = 243.04
 

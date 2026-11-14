@@ -36,44 +36,14 @@ WHOLE_NUMBER = re.compile(r"^\d{1,2}$")
 SKY_CLEAR = frozenset({"SKC", "CLR", "NSC", "NCD"})
 
 #: Two-letter codes; a token is weather if it decomposes into these.
-WEATHER_CODES = frozenset(
-    {
-        # qualifiers
-        "MI",
-        "PR",
-        "BC",
-        "DR",
-        "BL",
-        "SH",
-        "TS",
-        "FZ",
-        # precipitation
-        "DZ",
-        "RA",
-        "SN",
-        "SG",
-        "IC",
-        "PL",
-        "GR",
-        "GS",
-        "UP",
-        # obscuration
-        "BR",
-        "FG",
-        "FU",
-        "VA",
-        "DU",
-        "SA",
-        "HZ",
-        "PY",
-        # other
-        "PO",
-        "SQ",
-        "FC",
-        "SS",
-        "DS",
-    }
+_QUALIFIERS = frozenset({"MI", "PR", "BC", "DR", "BL", "SH", "TS", "FZ"})
+_PRECIPITATION = frozenset(
+    {"DZ", "RA", "SN", "SG", "IC", "PL", "GR", "GS", "UP"}
 )
+_OBSCURATION = frozenset({"BR", "FG", "FU", "VA", "DU", "SA", "HZ", "PY"})
+_OTHER = frozenset({"PO", "SQ", "FC", "SS", "DS"})
+
+WEATHER_CODES = _QUALIFIERS | _PRECIPITATION | _OBSCURATION | _OTHER
 
 
 @dataclass

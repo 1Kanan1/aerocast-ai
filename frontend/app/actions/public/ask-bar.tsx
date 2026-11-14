@@ -120,11 +120,9 @@ export const AskBar = clientEntry(
                     return
                   }
 
-                  // Up walks back through earlier questions, Down walks
-                  // forward and then restores the draft. A one-line value has
-                  // nowhere for the caret to go, so the arrows are free
-                  // whatever the caret is doing; a multi-line draft keeps the
-                  // caret's own movement on its first and last line.
+                  // A one-line value has nowhere for the caret to go, so the
+                  // arrows recall from anywhere; a multi-line draft keeps
+                  // them for the caret on its first and last line.
                   let multiline = field.value.includes('\n')
                   let atStart = field.selectionStart === 0
                   let atEnd = field.selectionStart === field.value.length
