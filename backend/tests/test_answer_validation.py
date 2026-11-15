@@ -123,6 +123,17 @@ def test_refusal_gets_fixed_copy_and_drops_model_text():
     assert "selected station" in result.refusal
 
 
+def test_an_unknown_refusal_kind_is_rejected():
+    with pytest.raises(InvalidAnswerError, match="unknown refusal kind"):
+        validate_answer(answer("", [], refusal="maybe"), BUNDLE)
+
+
+def test_every_refusal_kind_is_accepted():
+    for kind in ("decision", "out_of_scope", "not_in_bundle"):
+        result = validate_answer(answer("", [], refusal=kind), BUNDLE)
+        assert result.refusal
+
+
 def test_refusal_with_claims_is_rejected():
     with pytest.raises(InvalidAnswerError, match="refusal carries claims"):
         validate_answer(

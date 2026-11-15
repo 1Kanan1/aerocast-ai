@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install hooks db db-down api web test lint fmt types types-check check hooks-test mutants crosscheck up down
+.PHONY: help install hooks db db-down api web test lint fmt types types-check check hooks-test mutants mutants-baseline crosscheck up down
 
 help: ## show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -69,15 +69,19 @@ types-check: ## fail when api-types.ts no longer matches the schema
 hooks-test: ## check the commit-msg gate against its fixtures
 	sh scripts/commit-msg.test.sh
 
-mutants: ## break app/llm mechanically; a survivor is untested behaviour
+mutants: ## break app/llm; fail on a survivor the baseline does not list
 	cd backend && uv run mutmut run --max-children 4
-	cd backend && uv run mutmut results
+	sh scripts/mutants-check.sh
+
+mutants-baseline: ## accept today's survivors as the known set
+	sh scripts/mutants-check.sh --update
 
 check: ## every gate the hook and CI run
 	$(MAKE) hooks-test
 	$(MAKE) lint
 	$(MAKE) test
 	$(MAKE) types-check
+	$(MAKE) mutants
 
 up: ## run the whole stack in containers
 	docker compose up --build

@@ -39,6 +39,12 @@ def test_template_says_when_there_is_no_observation():
     assert "no observation" in template_summary(bundle(with_metar=False))
 
 
+def test_template_says_when_the_bundle_has_no_station():
+    assert template_summary({"stations": []}) == (
+        "No station data is available for this question."
+    )
+
+
 def multi_station_bundle() -> dict[str, object]:
     return build_brief(
         [

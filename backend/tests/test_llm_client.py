@@ -266,6 +266,29 @@ async def test_a_scope_timeout_does_not_bench_the_rung_for_the_answer(
     assert attempted == ["only-model", "only-model"]
 
 
+async def test_each_rung_sends_its_key(monkeypatch):
+    seen: list[dict[str, str]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        seen.append(headers)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    await complete(settings(llm_chain="zai"), [], {})
+    await complete(settings(llm_chain="gemini"), [], {})
+
+    assert [header.get("authorization") for header in seen] == [
+        "Bearer zai-key",
+        "Bearer gemini-key",
+    ]
+
+
 async def test_every_rung_receives_the_system_prompt(monkeypatch):
     bodies: list[dict[str, object]] = []
 
