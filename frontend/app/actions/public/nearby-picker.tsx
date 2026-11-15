@@ -15,10 +15,9 @@ const PICKER_EXIT_MS = 140
 export const NearbyPicker = clientEntry(
   import.meta.url,
   function NearbyPicker(handle: Handle) {
-    // Keep the list on screen for one beat while it fades out.
-    let closing = false
-    let closingTimer: ReturnType<typeof setTimeout> | undefined
-    let last: NearbyChoice | null = session.nearby
+    let fadingOut = false
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined
+    let exitChoice: NearbyChoice | null = session.nearby
 
     session.addEventListener(
       'change',
@@ -26,21 +25,21 @@ export const NearbyPicker = clientEntry(
         let next = session.nearby
 
         if (next === null) {
-          if (last === null || closing) return
+          if (exitChoice === null || fadingOut) return
 
-          closing = true
+          fadingOut = true
           await handle.update()
-          closingTimer = setTimeout(() => {
-            closing = false
-            last = null
+          fadeTimer = setTimeout(() => {
+            fadingOut = false
+            exitChoice = null
             handle.update()
           }, PICKER_EXIT_MS)
           return
         }
 
-        clearTimeout(closingTimer)
-        closing = false
-        last = next
+        clearTimeout(fadeTimer)
+        fadingOut = false
+        exitChoice = next
         await handle.update()
       },
       { signal: handle.signal },
@@ -59,7 +58,7 @@ export const NearbyPicker = clientEntry(
     })
 
     return () => {
-      let choice = session.nearby ?? (closing ? last : null)
+      let choice = session.nearby ?? (fadingOut ? exitChoice : null)
       if (choice === null) return null
 
       return (
@@ -69,10 +68,10 @@ export const NearbyPicker = clientEntry(
           style={{
             left: `${Math.min(choice.x, Math.max(12, window.innerWidth - 320))}px`,
             top: `${Math.min(choice.y, Math.max(12, window.innerHeight - 260))}px`,
-            animation: closing
+            animation: fadingOut
               ? 'rmx-card-out 140ms ease-in forwards'
               : undefined,
-            pointerEvents: closing ? 'none' : undefined,
+            pointerEvents: fadingOut ? 'none' : undefined,
           }}
         >
           <header mix={headerStyle}>

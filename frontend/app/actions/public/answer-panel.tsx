@@ -83,7 +83,6 @@ export const AnswerPanel = clientEntry(
           if (closing) return
           if (lastStation === null && lastClarification === null) return
 
-          // Keep the last contents on screen while the panel fades out.
           closing = true
           await handle.update()
           closingTimer = setTimeout(() => {

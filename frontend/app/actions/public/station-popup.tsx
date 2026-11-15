@@ -67,7 +67,6 @@ export const StationPopup = clientEntry(
         if (next === null) {
           if (last === null || closing) return
 
-          // Keep the last station on screen while the exit animation runs.
           closing = true
           await handle.update()
           closingTimer = setTimeout(() => {
