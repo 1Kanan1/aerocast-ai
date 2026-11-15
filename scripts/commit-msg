@@ -14,8 +14,9 @@
 #
 # Allowed types: feat fix chore docs refactor test build ci perf style
 # Subject and every body line: 72 characters, hard.
-# A body opens with a blank line, then the three labels in that order.
-# Each label appears once and carries text; drop a section with nothing to
+# A body opens with a blank line, then any subset of the labels below, in
+# this order. Each label appears once and carries text. A subject-only
+# message is fine, and so is one section; drop a section with nothing to
 # say rather than leaving it empty. No other labels or free paragraphs.
 # Install with: make hooks
 

@@ -60,6 +60,30 @@ Decision:
 Record the measurements.
 '
 
+check 'fix with only Why' 0 'fix(api): stop the retry loop
+
+Why:
+A 429 was retried forever.
+'
+
+check 'refactor with Why and Consequences' 0 'refactor(web): split the layer
+
+Why:
+The transform and the clip shared a box.
+
+Consequences:
+Panning is untouched; the clip stays on the outer box.
+'
+
+check 'chore with only Decision' 0 'chore(repo): bump the action
+
+Decision:
+Pin the release that fixed the cache key.
+'
+
+check 'style with a one-line body' 0 'style: wrap the imports
+'
+
 check 'comments are ignored' 0 'feat: keep comments out of the shape
 
 # a comment after the subject
