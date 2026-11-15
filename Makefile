@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install hooks db db-down api web test lint fmt types types-check check crosscheck up down
+.PHONY: help install hooks db db-down api web test lint fmt types types-check check hooks-test crosscheck up down
 
 help: ## show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -66,7 +66,11 @@ types-check: ## fail when api-types.ts no longer matches the schema
 	cd backend && uv run python -m app.tools.openapi_types "$$tmp" && \
 	cd .. && diff -u frontend/app/lib/api-types.ts "$$tmp"
 
+hooks-test: ## check the commit-msg gate against its fixtures
+	sh scripts/commit-msg.test.sh
+
 check: ## every gate the hook and CI run
+	$(MAKE) hooks-test
 	$(MAKE) lint
 	$(MAKE) test
 	$(MAKE) types-check

@@ -3,8 +3,20 @@
 #
 #   feat(scope)!: summary
 #
+#   Why:
+#   <the failure, gap or constraint>
+#
+#   Decision:
+#   <what was chosen and why>
+#
+#   Consequences:
+#   <what a future change must respect>
+#
 # Allowed types: feat fix chore docs refactor test build ci perf style
 # Subject and every body line: 72 characters, hard.
+# A body opens with a blank line, then the three labels in that order.
+# Each label appears once and carries text; drop a section with nothing to
+# say rather than leaving it empty. No other labels or free paragraphs.
 # Install with: make hooks
 
 MAX_LINE=72
@@ -55,3 +67,114 @@ while IFS= read -r line; do
     exit 1
   fi
 done < "$message_file"
+
+# The body shape. Only mechanics: which labels, in what order, each with
+# text. Whether the words are true is the author's problem.
+section_name() {
+  case "$1" in
+    1) printf 'Why:' ;;
+    2) printf 'Decision:' ;;
+    3) printf 'Consequences:' ;;
+  esac
+}
+
+shape_error() {
+  printf 'commit-msg: %s\n\n' "$1" >&2
+  printf '  line %s: %s\n' "$2" "$3" >&2
+  printf '  body shape:\n' >&2
+  printf '    (blank line)\n' >&2
+  printf '    Why:\n' >&2
+  printf '    Decision:\n' >&2
+  printf '    Consequences:\n' >&2
+  printf '  drop a section that has nothing to say\n' >&2
+  exit 1
+}
+
+second=$(sed -n '2p' "$message_file")
+case "$second" in
+  '' | '#'*) : ;;
+  *)
+    shape_error 'leave a blank line between the subject and the body' \
+      2 "$second"
+    ;;
+esac
+
+phase=0
+filled=0
+seen_why=0
+seen_decision=0
+seen_consequences=0
+number=0
+
+while IFS= read -r line; do
+  number=$((number + 1))
+  [ "$number" -eq 1 ] && continue
+  case "$line" in
+    '#'*) continue ;;
+  esac
+
+  if [ -z "$line" ]; then
+    if [ "$phase" -gt 0 ] && [ "$filled" -eq 0 ]; then
+      shape_error "section $(section_name "$phase") has no text" \
+        "$number" "$line"
+    fi
+    continue
+  fi
+
+  case "$line" in
+    'Why:') next=1 ;;
+    'Decision:') next=2 ;;
+    'Consequences:') next=3 ;;
+    *) next=0 ;;
+  esac
+
+  if [ "$next" -eq 0 ]; then
+    if [ "$phase" -eq 0 ]; then
+      shape_error \
+        'the body must start with Why:, Decision: or Consequences:' \
+        "$number" "$line"
+    fi
+    case "$line" in
+      [A-Za-z]*:)
+        case "$line" in
+          *[!A-Za-z:\ ]*) : ;;
+          *) shape_error \
+            'unknown section label (expected Why:, Decision: or Consequences:)' \
+            "$number" "$line" ;;
+        esac
+        ;;
+    esac
+    filled=1
+    continue
+  fi
+
+  case "$next" in
+    1) [ "$seen_why" -eq 1 ] && shape_error 'Why: appears twice' "$number" "$line" ;;
+    2) [ "$seen_decision" -eq 1 ] && shape_error 'Decision: appears twice' "$number" "$line" ;;
+    3) [ "$seen_consequences" -eq 1 ] && shape_error 'Consequences: appears twice' "$number" "$line" ;;
+  esac
+
+  if [ "$next" -lt "$phase" ]; then
+    shape_error \
+      'sections go in the order Why:, Decision:, Consequences:' \
+      "$number" "$line"
+  fi
+
+  if [ "$phase" -gt 0 ] && [ "$filled" -eq 0 ]; then
+    shape_error "section $(section_name "$phase") has no text" \
+      "$number" "$line"
+  fi
+
+  case "$next" in
+    1) seen_why=1 ;;
+    2) seen_decision=1 ;;
+    3) seen_consequences=1 ;;
+  esac
+  phase=$next
+  filled=0
+done < "$message_file"
+
+if [ "$phase" -gt 0 ] && [ "$filled" -eq 0 ]; then
+  shape_error "section $(section_name "$phase") has no text" \
+    "$number" ''
+fi
