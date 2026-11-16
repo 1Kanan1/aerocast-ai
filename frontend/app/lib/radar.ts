@@ -335,6 +335,50 @@ function fetchTile(url: string): Promise<Blob | null> {
   return promise
 }
 
+interface WindowTiles {
+  half: number
+  radius: number
+  originX: number
+  originY: number
+  side: number
+  tiles: { url: string; x: number; y: number }[]
+}
+
+/** The square of tiles that covers the disc, and where the disc sits in it. */
+function windowTiles(lat: number, lon: number, radiusNm: number): WindowTiles {
+  let scale = TILE_SIZE * 2 ** TILE_ZOOM
+  let worldX = ((lon + 180) / 360) * scale
+  let latRadians = (lat * Math.PI) / 180
+  let worldY =
+    ((1 - Math.log(Math.tan(latRadians) + 1 / Math.cos(latRadians)) / Math.PI) /
+      2) *
+    scale
+  let metersPerPixel = (156543.03392 * Math.cos(latRadians)) / 2 ** TILE_ZOOM
+  let radius = (radiusNm * 1852) / metersPerPixel
+  let half = Math.ceil(radius) + 1
+
+  let originX = worldX - half
+  let originY = worldY - half
+  let side = half * 2
+  let firstTileX = Math.floor(originX / TILE_SIZE)
+  let lastTileX = Math.floor((originX + side) / TILE_SIZE)
+  let firstTileY = Math.floor(originY / TILE_SIZE)
+  let lastTileY = Math.floor((originY + side) / TILE_SIZE)
+
+  let tiles: WindowTiles['tiles'] = []
+  for (let tileY = firstTileY; tileY <= lastTileY; tileY++) {
+    for (let tileX = firstTileX; tileX <= lastTileX; tileX++) {
+      tiles.push({
+        url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/${TILE_ZOOM}/${tileX}/${tileY}.png`,
+        x: tileX,
+        y: tileY,
+      })
+    }
+  }
+
+  return { half, radius, originX, originY, side, tiles }
+}
+
 /**
  * Fetch only the tiles that cover the disc around the station, composite them,
  * soften the pixel edges, then measure the coverage and place the echo as
@@ -347,50 +391,32 @@ export async function fetchRadarWindow(
   radiusNm: number,
   signal: AbortSignal,
 ): Promise<RadarWindow | null> {
-  let scale = TILE_SIZE * 2 ** TILE_ZOOM
-  let worldX = ((lon + 180) / 360) * scale
-  let latRadians = (lat * Math.PI) / 180
-  let worldY =
-    ((1 - Math.log(Math.tan(latRadians) + 1 / Math.cos(latRadians)) / Math.PI) /
-      2) *
-    scale
-  let metersPerPixel = (156543.03392 * Math.cos(latRadians)) / 2 ** TILE_ZOOM
-  let radius = (radiusNm * 1852) / metersPerPixel
-  let half = Math.ceil(radius) + 1
+  let box = windowTiles(lat, lon, radiusNm)
+  let { half, radius, originX, originY } = box
 
   let canvas = document.createElement('canvas')
-  canvas.width = half * 2
-  canvas.height = half * 2
+  canvas.width = box.side
+  canvas.height = box.side
   let context = canvas.getContext('2d')
   if (context === null) return null
   context.imageSmoothingEnabled = false
 
-  let originX = worldX - half
-  let originY = worldY - half
-  let firstTileX = Math.floor(originX / TILE_SIZE)
-  let lastTileX = Math.floor((originX + canvas.width) / TILE_SIZE)
-  let firstTileY = Math.floor(originY / TILE_SIZE)
-  let lastTileY = Math.floor((originY + canvas.height) / TILE_SIZE)
-
   let tiles: Promise<void>[] = []
-  for (let tileY = firstTileY; tileY <= lastTileY; tileY++) {
-    for (let tileX = firstTileX; tileX <= lastTileX; tileX++) {
-      let url = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/${TILE_ZOOM}/${tileX}/${tileY}.png`
-      tiles.push(
-        fetchTile(url)
-          .then(async (blob) => {
-            if (blob === null) return
-            let bitmap = await createImageBitmap(blob)
-            context?.drawImage(
-              bitmap,
-              tileX * TILE_SIZE - originX,
-              tileY * TILE_SIZE - originY,
-            )
-            bitmap.close()
-          })
-          .catch(() => {}),
-      )
-    }
+  for (let tile of box.tiles) {
+    tiles.push(
+      fetchTile(tile.url)
+        .then(async (blob) => {
+          if (blob === null) return
+          let bitmap = await createImageBitmap(blob)
+          context?.drawImage(
+            bitmap,
+            tile.x * TILE_SIZE - originX,
+            tile.y * TILE_SIZE - originY,
+          )
+          bitmap.close()
+        })
+        .catch(() => {}),
+    )
   }
 
   try {
@@ -426,4 +452,35 @@ export async function fetchRadarWindow(
   } catch {
     return null
   }
+}
+
+/**
+ * Warm the tiles a window will read, so a station picked from a list draws
+ * from the cache rather than the network. The readback stays with the real
+ * fetch, and tile requests are shared, so a later fetch reuses these.
+ */
+export function prefetchRadarWindow(
+  lat: number,
+  lon: number,
+  radiusNm: number,
+): void {
+  for (let tile of windowTiles(lat, lon, radiusNm).tiles)
+    void fetchTile(tile.url)
+}
+
+/** How many stations a click warms: tiles are cheap, a dozen requests are not. */
+const WARM_STATIONS = 3
+
+/**
+ * The stations worth warming when a picker opens: nearest first, never the
+ * one already selected, since its own window is being read.
+ */
+export function stationsToWarm(
+  stations: { icao: string; lat: number; lon: number }[],
+  selectedIcao: string | null,
+): { lat: number; lon: number }[] {
+  return stations
+    .filter((station) => station.icao !== selectedIcao)
+    .slice(0, WARM_STATIONS)
+    .map(({ lat, lon }) => ({ lat, lon }))
 }

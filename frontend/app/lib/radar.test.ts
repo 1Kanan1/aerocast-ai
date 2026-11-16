@@ -13,6 +13,7 @@ import {
   echoLevel,
   radarDrops,
   echoSteps,
+  stationsToWarm,
 } from './radar.ts'
 
 function pixels(
@@ -258,5 +259,22 @@ describe('rain marks', () => {
 
     assert.ok(speck.length >= 2, 'still a streak, not a dot')
     assert.ok(speck.width >= 0.7, 'still drawn, not vanished')
+  })
+})
+
+describe('stations to warm', () => {
+  it('warms the nearest offers, never the selected station', () => {
+    let offered = [
+      { icao: 'KAAA', lat: 1, lon: 10 },
+      { icao: 'KBBB', lat: 2, lon: 20 },
+      { icao: 'KCCC', lat: 3, lon: 30 },
+      { icao: 'KDDD', lat: 4, lon: 40 },
+    ]
+
+    assert.deepEqual(stationsToWarm(offered, 'KBBB'), [
+      { lat: 1, lon: 10 },
+      { lat: 3, lon: 30 },
+      { lat: 4, lon: 40 },
+    ])
   })
 })

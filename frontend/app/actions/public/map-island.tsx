@@ -15,7 +15,12 @@ import type {
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome } from '#app/lib/monochrome.ts'
 import { pixelsPerNm } from '#app/lib/public/field-stations.ts'
-import { RADAR_ATTRIBUTION } from '#app/lib/radar.ts'
+import {
+  RADAR_ATTRIBUTION,
+  AREA_NM,
+  prefetchRadarWindow,
+  stationsToWarm,
+} from '#app/lib/radar.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
@@ -141,6 +146,7 @@ export const MapIsland = clientEntry(
       let applySession = (): void => {
         let station = session.selected
         showSuggested(map, session.suggested)
+        warmSuggested(session.suggested)
         showArea(
           map,
           session.area === null
@@ -627,6 +633,20 @@ function showSuggested(map: MapLibreMap, stations: ResolveSuggestion[]): void {
       properties: { icao: station.icao },
     })),
   })
+}
+
+/**
+ * The rings are stations that can be picked, so their radar starts loading
+ * while the choice is still being made.
+ */
+function warmSuggested(stations: ResolveSuggestion[]): void {
+  if (!weatherLayers.rain) return
+  for (let station of stationsToWarm(
+    stations,
+    session.selected?.icao ?? null,
+  )) {
+    prefetchRadarWindow(station.lat, station.lon, AREA_NM)
+  }
 }
 
 function emptyCollection(): FeatureCollection {
