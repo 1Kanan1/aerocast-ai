@@ -23,7 +23,8 @@ db-down: ## stop the Docker Postgres
 	docker compose down db
 
 api: ## run the API on :8000 with reload
-	cd backend && uv run uvicorn app.main:app --reload --port 8000
+	cd backend && uv run uvicorn app.main:app --reload --port 8000 \
+		--reload-dir app --reload-dir migrations --reload-dir tests
 
 migrate: ## apply pending migrations
 	cd backend && uv run alembic upgrade head
