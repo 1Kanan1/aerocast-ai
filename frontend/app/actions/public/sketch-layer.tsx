@@ -10,6 +10,8 @@ import {
   type RadarWindow,
   dropsFor,
   fetchRadarWindow,
+  markScale,
+  rainMark,
 } from '#app/lib/radar.ts'
 import {
   type FieldStation,
@@ -51,9 +53,6 @@ const WIND_EDGE = 0.7
 const WIND_TRAVEL = 90
 /** The furthest the arrows reach past their origin, on top of the drift. */
 const WIND_STROKE = 24
-/** Per echo level: streak length, width, fall speed and solidity. */
-const RAIN_LENGTH = [4.5, 7, 10, 13]
-const RAIN_WIDTHS = [0.6, 0.85, 1.1, 1.3]
 /** Per echo level: fall speed and solidity. Geometry comes from `rainMark`. */
 const RAIN_SPEED = [16, 34, 58, 86]
 const RAIN_ALPHA = [0.32, 0.55, 0.75, 0.9]
@@ -237,8 +236,9 @@ export const SketchLayer = clientEntry(
       for (let streak of rainStreaks) {
         let phase =
           at ?? (((now / 1000 / streak.duration + streak.phase) % 1) + 1) % 1
-        let alpha =
-          streak.edge * streak.alpha * (0.15 + 0.85 * Math.sin(Math.PI * phase))
+        // A drop is fully gone at both ends of its loop, so the eye sees it
+        // fall and disappear instead of shuttling between two fixed marks.
+        let alpha = streak.edge * streak.alpha * Math.sin(Math.PI * phase)
         if (alpha < 0.02) continue
 
         let head = phase * streak.travel
@@ -750,6 +750,7 @@ function rainFor(
   let ux = RAIN_FALL.ux
   let uy = RAIN_FALL.uy
   let rain: RainStreak[] = []
+  let scale = markScale(radar, fieldRadius)
 
   for (let drop of dropsFor(radar, fieldRadius, fields)) {
     let x = offset.x + drop.x * fieldRadius
@@ -762,14 +763,15 @@ function rainFor(
 
     let travel = Math.min(RAIN_TRAVEL, drop.travel * fieldRadius)
     let level = drop.level
+    let mark = rainMark(level, scale)
 
     rain.push({
       x: centre + x,
       y: centre + y,
       ux,
       uy,
-      length: RAIN_LENGTH[level],
-      width: RAIN_WIDTHS[level],
+      length: mark.length,
+      width: mark.width,
       // A drop falls only as far as its own echo reaches, so a colour never
       // drifts into a cluster of another colour.
       travel,

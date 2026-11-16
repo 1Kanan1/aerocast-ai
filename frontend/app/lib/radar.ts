@@ -218,6 +218,34 @@ export function fullRadius(radar: RadarWindow): number {
   return DROP_SPACING / radar.pitch
 }
 
+/** Per echo level: streak length and width, at full size. */
+export const RAIN_LENGTH = [4.5, 7, 10, 13]
+export const RAIN_WIDTHS = [0.6, 0.85, 1.1, 1.3]
+/** Smaller than this, a mark stops reading as a streak and becomes a speck. */
+const MARK_LENGTH_MIN = 2
+const MARK_WIDTH_MIN = 0.7
+
+/**
+ * How much of its full size a mark is drawn at. A drop falls only as far as
+ * its own echo reaches, and that distance shrinks with the field; a mark that
+ * stayed full size would sit longer than the fall it shows and read as a
+ * frozen dash, which is what a zoomed-out field used to look like.
+ */
+export function markScale(radar: RadarWindow, fieldRadius: number): number {
+  return Math.min(1, fieldRadius / fullRadius(radar))
+}
+
+/** The streak and thickness one level is drawn with, at a given scale. */
+export function rainMark(
+  level: number,
+  scale: number,
+): { length: number; width: number } {
+  return {
+    length: Math.max(MARK_LENGTH_MIN, RAIN_LENGTH[level] * scale),
+    width: Math.max(MARK_WIDTH_MIN, RAIN_WIDTHS[level] * scale),
+  }
+}
+
 /**
  * The drops to draw for a field this many pixels across, shared between the
  * fields in the same disc. The window packs drops at radar resolution, which

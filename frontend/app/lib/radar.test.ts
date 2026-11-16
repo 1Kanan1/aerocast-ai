@@ -3,9 +3,12 @@ import { describe, it } from 'remix/test'
 
 import {
   RAIN_FALL,
+  RAIN_LENGTH,
   SECTORS,
   dropsFor,
+  markScale,
   radarCoverage,
+  rainMark,
   ECHO_LEVELS,
   echoLevel,
   radarDrops,
@@ -230,5 +233,30 @@ describe('drops for a field', () => {
 
   it('shares one disc between the fields stacked on it', () => {
     assert.ok(dropsFor(radar, 160, 4).length < dropsFor(radar, 160, 1).length)
+  })
+})
+
+describe('rain marks', () => {
+  let radar = { total: 1, sectors: [], drops: [], pitch: 3 / 120 }
+  let heaviest = RAIN_LENGTH.length - 1
+
+  it('draws the full mark at full size', () => {
+    assert.equal(markScale(radar, 400), 1)
+    assert.equal(rainMark(heaviest, 1).length, RAIN_LENGTH[heaviest])
+  })
+
+  it('shrinks the mark with the field it falls in', () => {
+    let wide = rainMark(heaviest, markScale(radar, 160))
+    let narrow = rainMark(heaviest, markScale(radar, 80))
+
+    assert.ok(narrow.length < wide.length, 'a smaller field draws a shorter')
+    assert.ok(narrow.width < wide.width, 'and a thinner mark')
+  })
+
+  it('stops shrinking before the mark becomes a speck', () => {
+    let speck = rainMark(0, markScale(radar, 4))
+
+    assert.ok(speck.length >= 2, 'still a streak, not a dot')
+    assert.ok(speck.width >= 0.7, 'still drawn, not vanished')
   })
 })
