@@ -4,6 +4,7 @@ import { describe, it } from 'remix/test'
 import {
   RAIN_FALL,
   SECTORS,
+  dropsFor,
   radarCoverage,
   ECHO_LEVELS,
   echoLevel,
@@ -195,5 +196,39 @@ describe('radar drops', () => {
       )
       assert.ok(drop.travel > 0, 'a drop that could not fall was dropped')
     }
+  })
+})
+
+describe('drops for a field', () => {
+  // One drop per cell of a grid, at the pitch the window would have read it
+  // with, so the field is packed the way a real one is.
+  let drops = Array.from({ length: 400 }, (_, index) => ({
+    x: ((index % 20) - 9.5) / 10,
+    y: (Math.floor(index / 20) - 9.5) / 10,
+    level: 2,
+    phase: index / 400,
+    travel: 0.1,
+  }))
+  let radar = { total: 1, sectors: [], drops, pitch: 3 / 120 }
+
+  it('keeps every drop when the field is drawn at full size', () => {
+    assert.equal(dropsFor(radar, 400).length, drops.length)
+  })
+
+  it('thins the field as it shrinks, keeping what it already kept', () => {
+    let wide = dropsFor(radar, 160)
+    let narrow = dropsFor(radar, 80)
+
+    assert.ok(wide.length > narrow.length, 'the smaller field draws less')
+    assert.ok(narrow.length > 0, 'but not nothing')
+
+    let kept = new Set(wide.map((drop) => `${drop.x},${drop.y}`))
+    for (let drop of narrow) {
+      assert.ok(kept.has(`${drop.x},${drop.y}`), 'the subset is stable')
+    }
+  })
+
+  it('shares one disc between the fields stacked on it', () => {
+    assert.ok(dropsFor(radar, 160, 4).length < dropsFor(radar, 160, 1).length)
   })
 })

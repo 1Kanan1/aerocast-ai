@@ -56,6 +56,8 @@ export interface RadarWindow {
   sectors: number[]
   /** The echo as droplets, already placed in window coordinates. */
   drops: RadarDrop[]
+  /** Distance between neighbouring drops, as a fraction of the half-size. */
+  pitch: number
 }
 
 /** The echo steps folded into levels, so that each level can look different. */
@@ -111,6 +113,9 @@ export function echoSteps(pixels: Uint8ClampedArray): Uint8Array {
 
 /** How many pixels one drop stands for; the window is read at this size. */
 const DROP_CELL = 3
+
+/** The closest two drops may sit on screen before the field starts thinning. */
+const DROP_SPACING = 5
 
 /** The furthest a drop may fall before it would leave its own colour. */
 const DROP_RUN = 8
@@ -205,7 +210,40 @@ function scatter(x: number, y: number): number {
   return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296
 }
 
-/** Count echo pixels inside the disc, overall and per compass sector. */
+/**
+ * The field radius at which neighbouring drops sit DROP_SPACING apart: the
+ * size the window is drawn at when nothing is thinned.
+ */
+export function fullRadius(radar: RadarWindow): number {
+  return DROP_SPACING / radar.pitch
+}
+
+/**
+ * The drops to draw for a field this many pixels across, shared between the
+ * fields in the same disc. The window packs drops at radar resolution, which
+ * is right for a field near full size; a zoomed-out field would squeeze the
+ * same count into a mat, so the share falls with the square of the radius, and
+ * with each extra field stacked on the same ground. The rank is a hash of the
+ * drop's own position, so a smaller share keeps a subset of the larger one
+ * instead of reshuffling as the map moves.
+ */
+export function dropsFor(
+  radar: RadarWindow,
+  fieldRadius: number,
+  fields = 1,
+): RadarDrop[] {
+  let share = (fieldRadius / fullRadius(radar)) ** 2 / Math.max(1, fields)
+  if (share >= 1) return radar.drops
+
+  return radar.drops.filter(
+    (drop) =>
+      scatter(Math.round(drop.x * 10000), Math.round(drop.y * 10000)) < share,
+  )
+}
+
+/**
+ * Count echo pixels inside the disc, overall and per compass sector.
+ */
 export function radarCoverage(
   pixels: Uint8ClampedArray,
   width: number,
@@ -355,6 +393,7 @@ export async function fetchRadarWindow(
     return {
       ...coverage,
       drops: radarDrops(steps, soft.width, half),
+      pitch: DROP_CELL / half,
     }
   } catch {
     return null

@@ -7,8 +7,8 @@ import type { BundleWind } from '#app/lib/api-types.ts'
 import {
   AREA_NM,
   RAIN_FALL,
-  type RadarDrop,
   type RadarWindow,
+  dropsFor,
   fetchRadarWindow,
 } from '#app/lib/radar.ts'
 import {
@@ -54,6 +54,7 @@ const WIND_STROKE = 24
 /** Per echo level: streak length, width, fall speed and solidity. */
 const RAIN_LENGTH = [4.5, 7, 10, 13]
 const RAIN_WIDTHS = [0.6, 0.85, 1.1, 1.3]
+/** Per echo level: fall speed and solidity. Geometry comes from `rainMark`. */
 const RAIN_SPEED = [16, 34, 58, 86]
 const RAIN_ALPHA = [0.32, 0.55, 0.75, 0.9]
 /** The furthest a drop falls on screen, however large the field is. */
@@ -448,6 +449,9 @@ export const SketchLayer = clientEntry(
         let winds: WindArrow[] = []
         let rain: RainStreak[] = []
         let centre = frameRadius + reach
+        let rainFields = fields.filter(
+          ({ field }) => field.radar !== null,
+        ).length
 
         for (let { station, field } of fields) {
           let offset = screenOffset(
@@ -474,7 +478,8 @@ export const SketchLayer = clientEntry(
                 fieldRadius,
                 frameRadius,
                 centre,
-                field.radar.drops,
+                field.radar,
+                rainFields,
               ),
             )
           }
@@ -739,13 +744,14 @@ function rainFor(
   fieldRadius: number,
   frameRadius: number,
   centre: number,
-  drops: RadarDrop[],
+  radar: RadarWindow,
+  fields: number,
 ): RainStreak[] {
   let ux = RAIN_FALL.ux
   let uy = RAIN_FALL.uy
   let rain: RainStreak[] = []
 
-  for (let drop of drops) {
+  for (let drop of dropsFor(radar, fieldRadius, fields)) {
     let x = offset.x + drop.x * fieldRadius
     let y = offset.y + drop.y * fieldRadius
     if (Math.hypot(x, y) > frameRadius + 4) continue
