@@ -74,12 +74,7 @@ export default createController(routes, {
       }
 
       return context.render(
-        <StationPage
-          askHref={routes.ask.href({ icao })}
-          brief={brief}
-          detail={detail.data}
-          history={history}
-        />,
+        <StationPage brief={brief} detail={detail.data} history={history} />,
       )
     },
 

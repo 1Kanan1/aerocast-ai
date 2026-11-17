@@ -2,6 +2,7 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
 import { ageLabel } from '#app/lib/format.ts'
+import { routes } from '#app/routes.ts'
 import type { SelectedStation } from '#app/ui/public/session.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
@@ -172,6 +173,14 @@ export const StationPopup = clientEntry(
                   ))}
                 </div>
               )}
+
+              <a
+                href={routes.station.href({ icao: station.icao })}
+                mix={detailLinkStyle}
+              >
+                Full station page
+                <span aria-hidden="true">→</span>
+              </a>
             </>
           )}
         </div>
@@ -305,4 +314,22 @@ const suggestedMetaStyle = css({
   gridColumn: '2',
   fontSize: '10px',
   color: 'var(--ink-3)',
+})
+
+const detailLinkStyle = css({
+  flex: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '8px',
+  padding: '8px 12px',
+  borderBlockStart: '1px solid var(--glass-border)',
+  color: 'var(--ink-2)',
+  fontSize: '11px',
+  textDecoration: 'none',
+  '&:hover': { color: 'var(--ink-0)' },
+  '&:focus-visible': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '-2px',
+  },
 })

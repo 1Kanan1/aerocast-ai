@@ -27,18 +27,16 @@ import {
   subheadingStyle,
 } from '#app/ui/layout.tsx'
 import { Timeline, timelinePoints } from '#app/ui/timeline.tsx'
-import { AskPanel } from './public/ask-panel.tsx'
 
 interface StationPageProps {
   brief: ApiResult<StationBrief>
   detail: StationDetailResponse
   history: ApiResult<StationHistory>
-  askHref: string
 }
 
 export function StationPage(handle: Handle<StationPageProps>) {
   return () => {
-    let { brief, detail, history, askHref } = handle.props
+    let { brief, detail, history } = handle.props
     let station = detail.data.station
     let metar = detail.data.metar
     let taf = detail.data.taf
@@ -164,13 +162,6 @@ export function StationPage(handle: Handle<StationPageProps>) {
               </p>
             </>
           )}
-        </section>
-
-        <section aria-labelledby="ask-heading" mix={cardStyle}>
-          <h2 id="ask-heading" mix={subheadingStyle}>
-            Ask about this station
-          </h2>
-          <AskPanel action={askHref} />
         </section>
       </Page>
     )
