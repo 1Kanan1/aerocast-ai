@@ -10,6 +10,28 @@ describe facts the deterministic parser verified.
 Service (1-800-WX-BRIEF) before you fly.** AeroCast does not make go/no-go decisions and
 cannot assess your aircraft, currency, or ratings.
 
+## Screenshots
+
+A station selected on the map: rain echo, the station card anchored above the dot, and the
+explanation drawer waiting on a question.
+
+![Map workspace with KDEN selected, rain overlay on, and the ask drawer open](images/radar.png)
+
+Clicking empty ground reads the stations around that point and blends their reports for
+the coordinates you picked.
+
+![Area view for a point west of Denver, with four nearby stations blended into one summary](images/area.png)
+
+The station page decodes the raw METAR beside the parsed fields, then shows the TAF as a
+row per period.
+
+![KDEN station page with the decoded observation and the forecast table](images/station.png)
+
+Below it, the last 48 hours plotted against the MVFR and VFR limits, and the advisories
+within 50 nm.
+
+![Ceiling and visibility history chart with the advisory list underneath](images/history.png)
+
 ## Status
 
 Phases 0 to 4 are complete. The API serves stations, observations, advisories, PIREPs and
