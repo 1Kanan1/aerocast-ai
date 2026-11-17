@@ -16,7 +16,12 @@ import type { Answer } from './answer.ts'
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 const DEFAULT_TIMEOUT_MS = 3000
-const ASK_TIMEOUT_MS = 30_000
+/**
+ * Above the API's own answer budget of 35 s: a client that gives up first
+ * throws away an answer that was about to arrive, and the reader is told the
+ * explanation layer is unavailable for a question that did get answered.
+ */
+const ASK_TIMEOUT_MS = 45_000
 
 export interface ApiResult<T> {
   ok: boolean
