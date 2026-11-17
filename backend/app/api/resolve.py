@@ -331,11 +331,12 @@ async def _by_place(phrase: str) -> list[dict[str, Any]]:
 
 
 async def _resolved(row: dict[str, Any]) -> dict[str, Any]:
-    age = await latest_age(row["icao"])
+    now = datetime.now(UTC)
+    age = await latest_age(row["icao"], now)
     return {
         "station": _place(row),
         "candidates": [],
-        "suggested": await suggestions(row, age),
+        "suggested": await suggestions(row, age, now),
         "message": None,
     }
 
@@ -369,7 +370,7 @@ async def _candidate(row: dict[str, Any]) -> dict[str, Any]:
     return {**_place(row), "metar": station_metar(row, observation)}
 
 
-async def latest_age(icao: str) -> int | None:
+async def latest_age(icao: str, now: datetime) -> int | None:
     """Seconds since the newest observation, or None if there is none."""
     row = await fetch_one(
         "select obs_time from metar_observations "
@@ -378,12 +379,13 @@ async def latest_age(icao: str) -> int | None:
     )
     if row is None:
         return None
-    return int((datetime.now(UTC) - row["obs_time"]).total_seconds())
+    return int((now - row["obs_time"]).total_seconds())
 
 
 async def suggestions(
     station: dict[str, Any],
     age_seconds: int | None,
+    now: datetime,
 ) -> list[dict[str, Any]]:
     """Fresh stations near one whose observation is stale or missing."""
     if age_seconds is not None and age_seconds <= METAR_STALE_SECONDS:
@@ -409,7 +411,6 @@ async def suggestions(
         },
     )
 
-    now = datetime.now(UTC)
     fresh: list[dict[str, Any]] = []
     for row in rows:
         age = int((now - row["obs_time"]).total_seconds())

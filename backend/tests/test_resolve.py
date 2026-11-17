@@ -197,7 +197,8 @@ async def test_a_stale_station_suggests_a_fresh_neighbour(monkeypatch) -> None:
 
     suggested = await resolve_module.suggestions(
         {"icao": "KIXD", "lat": KIXD["lat"], "lon": KIXD["lon"]},
-        await resolve_module.latest_age("KIXD"),
+        await resolve_module.latest_age("KIXD", NOW),
+        NOW,
     )
 
     assert [item["icao"] for item in suggested] == ["KOJC"]
