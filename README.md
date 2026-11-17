@@ -17,6 +17,11 @@ explanation drawer waiting on a question.
 
 ![Map workspace with KDEN selected, rain overlay on, and the ask drawer open](images/radar.png)
 
+The drawer answers in place instead of navigating away, and credits the model that
+wrote it along with how long the call took.
+
+![KDEN question answered in the explanation drawer, credited to gemini-3.5-flash-lite](images/chat.png)
+
 Clicking empty ground reads the stations around that point and blends their reports for
 the coordinates you picked.
 
