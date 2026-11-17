@@ -1,4 +1,4 @@
-"""One OpenAI-compatible chat completion per rung, in LLM_CHAIN order."""
+"""One OpenAI-compatible chat completion per rung, provider by provider."""
 
 from __future__ import annotations
 
@@ -48,35 +48,25 @@ class Rung:
 
 
 def rungs(settings: Settings) -> list[Rung]:
-    """The pool in `LLM_CHAIN` order. A bare provider expands in place."""
-    found: list[Rung] = []
+    """Every model of every configured provider."""
+    return [
+        Rung(
+            name=provider.name,
+            model=model,
+            base_url=provider.base_url,
+            api_key=_secret(provider.api_key),
+            response_format=provider.response_format,
+            reasoning_effort=provider.reasoning_effort,
+        )
+        for provider in settings.llm_providers
+        if provider.configured
+        for model in provider.models
+    ]
 
-    for target in settings.llm_targets:
-        match target.provider:
-            case "zai" if settings.zai_configured:
-                for model in target.models(settings.zai_model_list):
-                    found.append(
-                        Rung(
-                            name="zai",
-                            model=model,
-                            base_url=settings.zai_base_url,
-                            api_key=_secret(settings.zai_api_key),
-                            response_format="json",
-                        )
-                    )
-            case "gemini" if settings.gemini_configured:
-                for model in target.models(settings.gemini_model_list):
-                    found.append(
-                        Rung(
-                            name="gemini",
-                            model=model,
-                            base_url=settings.gemini_base_url,
-                            api_key=_secret(settings.gemini_api_key),
-                            response_format="schema",
-                            reasoning_effort=settings.gemini_reasoning_effort,
-                        )
-                    )
-    return found
+
+#: What a provider can be expected to raise. Anything else is our bug and
+#: travels up instead of benching a rung.
+_FAILURES = (TimeoutError, httpx.HTTPError, ValueError, KeyError, TypeError)
 
 
 async def complete(
@@ -86,59 +76,129 @@ async def complete(
     budget_seconds: float | None = None,
     *,
     namespace: str = "answer",
+    race: bool = True,
 ) -> Completion | None:
-    """Try each rung once. None means failure or an exhausted budget.
+    """Answer with the first rung that replies. None means no reply in budget.
+
+    Racing is what keeps one bad model from owning the request: tried in
+    turn, a rung that never answers spends the whole budget on itself and
+    the reader gets the fallback while a usable answer sat one rung
+    further down. Sent together, the wait is the fastest reply instead of
+    the sum of the failures in front of it, and the losers are cancelled
+    the moment a winner lands.
+
+    `race=False` sends them one at a time, for a caller that wants one
+    cheap opinion rather than the fastest of several.
 
     `namespace` separates the cooldowns, so a rung that timed out on the
     short scope check is still tried for the answer itself.
     """
-    deadline = (
-        None if budget_seconds is None else time.monotonic() + budget_seconds
-    )
+    budget = RUNG_BUDGET_SECONDS if budget_seconds is None else budget_seconds
+    if budget <= 0:
+        logger.info("answer budget was already spent")
+        return None
 
+    eligible = []
     for rung in rungs(settings):
         key = f"{namespace}:{rung.name}:{rung.model}"
         if _cooldowns.get(key, 0.0) > time.monotonic():
             logger.info("skipping %s during its cooldown", key)
             continue
+        eligible.append((rung, key))
 
-        timeout = RUNG_BUDGET_SECONDS
-        if deadline is not None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                logger.info("answer budget exhausted before %s", rung.name)
-                break
-            timeout = min(timeout, remaining)
+    if not eligible:
+        return None
 
-        started = time.monotonic()
+    driver = _race if race else _serial
+    return await driver(eligible, messages, schema, budget)
+
+
+async def _serial(
+    eligible: list[tuple[Rung, str]],
+    messages: list[dict[str, str]],
+    schema: dict[str, object],
+    budget: float,
+) -> Completion | None:
+    deadline = time.monotonic() + budget
+    for rung, key in eligible:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            logger.info("answer budget exhausted before %s", rung.name)
+            break
         try:
-            async with asyncio.timeout(timeout):
-                payload = await _call(rung, messages, schema, timeout)
-        except (
-            TimeoutError,
-            httpx.HTTPError,
-            ValueError,
-            KeyError,
-            TypeError,
-        ) as error:
-            logger.warning(
-                "provider %s (%s) failed: %s",
-                rung.name,
-                rung.model,
-                error,
-            )
-            _cooldowns[key] = time.monotonic() + COOLDOWN_SECONDS
+            completion = await _attempt(rung, messages, schema, remaining)
+        except _FAILURES as error:
+            _failed(rung, key, error)
             continue
-
         _cooldowns.pop(key, None)
-        return Completion(
-            payload=payload,
-            provider=rung.name,
-            model=rung.model,
-            latency_ms=int((time.monotonic() - started) * 1000),
-        )
-
+        return completion
     return None
+
+
+async def _race(
+    eligible: list[tuple[Rung, str]],
+    messages: list[dict[str, str]],
+    schema: dict[str, object],
+    budget: float,
+) -> Completion | None:
+    tasks = {
+        asyncio.ensure_future(_attempt(rung, messages, schema, budget)): (
+            rung,
+            key,
+        )
+        for rung, key in eligible
+    }
+    try:
+        while tasks:
+            done, _ = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED
+            )
+            winner: tuple[Completion, str] | None = None
+            for task in done:
+                rung, key = tasks.pop(task)
+                error = task.exception()
+                if error is not None:
+                    if not isinstance(error, _FAILURES):
+                        raise error
+                    _failed(rung, key, error)
+                elif winner is None:
+                    winner = (task.result(), key)
+            if winner is not None:
+                completion, key = winner
+                _cooldowns.pop(key, None)
+                return completion
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    return None
+
+
+async def _attempt(
+    rung: Rung,
+    messages: list[dict[str, str]],
+    schema: dict[str, object],
+    timeout: float,
+) -> Completion:
+    started = time.monotonic()
+    async with asyncio.timeout(timeout):
+        payload = await _call(rung, messages, schema, timeout)
+    return Completion(
+        payload=payload,
+        provider=rung.name,
+        model=rung.model,
+        latency_ms=int((time.monotonic() - started) * 1000),
+    )
+
+
+def _failed(rung: Rung, key: str, error: BaseException) -> None:
+    logger.warning(
+        "provider %s (%s) failed: %s",
+        rung.name,
+        rung.model,
+        error,
+    )
+    _cooldowns[key] = time.monotonic() + COOLDOWN_SECONDS
 
 
 async def _call(

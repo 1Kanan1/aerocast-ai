@@ -48,7 +48,7 @@ nice-to-have in section 17, not promised.
 | Frontend runtime | Node 26.13.0 LTS, Bun 1.4 | the Remix 3 scaffold runs the server under `remix/node-tsx`; Bun handles install and script running. Pinned in the Docker base image, CI and `.node-version` |
 | Map | MapLibre GL JS v6 | ESM only, WebGL2, no Mapbox account |
 | Basemap | OpenFreeMap `positron`, restyled monochrome | no key, no rate limit, MIT-ish terms, good enough to desaturate |
-| AI | Z.ai GLM-4.5/4.7-Flash, Gemini Flash, template floor | free tiers; one OpenAI-compatible client, smartest model first, 35s for the whole answer |
+| AI | Z.ai GLM-4.5/4.7-Flash, Gemini Flash, template floor | free tiers; one OpenAI-compatible client, every rung raced, first reply wins, 35s for the whole answer |
 | Deploy | Hetzner + Coolify + Caddy, `docker compose` underneath | ~EUR 4/mo, real TLS, git-push deploys |
 
 Remix never touches Postgres. FastAPI owns the database, the parsers, ingestion, and
@@ -581,7 +581,7 @@ question
      -> no match: say so, no model call
   -> pre-check: does it ask for a decision? (regex)  -> fixed refusal, no model call
   -> cache: sha256(brief_hash + normalized_question + prompt_version)
-  -> pool: LLM_CHAIN order, smartest model first, then the template floor
+  -> pool: every configured provider at once, first reply wins, then the template floor
   -> validate
   -> store in ai_answers
   -> respond
@@ -675,11 +675,11 @@ Every provider names an exact model id: `deepseek/deepseek-v4.1-flash-free`,
 `z-ai/glm-5.3-flash-free`, `glm-4.7-flash`, `gemini-3.8-flash`. No `-latest` aliases
 anywhere.
 
-Gemini is a ladder rather than a single id. `GEMINI_MODELS` lists the models tried in order
-behind one endpoint, because one provider can hold several usable models and the only
-difference that matters between them is latency. Each entry is still pinned; only the
-ordering is configuration. ZAI gets the same treatment with `ZAI_MODELS`: 4.7 first, and
-the free 4.5 behind it for the days when 4.7 answers 1305.
+Gemini holds a model list rather than a single id. `GEMINI_MODELS` names the models behind
+one endpoint, because one provider can offer several callable models and the free tier
+answers a different one on each attempt. Each entry is still pinned; the list is
+configuration, and its order is only a preference for the one caller that asks a single
+model. ZAI gets the same treatment with `ZAI_MODELS`.
 
 An alias that rolls forward is worse than one that expires. The thing it silently changes
 is the output of a system validated by a frozen eval fixture and a versioned prompt, so a
@@ -692,38 +692,42 @@ visible failure with a published replacement, which is the failure mode you want
 commit that bumps an id should name the replacement and rerun `make eval` so the delta is
 recorded.
 
-### The API router comes first
+### One provider, one model list
 
-Every `LLM_CHAIN` entry starts with the API router the app calls, because a model id may
-carry a vendor prefix of its own. Only two routers are known, `zai` and `gemini`:
-
-```dotenv
-LLM_CHAIN=zai/glm-4.5-flash,gemini/gemini-3.6-flash,zai/glm-4.7-flash,gemini/gemini-3.5-flash-lite,gemini/gemini-3.8-flash
-```
-
-The first segment is split off once. A first segment that names no known router is dropped
-with a warning, so a vendor prefix written in its place fails visibly instead of
-disappearing from the chain. A bare router name expands to that router's ladder in place,
-which keeps the ladder in one setting.
-
-### One pool, ordered by intelligence
-
-The chain is ordered by how good the answer is, then by speed on a tie. `glm-4.5-flash` is
-first despite taking 15 to 27s, because it is the only model measured that puts the values
-and the observation age into the summary a reader sees; `gemini-3.6-flash` is second at 4
-to 43s; `gemini-3.5-flash-lite` is fourth at ~2s because its summaries restate the topic
-rather than answer it.
+A provider is its transport plus a model list, and both are settings. There is no pool to
+compose: `ZAI_MODELS` and `GEMINI_MODELS` are the whole candidate set, asked together on
+every question.
 
 ```dotenv
-LLM_CHAIN=zai/glm-4.5-flash,gemini/gemini-3.6-flash,zai/glm-4.7-flash,gemini/gemini-3.5-flash-lite,gemini/gemini-3.8-flash
+ZAI_MODELS=glm-4.5-flash,glm-4.7-flash
+GEMINI_MODELS=gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.8-flash
 ```
 
-The order is hand-tuned from measurement, not learned, and the free tiers move under it:
-on 2026-11-14 ZAI returned 429 or 1305 on most attempts and `gemini-3.8-flash` answered
-none, while the same models answered minutes apart. What stays automatic is failure
-handling: any rung that times out or returns 429 sits out for 60s, so an overloaded
-provider is demoted without an edit. The scope classifier keeps its own cooldown
-namespace, so its 4s timeout cannot bench the rung the answer is about to use.
+A model id never carries its vendor: the list sits under the router that serves it, so a
+name cannot land on the wrong endpoint. A repeated id keeps its first position, so no model
+is asked twice in the same race.
+
+### Every rung is asked at once
+
+The answer path sends the question to every rung simultaneously and keeps the first reply
+that validates; the losers are cancelled. One order for everybody meant one silent model
+owned the request: measured on 2026-11-18, `glm-4.5-flash`, `glm-4.7-flash` and
+`gemini-3.6-flash` each outlasted a 30s cap while `gemini-4-hydrogen` answered in 11.7s,
+and `gemini-3.5-flash-lite` in about 2s. The race makes the wait the fastest reply instead
+of the sum of the failures in front of it: 2.8 to 7.0s, against 26 to 32s or the template.
+
+Cost, plainly: a race bills every rung that produced tokens, and cancelling does not refund
+them. It buys latency, not money. The winner is usually the smallest model, so racing
+trades answer quality for speed by construction; `make eval` is what keeps that honest.
+
+Order still decides one thing: the scope check asks one model, serially, on a 4s budget, so
+the first model of the first configured provider answers it. That is the only reason the
+list is ordered.
+
+What stays automatic is failure handling: any rung that times out or returns 429 sits out
+for 60s, so an overloaded provider leaves the race without an edit. The scope classifier
+keeps its own cooldown namespace, so its 4s timeout cannot bench the rung the answer is
+about to use.
 
 `ai_answers.model` stores the id that produced each answer, so results stay attributable
 after a bump. The API returns that id with the answer, and the panel prints it beside the
@@ -757,11 +761,9 @@ longer than that, so a thinking model cannot hold the drawer for a minute. A run
 times out or returns 429 is skipped for 60s, which keeps a hung provider from costing
 every request.
 
-Consequence for the ladder: a 63s explanation is not an interactive experience, so the
-intelligence-first order costs 15 to 27s on the first request. That is a deliberate trade:
-the faster models were measured dodging the question in their summaries while putting the
-values only in claims the panel does not render. If `make eval` later says the fast model
-is good enough, moving it up is one env change.
+Consequence for the model lists: a 63s explanation is not an interactive experience, so no
+single thinking model is allowed to set the reader's wait. Every model is raced and the 35s
+cap bounds it; a slow model can win only when every fast one failed.
 
 ### Eval fixture
 
@@ -781,9 +783,10 @@ single most persuasive artifact in the repo and it costs about half a day.
 the brief endpoint, and returns the answer contract. The request path is:
 
 1. Verdict regex. A match returns fixed refusal copy without a provider call.
-2. Pool from `LLM_CHAIN`, smartest model first. One attempt per rung, pinned model ids, no
-   per-provider timeout, and 35s for the whole answer. Gemini uses the JSON schema response
-   format; Z.ai asks for JSON. A rung that times out or returns 429 is skipped for 60s.
+2. Every rung at once, first valid reply wins and the losers are cancelled.
+   One attempt per rung, pinned model ids, no per-provider timeout, and 35s for the whole
+   answer. Gemini uses the JSON schema response format; Z.ai asks for JSON. A rung that
+   times out or returns 429 is skipped for 60s.
 3. Parse and validate. Unknown refs, invented numbers, verdict language, too many claims
    or a refusal that carries claims all reject the draft.
 4. On rejection or an unreachable chain, the deterministic template and its notice.
@@ -998,8 +1001,6 @@ Two owners, two sets of variables. They never mix.
 ```dotenv
 AEROCAST_ENV=local
 DATABASE_URL=postgresql+asyncpg://aerocast@localhost:5432/aerocast
-
-LLM_CHAIN=zai/glm-4.5-flash,gemini/gemini-3.6-flash,zai/glm-4.7-flash,gemini/gemini-3.5-flash-lite,gemini/gemini-3.8-flash
 
 ZAI_API_KEY=
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4/

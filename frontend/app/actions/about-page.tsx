@@ -116,8 +116,8 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
           />
           {body ? (
             <p mix={mutedStyle}>
-              {body.llm.chain.length} providers in the chain; the first one that
-              answers inside its budget is used.
+              {body.llm.chain.length} models in the chain; they are asked
+              together and the first valid answer is used.
             </p>
           ) : null}
         </section>

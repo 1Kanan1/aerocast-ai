@@ -28,10 +28,9 @@ async def health(response: Response) -> dict[str, object]:
         "database": {"ok": database_ok, "error": database_error},
         "llm": {
             "chain": [
-                f"{target.provider}/{target.model}"
-                if target.model
-                else target.provider
-                for target in settings.llm_targets
+                f"{provider.name}/{model}"
+                for provider in settings.llm_providers
+                for model in provider.models
             ],
             "providers": await provider_statuses(settings),
         },

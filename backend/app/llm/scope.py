@@ -73,6 +73,9 @@ async def classify_scope(
         SCOPE_SCHEMA,
         budget_seconds=budget_seconds,
         namespace="scope",
+        # A gate that cannot block an answer wants one cheap opinion, not a
+        # second race: the first eligible model answers it or none does.
+        race=False,
     )
     if completion is None:
         return None
