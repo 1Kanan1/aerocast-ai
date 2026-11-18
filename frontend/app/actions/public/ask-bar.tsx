@@ -219,6 +219,11 @@ const barStyle = css({
   WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
   transition: 'border-color 140ms ease',
   '&:focus-within': { borderColor: 'rgba(255, 255, 255, 0.24)' },
+  // The textarea draws no outline of its own, so the ring goes on the bar.
+  '&:has(textarea:focus-visible)': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
   '& textarea': {
     flex: '1 1 auto',
     minWidth: 0,

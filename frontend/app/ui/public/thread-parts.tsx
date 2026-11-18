@@ -617,6 +617,11 @@ const userEditStyle = css({
   border: '1px solid rgba(255, 255, 255, 0.2)',
   borderRadius: '16px',
   background: 'rgba(255, 255, 255, 0.06)',
+  // The textarea draws no outline of its own, so the ring goes on the bubble.
+  '&:has(textarea:focus-visible)': {
+    outline: '2px solid var(--ink-2)',
+    outlineOffset: '2px',
+  },
   '& textarea': {
     width: '100%',
     minHeight: '34px',
@@ -781,7 +786,7 @@ const turnActionStyle = css({
   outline: 'none',
   '&:hover': { color: 'var(--ink-1)' },
   '&:focus-visible': {
-    outline: '1px solid var(--glass-border)',
+    outline: '2px solid var(--ink-2)',
     outlineOffset: '2px',
   },
 })
