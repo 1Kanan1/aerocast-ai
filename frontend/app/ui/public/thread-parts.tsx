@@ -818,11 +818,8 @@ const thinkingStyle = css({
   whiteSpace: 'nowrap',
 })
 
-// `backwards` holds each letter at the dim first frame until its delay
-// elapses. Without it a letter waits at its full, unlit opacity, so the first
-// pass starts brighter than every pass after it.
 const thinkingLetterStyle = css({
-  animation: `rmx-thinking-wave ${THINKING_CYCLE_MS}ms ease-in-out infinite backwards`,
+  animation: `rmx-thinking-wave ${THINKING_CYCLE_MS}ms ease-in-out infinite`,
   '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
 })
 

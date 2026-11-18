@@ -36,7 +36,7 @@ function percentOfCycle(ms: number): string {
 }
 
 export const THINKING_KEYFRAMES = `@keyframes rmx-thinking-wave {
-  0%, 100% { opacity: 0.4; color: var(--ink-3); text-shadow: none; }
-  ${percentOfCycle(CREST_MS / 2)} { opacity: 1; color: var(--ink-1); text-shadow: 0 0 4px currentColor; }
-  ${percentOfCycle(CREST_MS)} { opacity: 0.4; color: var(--ink-3); text-shadow: none; }
+  0%, 100% { color: var(--ink-3); text-shadow: none; }
+  ${percentOfCycle(CREST_MS / 2)} { color: var(--ink-2); text-shadow: 0 0 4px currentColor; }
+  ${percentOfCycle(CREST_MS)} { color: var(--ink-3); text-shadow: none; }
 }`
