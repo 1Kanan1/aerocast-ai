@@ -3,6 +3,7 @@ import { css } from 'remix/component'
 import { ImportMap } from 'remix/component/server'
 
 import { scriptEntry } from '#app/assets.ts'
+import { THINKING_KEYFRAMES } from '#app/ui/public/thinking-wave.ts'
 
 export interface DocumentProps {
   children?: RemixNode
@@ -50,6 +51,7 @@ export function Document(handle: Handle<DocumentProps>) {
   0%, 100% { opacity: 0.25; }
   50% { opacity: 1; }
 }
+${THINKING_KEYFRAMES}
 @keyframes rmx-word-in {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }

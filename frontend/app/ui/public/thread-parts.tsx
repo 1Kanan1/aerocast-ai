@@ -4,6 +4,11 @@ import { css, on, ref } from 'remix/component'
 import type { ResolveCandidate } from '#app/lib/api-types.ts'
 import { modelLabel, tookLabel } from '#app/lib/format.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
+import {
+  THINKING_CYCLE_MS,
+  THINKING_LETTERS,
+  thinkingDelay,
+} from '#app/ui/public/thinking-wave.ts'
 import type { ThreadEntry } from '#app/ui/public/session.ts'
 import {
   CheckIcon,
@@ -274,8 +279,18 @@ export function AssistantTurn(
 
         {entry.pending ? (
           <p aria-live="polite" mix={pendingStyle} role="status">
-            <span mix={pulseStyle} />
-            Thinking…
+            <span aria-hidden="true" mix={pulseStyle} />
+            <span mix={thinkingStyle}>
+              {THINKING_LETTERS.map((letter, index) => (
+                <span
+                  key={index}
+                  mix={thinkingLetterStyle}
+                  style={{ animationDelay: thinkingDelay(index) }}
+                >
+                  {letter}
+                </span>
+              ))}
+            </span>
           </p>
         ) : entry.stopped ? (
           <p mix={stoppedStyle}>Stopped.</p>
@@ -760,10 +775,24 @@ const pendingStyle = css({
   color: 'var(--ink-3)',
 })
 
+const thinkingStyle = css({
+  display: 'inline-flex',
+  whiteSpace: 'nowrap',
+})
+
+// `backwards` holds each letter at the dim first frame until its delay
+// elapses. Without it a letter waits at its full, unlit opacity, so the first
+// pass starts brighter than every pass after it.
+const thinkingLetterStyle = css({
+  animation: `rmx-thinking-wave ${THINKING_CYCLE_MS}ms ease-in-out infinite backwards`,
+  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+})
+
 const pulseStyle = css({
   width: '6px',
   height: '6px',
   borderRadius: '999px',
   background: 'var(--accent)',
   animation: 'rmx-thread-pulse 1.1s ease-in-out infinite',
+  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
 })
