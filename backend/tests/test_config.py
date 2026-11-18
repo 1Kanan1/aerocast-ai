@@ -7,8 +7,17 @@ from app.config import Settings
 
 
 def make_settings(**overrides: Any) -> Settings:
-    """Build settings without reading .env or the environment."""
-    return Settings(_env_file=None, **overrides)
+    """Build settings without reading .env or the environment.
+
+    Every key is cleared explicitly: a developer with ZAI_API_KEY or
+    OPENAI_API_KEY exported would otherwise change what these assert.
+    """
+    keys: dict[str, Any] = {
+        "zai_api_key": None,
+        "gemini_api_key": None,
+        "openai_api_key": None,
+    }
+    return Settings(_env_file=None, **{**keys, **overrides})
 
 
 @pytest.mark.parametrize(
@@ -48,10 +57,12 @@ def test_database_url_rejects_anything_not_postgres(url: str) -> None:
 
 
 def test_each_provider_carries_its_own_transport() -> None:
-    zai, gemini = make_settings(
+    zai, gemini, openai = make_settings(
         zai_models=" glm-a , glm-b,,glm-a ",
         gemini_models="gemini-a",
         gemini_reasoning_effort="medium",
+        openai_models="luna-a",
+        openai_reasoning_effort="none",
     ).llm_providers
 
     assert zai.name == "zai"
@@ -66,15 +77,25 @@ def test_each_provider_carries_its_own_transport() -> None:
     assert gemini.response_format == "schema"
     assert gemini.reasoning_effort == "medium"
 
+    assert openai.name == "openai"
+    assert openai.models == ("luna-a",)
+    assert openai.base_url == "https://api.openai.com/v1/"
+    assert openai.response_format == "schema"
+    assert openai.reasoning_effort == "none"
+    # Every other provider takes a pinned temperature; Luna rejects it.
+    assert openai.temperature is None
+    assert zai.temperature == gemini.temperature == 0.0
+
 
 def test_a_provider_is_configured_by_a_non_empty_key() -> None:
-    zai, gemini = make_settings(
+    zai, gemini, openai = make_settings(
         zai_api_key="",
         gemini_api_key="secret",
     ).llm_providers
 
     assert zai.configured is False
     assert gemini.configured is True
+    assert openai.configured is False
 
 
 def test_no_provider_uses_a_moving_model_alias() -> None:

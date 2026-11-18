@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import httpx
@@ -42,8 +42,10 @@ class Rung:
     name: str
     model: str
     base_url: str
-    api_key: str | None
+    #: Kept out of the repr: a failing assertion must not print a key.
+    api_key: str | None = field(repr=False)
     response_format: Literal["schema", "json", "none"]
+    temperature: float | None = 0.0
     reasoning_effort: str | None = None
 
 
@@ -56,6 +58,7 @@ def rungs(settings: Settings) -> list[Rung]:
             base_url=provider.base_url,
             api_key=_secret(provider.api_key),
             response_format=provider.response_format,
+            temperature=provider.temperature,
             reasoning_effort=provider.reasoning_effort,
         )
         for provider in settings.llm_providers
@@ -210,8 +213,9 @@ async def _call(
     body: dict[str, Any] = {
         "model": rung.model,
         "messages": messages,
-        "temperature": 0,
     }
+    if rung.temperature is not None:
+        body["temperature"] = rung.temperature
     if rung.response_format == "schema":
         body["response_format"] = {
             "type": "json_schema",

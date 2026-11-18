@@ -29,6 +29,11 @@ def _fake_providers(monkeypatch, database_ok: bool) -> None:
                 "model": "gemini-3.5-flash-lite",
                 "configured": False,
             },
+            {
+                "name": "openai",
+                "model": "gpt-6-luna",
+                "configured": False,
+            },
         ]
 
     # The chain comes from settings, so it is pinned here: a developer's
@@ -37,6 +42,7 @@ def _fake_providers(monkeypatch, database_ok: bool) -> None:
         _env_file=None,
         zai_models="glm-4.7-flash",
         gemini_models="gemini-3.5-flash-lite",
+        openai_models="gpt-6-luna",
     )
 
     monkeypatch.setattr(health_module, "get_settings", lambda: settings)
@@ -56,12 +62,15 @@ async def test_health_reports_ok_when_database_reachable(monkeypatch) -> None:
     assert body["llm"]["chain"] == [
         "zai/glm-4.7-flash",
         "gemini/gemini-3.5-flash-lite",
+        "openai/gpt-6-luna",
     ]
     assert [provider["name"] for provider in body["llm"]["providers"]] == [
         "zai",
         "gemini",
+        "openai",
     ]
     assert body["llm"]["providers"][1]["configured"] is False
+    assert body["llm"]["providers"][2]["configured"] is False
 
 
 async def test_health_reports_degraded_when_database_unreachable(

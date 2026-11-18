@@ -21,6 +21,7 @@ class Provider(NamedTuple):
     base_url: str
     api_key: SecretStr | None
     response_format: Literal["schema", "json", "none"]
+    temperature: float | None = 0.0
     reasoning_effort: str | None = None
 
     @property
@@ -47,17 +48,17 @@ class Settings(BaseSettings):
     )
 
     zai_api_key: SecretStr | None = None
-    zai_base_url: str = "https://api.z.ai/api/paas/v4/"
     zai_models: str = "glm-4.5-flash,glm-4.7-flash"
 
     gemini_api_key: SecretStr | None = None
-    gemini_base_url: str = (
-        "https://generativelanguage.googleapis.com/v1beta/openai/"
-    )
     gemini_models: str = (
         "gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.8-flash"
     )
     gemini_reasoning_effort: str = "low"
+
+    openai_api_key: SecretStr | None = None
+    openai_models: str = "gpt-6-luna"
+    openai_reasoning_effort: str = "low"
 
     @field_validator("database_url")
     @classmethod
@@ -75,22 +76,39 @@ class Settings(BaseSettings):
 
     @property
     def llm_providers(self) -> tuple[Provider, ...]:
-        """Every provider, in the order a serial caller tries them."""
+        """Every provider, in the order a serial caller tries them.
+
+        Each endpoint is written here rather than read from the environment:
+        the URL and the request shape it accepts are one decision, and putting
+        a copy in settings lets the two drift apart.
+        """
         return (
             Provider(
                 name="zai",
                 models=_models(self.zai_models),
-                base_url=self.zai_base_url,
+                base_url="https://api.z.ai/api/paas/v4/",
                 api_key=self.zai_api_key,
                 response_format="json",
             ),
             Provider(
                 name="gemini",
                 models=_models(self.gemini_models),
-                base_url=self.gemini_base_url,
+                base_url=(
+                    "https://generativelanguage.googleapis.com/v1beta/openai/"
+                ),
                 api_key=self.gemini_api_key,
                 response_format="schema",
                 reasoning_effort=self.gemini_reasoning_effort,
+            ),
+            Provider(
+                name="openai",
+                models=_models(self.openai_models),
+                base_url="https://api.openai.com/v1/",
+                api_key=self.openai_api_key,
+                response_format="schema",
+                # Luna rejects any temperature but its default.
+                temperature=None,
+                reasoning_effort=self.openai_reasoning_effort,
             ),
         )
 

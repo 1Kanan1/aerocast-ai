@@ -694,13 +694,15 @@ recorded.
 
 ### One provider, one model list
 
-A provider is its transport plus a model list, and both are settings. There is no pool to
-compose: `ZAI_MODELS` and `GEMINI_MODELS` are the whole candidate set, asked together on
-every question.
+A provider is its endpoint plus a model list. The model list is a setting; the endpoint is
+written in `config.py` beside the request shape it accepts, because the two only work
+together. There is no pool to compose: `ZAI_MODELS`, `GEMINI_MODELS` and `OPENAI_MODELS`
+are the whole candidate set, asked together on every question.
 
 ```dotenv
 ZAI_MODELS=glm-4.5-flash,glm-4.7-flash
 GEMINI_MODELS=gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.8-flash
+OPENAI_MODELS=gpt-6-luna
 ```
 
 A model id never carries its vendor: the list sits under the router that serves it, so a
@@ -1003,10 +1005,11 @@ AEROCAST_ENV=local
 DATABASE_URL=postgresql+asyncpg://aerocast@localhost:5432/aerocast
 
 ZAI_API_KEY=
-ZAI_BASE_URL=https://api.z.ai/api/paas/v4/
 ZAI_MODELS=glm-4.5-flash,glm-4.7-flash
 GEMINI_API_KEY=
 GEMINI_MODELS=gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.8-flash
+OPENAI_API_KEY=
+OPENAI_MODELS=gpt-6-luna
 ```
 
 **The web container gets exactly one variable**, set in `compose.yaml` or the shell, not

@@ -20,11 +20,14 @@ def clear_cooldowns():
 
 
 def settings(**overrides: object) -> Settings:
+    # The keys are pinned, not read: an exported OPENAI_API_KEY would
+    # otherwise add a rung these tests do not expect.
     defaults = Settings(
         _env_file=None,
         database_url="postgresql://user:pass@localhost:5432/aerocast",
         zai_api_key=SecretStr("zai-key"),
         gemini_api_key=SecretStr("gemini-key"),
+        openai_api_key=None,
     )
     return defaults.model_copy(update=overrides)
 
@@ -77,12 +80,13 @@ def test_zai_lists_its_models():
     assert all(rung.name == "zai" for rung in chain)
 
 
-def test_the_default_providers_are_zai_then_gemini():
+def test_the_default_providers_are_zai_then_gemini_then_openai():
     chain = rungs(
         Settings(
             _env_file=None,
             zai_api_key=SecretStr("zai-key"),
             gemini_api_key=SecretStr("gemini-key"),
+            openai_api_key=SecretStr("openai-key"),
         )
     )
 
@@ -92,6 +96,7 @@ def test_the_default_providers_are_zai_then_gemini():
         ("gemini", "gemini-3.6-flash"),
         ("gemini", "gemini-3.5-flash-lite"),
         ("gemini", "gemini-3.8-flash"),
+        ("openai", "gpt-6-luna"),
     ]
 
 
@@ -422,6 +427,82 @@ async def test_each_rung_sends_its_key(monkeypatch):
         "Bearer zai-key",
         "Bearer gemini-key",
     ]
+
+
+async def test_a_model_that_only_takes_its_default_temperature(monkeypatch):
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        bodies.append(json)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    await complete(
+        settings(
+            zai_api_key=None,
+            gemini_api_key=None,
+            openai_api_key=SecretStr("openai-key"),
+        ),
+        [],
+        {},
+    )
+    await complete(
+        settings(gemini_api_key=None, zai_models="zai-only"), [], {}
+    )
+
+    # Luna answers 400 to any temperature but its default, so the key is
+    # left out rather than pinned to a number the model will refuse.
+    assert len(bodies) == 2
+    assert "temperature" not in bodies[0]
+    assert bodies[1]["temperature"] == 0
+
+
+async def test_a_rung_that_names_a_reasoning_effort_sends_it(monkeypatch):
+    bodies: list[dict[str, object]] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        bodies.append(json)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    await complete(
+        settings(zai_api_key=None, gemini_models="gemini-only"), [], {}
+    )
+
+    assert bodies[0]["reasoning_effort"] == "low"
+
+
+async def test_a_rung_posts_to_its_own_base_url(monkeypatch):
+    urls: list[str] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        urls.append(url)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    await complete(
+        settings(gemini_api_key=None, zai_models="only-model"), [], {}
+    )
+
+    assert urls == ["https://api.z.ai/api/paas/v4/chat/completions"]
 
 
 async def test_every_rung_receives_the_system_prompt(monkeypatch):
