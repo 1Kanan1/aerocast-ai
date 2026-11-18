@@ -231,9 +231,16 @@ const moodStyle = css({
   color: 'var(--ink-3)',
 })
 
+// The range input is transparent so the drawn ticks show through, which hides
+// its own focus ring. Draw the ring on the rail instead.
 const railStyle = css({
   position: 'relative',
   height: '18px',
+  '&:has(:focus-visible)': {
+    outline: '1px solid var(--ink-2)',
+    outlineOffset: '2px',
+    borderRadius: '4px',
+  },
 })
 
 const trackStyle = css({
