@@ -26,6 +26,7 @@ import {
   type Suggestion,
   AssistantTurn,
   ClarificationView,
+  ThreadAnnouncer,
   ThreadWelcome,
   UserTurn,
 } from '#app/ui/public/thread-parts.tsx'
@@ -196,6 +197,10 @@ export const AnswerPanel = clientEntry(
           )}
 
           <div mix={[threadStyle, ref((node) => (scroller = node))]}>
+            {station === null ? null : (
+              <ThreadAnnouncer thread={station.thread} />
+            )}
+
             {clarification === null ? null : (
               <ClarificationView
                 message={clarification.message}

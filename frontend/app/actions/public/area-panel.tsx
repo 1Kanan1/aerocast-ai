@@ -13,7 +13,11 @@ import { reportLabel } from '#app/lib/public/labels.ts'
 import { ChevronIcon } from '#app/ui/public/icons.tsx'
 import type { AreaPoint, ThreadEntry } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
-import { AssistantTurn, UserTurn } from '#app/ui/public/thread-parts.tsx'
+import {
+  AssistantTurn,
+  ThreadAnnouncer,
+  UserTurn,
+} from '#app/ui/public/thread-parts.tsx'
 
 /** How long the panel takes to leave, matching rmx-card-out. */
 const PANEL_EXIT_MS = 160
@@ -225,6 +229,8 @@ export const AreaPanel = clientEntry(
           )}
 
           <div mix={[threadStyle, ref((node) => (scroller = node))]}>
+            <ThreadAnnouncer thread={thread} />
+
             {thread.length === 0 ? (
               <p mix={hintStyle}>
                 Ask about the weather here. Answers quote each station by name,

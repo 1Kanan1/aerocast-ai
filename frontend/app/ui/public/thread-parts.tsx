@@ -6,6 +6,7 @@ import { modelLabel, tookLabel } from '#app/lib/format.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
 import {
   THINKING_CYCLE_MS,
+  THINKING_LABEL,
   THINKING_LETTERS,
   thinkingDelay,
 } from '#app/ui/public/thinking-wave.ts'
@@ -278,7 +279,7 @@ export function AssistantTurn(
         )}
 
         {entry.pending ? (
-          <p aria-live="polite" mix={pendingStyle} role="status">
+          <p mix={pendingStyle}>
             <span aria-hidden="true" mix={pulseStyle} />
             <span mix={thinkingStyle}>
               {THINKING_LETTERS.map((letter, index) => (
@@ -352,6 +353,31 @@ export function AssistantTurn(
       </article>
     )
   }
+}
+
+/** What a turn says out loud: the latest one is the live region's text. */
+export function threadAnnouncement(entry: ThreadEntry | undefined): string {
+  if (entry === undefined) return ''
+  if (entry.pending) return THINKING_LABEL
+  if (entry.stopped) return 'Stopped.'
+  if (entry.refusal !== null) return entry.refusal
+  if (entry.problem !== null) return entry.problem
+  return entry.answer?.summary ?? ''
+}
+
+/**
+ * The thread's status for screen readers. A live region announces changes to
+ * text that was already in the document, so this mounts with the panel and
+ * follows the latest turn instead of appearing inside the turn it describes.
+ */
+export function ThreadAnnouncer(
+  handle: Handle<{ thread: readonly ThreadEntry[] }>,
+) {
+  return () => (
+    <p aria-atomic="true" aria-live="polite" mix={srOnlyStyle}>
+      {threadAnnouncement(handle.props.thread[handle.props.thread.length - 1])}
+    </p>
+  )
 }
 
 /**
@@ -764,6 +790,18 @@ const bodyTextStyle = css({
   margin: 0,
   fontSize: '13px',
   lineHeight: 1.6,
+})
+
+const srOnlyStyle = css({
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  margin: '-1px',
+  padding: 0,
+  border: 0,
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
 })
 
 const pendingStyle = css({
