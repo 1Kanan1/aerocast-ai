@@ -3,6 +3,7 @@ import { clientEntry, css, on, ref } from 'remix/component'
 
 import { ageLabel } from '#app/lib/format.ts'
 import { routes } from '#app/routes.ts'
+import { prefersReducedMotion } from '#app/ui/public/motion.ts'
 import type { SelectedStation } from '#app/ui/public/session.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
@@ -118,11 +119,13 @@ export const StationPopup = clientEntry(
           mix={[hostStyle, ref((node) => (host = node))]}
           style={{
             display: station === null ? 'none' : 'flex',
-            animation: closing
-              ? 'rmx-card-out 160ms ease-in forwards'
-              : entering
-                ? 'rmx-card-in 180ms ease-out'
-                : 'none',
+            animation: prefersReducedMotion()
+              ? undefined
+              : closing
+                ? 'rmx-card-out 160ms ease-in forwards'
+                : entering
+                  ? 'rmx-card-in 180ms ease-out'
+                  : 'none',
             pointerEvents: closing ? 'none' : undefined,
           }}
         >
@@ -212,7 +215,9 @@ const hostStyle = css({
   backdropFilter: 'blur(26px) saturate(1.25)',
   WebkitBackdropFilter: 'blur(26px) saturate(1.25)',
   overflow: 'hidden',
-  animation: 'rmx-card-in 180ms ease-out',
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-card-in 180ms ease-out',
+  },
 })
 
 const headerStyle = css({

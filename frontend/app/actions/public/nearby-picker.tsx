@@ -1,6 +1,7 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on } from 'remix/component'
 
+import { prefersReducedMotion } from '#app/ui/public/motion.ts'
 import type { NearbyChoice } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 
@@ -68,9 +69,10 @@ export const NearbyPicker = clientEntry(
           style={{
             left: `${Math.min(choice.x, Math.max(12, window.innerWidth - 320))}px`,
             top: `${Math.min(choice.y, Math.max(12, window.innerHeight - 260))}px`,
-            animation: fadingOut
-              ? 'rmx-card-out 140ms ease-in forwards'
-              : undefined,
+            animation:
+              fadingOut && !prefersReducedMotion()
+                ? 'rmx-card-out 140ms ease-in forwards'
+                : undefined,
             pointerEvents: fadingOut ? 'none' : undefined,
           }}
         >
@@ -125,7 +127,9 @@ const panelStyle = css({
   borderRadius: '14px',
   background: 'var(--glass-strong)',
   boxShadow: 'var(--shadow)',
-  animation: 'rmx-card-in 140ms ease-out',
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-card-in 140ms ease-out',
+  },
   '@media (max-width: 900px)': { display: 'none' },
 })
 

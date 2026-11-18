@@ -433,8 +433,9 @@ function copyText(answer: NonNullable<ThreadEntry['answer']>): string {
 }
 
 const turnInStyle = css({
-  animation: 'rmx-thread-in 220ms ease-out both',
-  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-thread-in 220ms ease-out both',
+  },
 })
 
 const welcomeStyle = css({
@@ -491,9 +492,10 @@ const suggestionStyle = css({
   font: 'inherit',
   textAlign: 'left',
   cursor: 'pointer',
-  animation: 'rmx-thread-in 220ms ease-out both',
   transition: 'background 120ms ease, border-color 120ms ease',
-  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-thread-in 220ms ease-out both',
+  },
   '&:hover': {
     background: 'rgba(255, 255, 255, 0.06)',
     borderColor: 'rgba(255, 255, 255, 0.18)',
@@ -708,8 +710,9 @@ const summaryStyle = css({
 
 const wordStyle = css({
   display: 'inline-block',
-  animation: 'rmx-word-in 200ms ease-out both',
-  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-word-in 200ms ease-out both',
+  },
 })
 
 const noticeStyle = css({
@@ -824,8 +827,9 @@ const thinkingStyle = css({
 })
 
 const thinkingLetterStyle = css({
-  animation: `rmx-thinking-wave ${THINKING_CYCLE_MS}ms ease-in-out infinite`,
-  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: `rmx-thinking-wave ${THINKING_CYCLE_MS}ms ease-in-out infinite`,
+  },
 })
 
 const pulseStyle = css({
@@ -833,6 +837,7 @@ const pulseStyle = css({
   height: '6px',
   borderRadius: '999px',
   background: 'var(--accent)',
-  animation: 'rmx-thread-pulse 1.1s ease-in-out infinite',
-  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-thread-pulse 1.1s ease-in-out infinite',
+  },
 })

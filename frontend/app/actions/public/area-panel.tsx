@@ -11,6 +11,7 @@ import type { Blend } from '#app/lib/public/blend.ts'
 import { blendStations } from '#app/lib/public/blend.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
 import { ChevronIcon } from '#app/ui/public/icons.tsx'
+import { prefersReducedMotion } from '#app/ui/public/motion.ts'
 import type { AreaPoint, ThreadEntry } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
@@ -124,9 +125,10 @@ export const AreaPanel = clientEntry(
           aria-label="Weather here"
           mix={panelStyle}
           style={{
-            animation: closing
-              ? 'rmx-card-out 160ms ease-in forwards'
-              : undefined,
+            animation:
+              closing && !prefersReducedMotion()
+                ? 'rmx-card-out 160ms ease-in forwards'
+                : undefined,
             pointerEvents: closing ? 'none' : undefined,
           }}
         >
@@ -341,7 +343,9 @@ const panelStyle = css({
   background: 'var(--paper-2)',
   boxShadow: 'var(--shadow)',
   overflow: 'hidden',
-  animation: 'rmx-card-in 200ms ease-out',
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-card-in 200ms ease-out',
+  },
   '@media (max-width: 900px)': { bottom: '120px' },
 })
 

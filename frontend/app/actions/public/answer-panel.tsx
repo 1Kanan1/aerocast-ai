@@ -440,12 +440,16 @@ const panelStyle = css({
   overflow: 'hidden',
   '&[data-open="true"]': {
     display: 'flex',
-    animation: 'rmx-card-in 200ms ease-out',
+    '@media (prefers-reduced-motion: no-preference)': {
+      animation: 'rmx-card-in 200ms ease-out',
+    },
   },
   '&[data-closing="true"]': {
     display: 'flex',
-    animation: 'rmx-card-out 160ms ease-in forwards',
     pointerEvents: 'none',
+    '@media (prefers-reduced-motion: no-preference)': {
+      animation: 'rmx-card-out 160ms ease-in forwards',
+    },
   },
   '@media (max-width: 900px)': { bottom: '120px' },
 })

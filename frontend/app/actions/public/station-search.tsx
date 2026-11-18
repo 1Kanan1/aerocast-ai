@@ -194,10 +194,14 @@ const panelStyle = css({
   transform: 'translateX(-50%)',
   '&:popover-open': {
     opacity: 1,
-    animation: 'rmx-pop-in 160ms ease-out',
+    '@media (prefers-reduced-motion: no-preference)': {
+      animation: 'rmx-pop-in 160ms ease-out',
+    },
   },
   '&[data-closing="true"]': {
-    animation: 'rmx-pop-out 140ms ease-in forwards',
+    '@media (prefers-reduced-motion: no-preference)': {
+      animation: 'rmx-pop-out 140ms ease-in forwards',
+    },
   },
   '&::backdrop': {
     background: 'rgba(0, 0, 0, 0.5)',
