@@ -7,6 +7,7 @@ import type {
   BundleTaf,
 } from '#app/lib/api-types.ts'
 import { ageLabel, timeLabel } from '#app/lib/format.ts'
+import { decodedReport } from '#app/lib/observations.ts'
 import { ChevronIcon } from '#app/ui/public/icons.tsx'
 import {
   ceilingLabel,
@@ -320,6 +321,8 @@ function TimedConditions(
         )
       }
 
+      let facts = decodedReport(point.decoded)
+
       return (
         <section aria-label="Conditions" mix={conditionsStyle}>
           <p mix={conditionsHeadStyle}>
@@ -328,6 +331,27 @@ function TimedConditions(
               observed {WHEN.format(Date.parse(point.obs_time))}
             </span>
           </p>
+          <dl mix={factsStyle}>
+            <Fact label="Wind" value={windLabel(facts)} />
+            <Fact label="Visibility" value={visibilityLabel(facts)} />
+            <Fact label="Ceiling" value={ceilingLabel(facts)} />
+            <Fact label="Clouds" value={cloudsLabel(facts)} />
+            <Fact label="Temperature" value={temperatureLabel(facts)} />
+            <Fact
+              label="Altimeter"
+              value={
+                facts.altimeter_in_hg === null
+                  ? 'not reported'
+                  : `${facts.altimeter_in_hg} inHg`
+              }
+            />
+            <Fact
+              label="Weather"
+              value={
+                facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
+              }
+            />
+          </dl>
           <code mix={rawStyle}>{point.raw}</code>
         </section>
       )

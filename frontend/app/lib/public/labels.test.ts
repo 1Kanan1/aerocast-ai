@@ -78,6 +78,10 @@ describe('fact labels', () => {
       ),
       'less than 0.25 SM',
     )
+    assert.equal(
+      visibilityLabel(metar({ visibility: { statute_miles: null } })),
+      'not reported',
+    )
   })
 
   it('says no ceiling when there is none', () => {
@@ -110,7 +114,23 @@ describe('fact labels', () => {
       ),
       '12.2 °C / dewpoint 10 °C, spread 2.2 °C',
     )
+    assert.equal(
+      temperatureLabel(
+        metar({
+          temperature: { c: 12.2, dewpoint_c: null, dewpoint_spread_c: null },
+        }),
+      ),
+      '12.2 °C / dewpoint not reported',
+    )
     assert.equal(temperatureLabel(metar({})), 'not reported')
+    assert.equal(
+      temperatureLabel(
+        metar({
+          temperature: { c: null, dewpoint_c: 10, dewpoint_spread_c: null },
+        }),
+      ),
+      'not reported',
+    )
   })
 
   it('labels a forecast period wind, or a dash when absent', () => {

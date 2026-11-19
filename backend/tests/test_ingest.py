@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 from app.domain.taf import parse_taf
@@ -35,6 +36,33 @@ def test_metar_record_carries_the_parse_and_the_upstream_category() -> None:
     assert record["category"] == "MVFR"
     assert record["upstream_category"] == "MVFR"
     assert record["parse_status"] == "ok"
+
+
+def test_the_stored_decode_carries_the_fields_the_timeline_reads() -> None:
+    record = metar_record(upstream_metar(), NOW)
+
+    assert record is not None
+    decoded = json.loads(str(record["decoded"]))
+    assert {
+        "altimeter_in_hg",
+        "clouds",
+        "dewpoint_c",
+        "temperature_c",
+        "visibility",
+        "weather",
+        "wind",
+    } <= decoded.keys()
+    assert {
+        "direction_deg",
+        "gust_kt",
+        "is_variable",
+        "speed_kt",
+    } <= decoded["wind"].keys()
+    assert {
+        "is_greater_than",
+        "is_less_than",
+        "statute_miles",
+    } <= decoded["visibility"].keys()
 
 
 def test_metar_record_flags_a_category_disagreement() -> None:
