@@ -1,11 +1,7 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import type {
-  BundleMetar,
-  BundlePeriod,
-  BundleTaf,
-} from '#app/lib/api-types.ts'
+import type { BundleMetar, BundlePeriod } from '#app/lib/api-types.ts'
 import { ageLabel, timeLabel } from '#app/lib/format.ts'
 import { decodedReport } from '#app/lib/observations.ts'
 import { ChevronIcon } from '#app/ui/public/icons.tsx'
@@ -17,11 +13,8 @@ import {
   visibilityLabel,
   windLabel,
 } from '#app/lib/public/labels.ts'
-import type {
-  Clarification,
-  HistoryPoint,
-  SelectedStation,
-} from '#app/ui/public/session.ts'
+import { conditionsAt } from '#app/lib/public/timeline.ts'
+import type { Clarification, SelectedStation } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
   type Suggestion,
@@ -32,8 +25,6 @@ import {
   UserTurn,
 } from '#app/ui/public/thread-parts.tsx'
 
-/** The timeline's clock, and the hour it is measured in. */
-const HOUR_MS = 60 * 60 * 1000
 /** How long the panel takes to leave, matching rmx-card-out. */
 const PANEL_EXIT_MS = 160
 const WHEN = new Intl.DateTimeFormat(undefined, {
@@ -311,16 +302,14 @@ function TimedConditions(
 ) {
   return () => {
     let { hour, station } = handle.props
-    let target = session.timelineBase + hour * HOUR_MS
+    let conditions = conditionsAt(station, hour, session.timelineBase)
 
-    if (hour < 0) {
-      let point = nearestReport(station.history, target)
-      if (point === null) {
-        return (
-          <p mix={mutedStyle}>No observation within an hour of that time.</p>
-        )
-      }
+    if (conditions.kind === 'no-report') {
+      return <p mix={mutedStyle}>No observation within an hour of that time.</p>
+    }
 
+    if (conditions.kind === 'report') {
+      let point = conditions.point
       let facts = decodedReport(point.decoded)
 
       return (
@@ -357,10 +346,11 @@ function TimedConditions(
       )
     }
 
-    let period = periodAt(station.taf, target)
-    if (period === null) {
+    if (conditions.kind === 'no-forecast') {
       return <p mix={mutedStyle}>The forecast does not reach that hour.</p>
     }
+
+    let period = conditions.period
 
     return (
       <section aria-label="Conditions" mix={conditionsStyle}>
@@ -388,36 +378,6 @@ function TimedConditions(
       </section>
     )
   }
-}
-
-/** The report closest to an hour, if one is close enough to stand for it. */
-function nearestReport(
-  history: HistoryPoint[],
-  target: number,
-): HistoryPoint | null {
-  let best: HistoryPoint | null = null
-  let bestGap = Infinity
-
-  for (let point of history) {
-    let gap = Math.abs(Date.parse(point.obs_time) - target)
-    if (gap < bestGap) {
-      best = point
-      bestGap = gap
-    }
-  }
-
-  return bestGap <= HOUR_MS * 1.5 ? best : null
-}
-
-/** The forecast period covering an hour, latest start first. */
-function periodAt(taf: BundleTaf | null, target: number): BundlePeriod | null {
-  if (taf === null) return null
-
-  let covering = taf.periods.filter(
-    (period) =>
-      Date.parse(period.from) <= target && target <= Date.parse(period.to),
-  )
-  return covering.at(-1) ?? null
 }
 
 function smLabel(miles: number | null): string {

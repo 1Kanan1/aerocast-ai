@@ -16,13 +16,11 @@ import type {
   StationHistory,
 } from '#app/lib/api-types.ts'
 import { parseCoordinates } from '#app/lib/public/coordinates.ts'
+import { TIMELINE_HOURS } from '#app/lib/public/timeline.ts'
 import { routes } from '#app/routes.ts'
 
 /** Same threshold the envelope applies, so the card can flag a stale report. */
 const METAR_STALE_SECONDS = 90 * 60
-
-/** How far the timeline reaches in either direction, in hours. */
-export const TIMELINE_HOURS = 48
 
 /** Older than this, the rail is drawn against the newest report instead. */
 const TIMELINE_FRESH_MS = 2 * 60 * 60 * 1000

@@ -1,9 +1,14 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on } from 'remix/component'
 
-import { TIMELINE_HOURS, session } from '#app/ui/public/session.ts'
+import {
+  HOUR_MS,
+  TIMELINE_HOURS,
+  forecastRange,
+  reportHours,
+} from '#app/lib/public/timeline.ts'
+import { session } from '#app/ui/public/session.ts'
 
-const HOUR_MS = 60 * 60 * 1000
 const LABEL_STEP = 24
 const MAJOR_STEP = 6
 
@@ -60,6 +65,8 @@ export const TimelineControl = clientEntry(
       let base = session.timelineBase
       let at = base + hour * HOUR_MS
       let mood = hour === 0 ? 'live' : hour < 0 ? 'observed' : 'forecast'
+      let reports = reportHours(station.history, base)
+      let forecast = forecastRange(station.taf, base)
 
       return (
         <div aria-label="Timeline" mix={barStyle}>
@@ -78,6 +85,20 @@ export const TimelineControl = clientEntry(
                 {hour === 0 ? 'Now' : WHEN.format(at)}
               </span>
               <span mix={moodStyle}>{mood}</span>
+              <span mix={legendStyle}>
+                {reports.length === 0 ? null : (
+                  <span mix={legendItemStyle}>
+                    <span aria-hidden="true" mix={legendDotStyle} />
+                    {reports.length} reports
+                  </span>
+                )}
+                {forecast === null ? null : (
+                  <span mix={legendItemStyle}>
+                    <span aria-hidden="true" mix={legendBandStyle} />
+                    forecast
+                  </span>
+                )}
+              </span>
             </p>
 
             <div mix={railStyle}>
@@ -92,6 +113,28 @@ export const TimelineControl = clientEntry(
                   key={tick}
                   mix={tickStyle}
                   style={{ left: `${position(tick)}%` }}
+                />
+              ))}
+
+              {forecast === null ? null : (
+                <span
+                  aria-hidden="true"
+                  mix={forecastStyle}
+                  style={{
+                    left: `${position(forecast.from)}%`,
+                    width: `${position(forecast.to) - position(forecast.from)}%`,
+                  }}
+                  title={`Forecast ${WHEN.format(base + forecast.from * HOUR_MS)} to ${WHEN.format(base + forecast.to * HOUR_MS)}`}
+                />
+              )}
+
+              {reports.map((reportHour, index) => (
+                <span
+                  aria-hidden="true"
+                  key={index}
+                  mix={reportDotStyle}
+                  style={{ left: `${position(reportHour)}%` }}
+                  title={WHEN.format(base + reportHour * HOUR_MS)}
                 />
               ))}
 
@@ -231,11 +274,42 @@ const moodStyle = css({
   color: 'var(--ink-3)',
 })
 
+const legendStyle = css({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '10px',
+  marginInlineStart: 'auto',
+  fontSize: '9px',
+  color: 'var(--ink-3)',
+  whiteSpace: 'nowrap',
+})
+
+const legendItemStyle = css({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+})
+
+const legendDotStyle = css({
+  width: '4px',
+  height: '4px',
+  borderRadius: '50%',
+  background: PAST,
+})
+
+const legendBandStyle = css({
+  width: '12px',
+  height: '4px',
+  borderRadius: '2px',
+  background: FUTURE,
+  opacity: 0.7,
+})
+
 // The range input is transparent so the drawn ticks show through, which hides
 // its own focus ring. Draw the ring on the rail instead.
 const railStyle = css({
   position: 'relative',
-  height: '18px',
+  height: '22px',
   '&:has(:focus-visible)': {
     outline: '1px solid var(--ink-2)',
     outlineOffset: '2px',
@@ -283,6 +357,27 @@ const nowLineStyle = css({
   background: 'var(--ink-1)',
   opacity: 0.5,
   transform: 'translateX(-50%)',
+})
+
+/** Where the station has a report, drawn under its hour. */
+const reportDotStyle = css({
+  position: 'absolute',
+  top: '16px',
+  width: '4px',
+  height: '4px',
+  borderRadius: '50%',
+  background: PAST,
+  transform: 'translateX(-50%)',
+})
+
+/** The stretch the station's TAF covers, under the future half. */
+const forecastStyle = css({
+  position: 'absolute',
+  top: '16px',
+  height: '4px',
+  borderRadius: '2px',
+  background: FUTURE,
+  opacity: 0.55,
 })
 
 const rangeStyle = css({
