@@ -11,7 +11,7 @@ import httpx
 USER_AGENT = "aerocast/0.1 (+https://github.com/)"
 
 
-def download(url: str, attempts: int = 3) -> bytes:
+def download(url: str, attempts: int = 3, timeout: float = 60.0) -> bytes:
     """Retry: upstream returns the occasional 5xx mid-cycle."""
     last: httpx.HTTPError | None = None
     for attempt in range(attempts):
@@ -19,7 +19,7 @@ def download(url: str, attempts: int = 3) -> bytes:
             response = httpx.get(
                 url,
                 headers={"User-Agent": USER_AGENT},
-                timeout=60.0,
+                timeout=timeout,
                 follow_redirects=True,
             )
             response.raise_for_status()

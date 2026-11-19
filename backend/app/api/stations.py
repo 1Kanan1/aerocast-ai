@@ -20,6 +20,7 @@ from app.domain.metar import (
     parse_metar,
 )
 from app.domain.taf import Taf, TafParseError, parse_taf
+from app.ingest.backfill import ensure_history
 
 router = APIRouter(prefix="/api", tags=["stations"])
 
@@ -132,14 +133,21 @@ async def observations(
     icao: str,
     hours: int = Query(default=48, ge=1, le=720),
 ) -> dict[str, Any]:
-    rows = await fetch_all(
+    sql = (
         "select obs_time, report_time, category, raw, decoded, "
         "parse_status, fetched_at from metar_observations "
         "where station_icao = :icao "
         "and obs_time > now() - make_interval(hours => :hours) "
-        "order by obs_time desc",
-        {"icao": icao.upper(), "hours": hours},
+        "order by obs_time desc"
     )
+    params: dict[str, object] = {"icao": icao.upper(), "hours": hours}
+    rows = await fetch_all(sql, params)
+
+    # A station the minute ingest has never seen has an empty history, and its
+    # timeline has nothing to show. Fill it once, then read the wider window.
+    if await ensure_history(icao.upper(), rows, hours):
+        rows = await fetch_all(sql, params)
+
     return wrap(
         rows,
         source="aviationweather.gov metars",

@@ -159,7 +159,7 @@ class FakeDb:
         return rows
 
 
-def install(monkeypatch, **tables: list[dict[str, Any]]) -> None:
+def install(monkeypatch, **tables: list[dict[str, Any]]) -> FakeDb:
     defaults = {
         "stations": [KSFO, KJFK],
         "metar_observations": [METAR_ROW],
@@ -175,9 +175,15 @@ def install(monkeypatch, **tables: list[dict[str, Any]]) -> None:
     async def no_scope(*args: object, **kwargs: object) -> None:
         return None
 
+    async def no_history(*args: object, **kwargs: object) -> bool:
+        return False
+
     # The scope check is a provider call; tests never make one.
     monkeypatch.setattr(ask_module, "classify_scope", no_scope)
     monkeypatch.setattr(area_module, "classify_scope", no_scope)
+    # The history backfill reaches AWC; tests say whether it ran.
+    monkeypatch.setattr(stations_module, "ensure_history", no_history)
+    return db
 
 
 async def get(path: str) -> httpx.Response:
@@ -266,6 +272,27 @@ async def test_history_returns_the_timeline(monkeypatch) -> None:
     assert response.status_code == 200
     assert body["data"][0]["category"] == "MVFR"
     assert body["meta"]["observed_at"].startswith("2026-11-01T08:56")
+
+
+async def test_history_fills_a_station_the_ingest_has_not_seen(
+    monkeypatch,
+) -> None:
+    db = install(monkeypatch, metar_observations=[])
+    asked: list[tuple[str, int]] = []
+
+    async def record(icao: str, rows: object, hours: int) -> bool:
+        asked.append((icao, hours))
+        db.tables["metar_observations"] = [METAR_ROW]
+        return True
+
+    monkeypatch.setattr(stations_module, "ensure_history", record)
+
+    response = await get("/api/stations/KSFO/observations")
+
+    body = response.json()
+    assert response.status_code == 200
+    assert asked == [("KSFO", 48)]
+    assert [row["category"] for row in body["data"]] == ["MVFR"]
 
 
 async def test_map_layers_keeps_what_the_viewport_contains(
