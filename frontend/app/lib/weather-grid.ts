@@ -141,7 +141,7 @@ function cell(
   // it goes.
   let radians = (direction * Math.PI) / 180
   return {
-    u: Math.sin(radians) * speed,
+    u: -Math.sin(radians) * speed,
     v: -Math.cos(radians) * speed,
     speed,
     temperature,

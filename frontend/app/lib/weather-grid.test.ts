@@ -129,4 +129,44 @@ describe('weather grid for an hour', () => {
       stub.restore()
     }
   })
+
+  it('turns meteorological wind direction into flow components', async () => {
+    let cases: [number, number, number][] = [
+      // North wind (0°) flows south (v < 0)
+      [0, 0, -10],
+      // East wind (90°) flows west (u < 0)
+      [90, -10, 0],
+      // South wind (180°) flows north (v > 0)
+      [180, 0, 10],
+      // West wind (270°) flows east (u > 0)
+      [270, 10, 0],
+    ]
+
+    for (let [direction, expectedU, expectedV] of cases) {
+      let row = {
+        current: {
+          wind_speed_10m: 10,
+          wind_direction_10m: direction,
+          temperature_2m: 12,
+          relative_humidity_2m: 50,
+        },
+      }
+      let stub = answer(
+        Array.from({ length: GRID_SIZE * GRID_SIZE }, () => row),
+      )
+      try {
+        let loaded = await fetchWeatherGrid(
+          47.45,
+          -122.31,
+          30,
+          new AbortController().signal,
+        )
+        assert.ok(loaded !== null)
+        assert.ok(Math.abs(loaded.cells[0].u - expectedU) < 1e-9)
+        assert.ok(Math.abs(loaded.cells[0].v - expectedV) < 1e-9)
+      } finally {
+        stub.restore()
+      }
+    }
+  })
 })
