@@ -531,3 +531,57 @@ async def test_every_rung_receives_the_system_prompt(monkeypatch):
 
     assert len(bodies) == 2
     assert all(body["messages"] == messages for body in bodies)
+
+
+async def test_race_skips_a_rejected_reply_and_takes_a_valid_slower_one(
+    monkeypatch,
+):
+    async def fake_call(rung, messages, schema, timeout):
+        if rung.model == "slow-valid":
+            await asyncio.sleep(0.03)
+            return {"ok": True}
+        return {"ok": False}
+
+    monkeypatch.setattr(client_module, "_call", fake_call)
+    chain = settings(
+        gemini_api_key=None,
+        zai_models="fast-invalid,slow-valid",
+    )
+
+    completion = await complete(
+        chain,
+        [],
+        {},
+        budget_seconds=5,
+        accept=lambda payload: (
+            isinstance(payload, dict) and payload.get("ok") is True
+        ),
+    )
+
+    assert completion is not None
+    assert completion.model == "slow-valid"
+
+
+async def test_serial_skips_a_rejected_reply_and_takes_the_next(monkeypatch):
+    async def fake_call(rung, messages, schema, timeout):
+        return {"ok": rung.model == "second-valid"}
+
+    monkeypatch.setattr(client_module, "_call", fake_call)
+    chain = settings(
+        gemini_api_key=None,
+        zai_models="first-invalid,second-valid",
+    )
+
+    completion = await complete(
+        chain,
+        [],
+        {},
+        budget_seconds=5,
+        race=False,
+        accept=lambda payload: (
+            isinstance(payload, dict) and payload.get("ok") is True
+        ),
+    )
+
+    assert completion is not None
+    assert completion.model == "second-valid"

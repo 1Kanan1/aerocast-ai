@@ -100,6 +100,29 @@ def test_number_from_another_fact_is_rejected():
         )
 
 
+def test_invented_number_in_the_summary_is_rejected():
+    with pytest.raises(InvalidAnswerError, match="number in summary"):
+        validate_answer(
+            answer(
+                "KSFO has a 9,500 ft ceiling.",
+                [claim("The ceiling is 4,300 ft.", "metar.KSFO.ceiling")],
+            ),
+            BUNDLE,
+        )
+
+
+def test_grounded_number_in_the_summary_is_accepted():
+    result = validate_answer(
+        answer(
+            "KSFO has a 4,300 ft ceiling.",
+            [claim("The ceiling is 4,300 ft.", "metar.KSFO.ceiling")],
+        ),
+        BUNDLE,
+    )
+
+    assert result.summary == "KSFO has a 4,300 ft ceiling."
+
+
 def test_answer_without_claims_is_rejected():
     with pytest.raises(InvalidAnswerError, match="claim count"):
         validate_answer(answer("I'm doing well, thanks.", []), BUNDLE)

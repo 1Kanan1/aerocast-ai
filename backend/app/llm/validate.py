@@ -64,6 +64,7 @@ def validate_answer(model: ModelAnswer, bundle: object) -> Answer:
 
     index = _ref_index(bundle)
     claims: list[DraftClaim] = []
+    cited_values: list[object] = []
 
     for claim in model.claims:
         text = claim.text.strip()
@@ -84,7 +85,11 @@ def validate_answer(model: ModelAnswer, bundle: object) -> Answer:
         if not _numbers_grounded(text, values):
             raise InvalidAnswerError("number not in the cited facts")
 
+        cited_values.extend(values)
         claims.append(DraftClaim(text, tuple(claim.refs)))
+
+    if not _numbers_grounded(summary, cited_values):
+        raise InvalidAnswerError("number in summary not in the cited facts")
 
     return Answer(summary, tuple(claims), tuple(caveats), None)
 

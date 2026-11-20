@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -80,6 +81,7 @@ async def complete(
     *,
     namespace: str = "answer",
     race: bool = True,
+    accept: Callable[[object], bool] | None = None,
 ) -> Completion | None:
     """Answer with the first rung that replies. None means no reply in budget.
 
@@ -95,6 +97,9 @@ async def complete(
 
     `namespace` separates the cooldowns, so a rung that timed out on the
     short scope check is still tried for the answer itself.
+
+    `accept` lets the caller reject a draft inside the race so a fast,
+    ungrounded reply does not cancel slower models that may still pass.
     """
     budget = RUNG_BUDGET_SECONDS if budget_seconds is None else budget_seconds
     if budget <= 0:
@@ -113,7 +118,7 @@ async def complete(
         return None
 
     driver = _race if race else _serial
-    return await driver(eligible, messages, schema, budget)
+    return await driver(eligible, messages, schema, budget, accept)
 
 
 async def _serial(
@@ -121,6 +126,7 @@ async def _serial(
     messages: list[dict[str, str]],
     schema: dict[str, object],
     budget: float,
+    accept: Callable[[object], bool] | None,
 ) -> Completion | None:
     deadline = time.monotonic() + budget
     for rung, key in eligible:
@@ -134,6 +140,8 @@ async def _serial(
             _failed(rung, key, error)
             continue
         _cooldowns.pop(key, None)
+        if accept is not None and not accept(completion.payload):
+            continue
         return completion
     return None
 
@@ -143,6 +151,7 @@ async def _race(
     messages: list[dict[str, str]],
     schema: dict[str, object],
     budget: float,
+    accept: Callable[[object], bool] | None,
 ) -> Completion | None:
     tasks = {
         asyncio.ensure_future(_attempt(rung, messages, schema, budget)): (
@@ -165,7 +174,9 @@ async def _race(
                         raise error
                     _failed(rung, key, error)
                 elif winner is None:
-                    winner = (task.result(), key)
+                    result = task.result()
+                    if accept is None or accept(result.payload):
+                        winner = (result, key)
             if winner is not None:
                 completion, key = winner
                 _cooldowns.pop(key, None)

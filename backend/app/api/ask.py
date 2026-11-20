@@ -77,11 +77,21 @@ async def explain(
     answer can say how long the reader waited, failed rungs included.
     """
     began = time.monotonic() if started is None else started
+
+    def accept(payload: object) -> bool:
+        try:
+            validate_answer(parse_model_answer(payload), bundle)
+        except (ValueError, InvalidAnswerError) as error:
+            logger.info("answer draft rejected during race: %s", error)
+            return False
+        return True
+
     completion = await complete(
         get_settings(),
         build_messages(bundle, question, area=area),
         ANSWER_SCHEMA,
         budget_seconds=ASK_BUDGET_SECONDS,
+        accept=accept,
     )
     if completion is None:
         return wire_answer(fallback_answer(bundle))
