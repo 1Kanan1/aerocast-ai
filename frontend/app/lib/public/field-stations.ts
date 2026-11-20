@@ -1,4 +1,11 @@
-import type { AreaPayload, BundleWind } from '#app/lib/api-types.ts'
+import type { AreaPayload } from '#app/lib/api-types.ts'
+
+/** The wind a station's field falls back to when the model grid is missing. */
+export interface FieldWind {
+  direction_deg: number | null
+  speed_kt: number | null
+  is_calm: boolean
+}
 
 /** A station's own readings, which its weather field is drawn from. */
 export interface FieldStation {
@@ -8,7 +15,7 @@ export interface FieldStation {
   /** The station's own temperature in °C, or null when it has no report. */
   temperature: number | null
   /** The station's own wind, or null when it has no report. */
-  wind: BundleWind | null
+  wind: FieldWind | null
 }
 
 /** Every station inside an area, each with its own report and no blending. */

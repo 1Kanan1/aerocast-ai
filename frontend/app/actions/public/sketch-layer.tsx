@@ -3,7 +3,6 @@ import type { RoughSVG } from 'roughjs/bin/svg.js'
 import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
-import type { BundleWind } from '#app/lib/api-types.ts'
 import {
   AREA_NM,
   RAIN_FALL,
@@ -15,9 +14,11 @@ import {
 } from '#app/lib/radar.ts'
 import {
   type FieldStation,
+  type FieldWind,
   areaFieldStations,
   screenOffset,
 } from '#app/lib/public/field-stations.ts'
+import { HOUR_MS, readingAt } from '#app/lib/public/timeline.ts'
 import type { Anchor } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
@@ -76,11 +77,25 @@ const ARROW_SHAPE_LIMIT = 4096
 
 /** A station's own weather, fetched once and kept while the station is in view. */
 interface StationField {
+  /** The hour the grid and radar were read for; a new hour replaces them. */
+  stamp: string
   grid: WeatherGrid | null
   radar: RadarWindow | null
   gridRequested: boolean
   radarRequested: boolean
   abort: AbortController
+}
+
+/**
+ * The hour the map is drawing. `stamp` names it, so a change of hour is a
+ * different field; `gridAt` and `radarAt` are the moments asked of the
+ * sources, with undefined meaning the live frame.
+ */
+interface HourSlot {
+  stamp: string
+  gridAt: number | undefined
+  radarAt: number | undefined
+  radar: boolean
 }
 
 interface FieldFrame {
@@ -138,37 +153,57 @@ export const SketchLayer = clientEntry(
       })
     }
 
-    /** Start a station's fetches once; they stay cached while it is in view. */
-    function loadField(station: FieldStation, rainOn: boolean): StationField {
-      let field: StationField = stationFields.get(station.icao) ?? {
-        grid: null,
-        radar: null,
-        gridRequested: false,
-        radarRequested: false,
-        abort: new AbortController(),
+    /**
+     * Start a station's fetches once for the hour on screen; another hour
+     * replaces them, so scrubbing cannot mix two hours in one drawing.
+     */
+    function loadField(
+      station: FieldStation,
+      rainOn: boolean,
+      slot: HourSlot,
+    ): StationField {
+      let field = stationFields.get(station.icao)
+      if (field === undefined || field.stamp !== slot.stamp) {
+        field?.abort.abort()
+        field = {
+          stamp: slot.stamp,
+          grid: null,
+          radar: null,
+          gridRequested: false,
+          radarRequested: false,
+          abort: new AbortController(),
+        }
+        stationFields.set(station.icao, field)
       }
-      stationFields.set(station.icao, field)
 
       let { signal } = field.abort
       if (!field.gridRequested) {
         field.gridRequested = true
-        void fetchWeatherGrid(station.lat, station.lon, AREA_NM, signal).then(
-          (result) => {
-            if (signal.aborted) return
-            field.grid = result
-            schedule()
-          },
-        )
+        void fetchWeatherGrid(
+          station.lat,
+          station.lon,
+          AREA_NM,
+          signal,
+          slot.gridAt,
+        ).then((result) => {
+          if (signal.aborted) return
+          field.grid = result
+          schedule()
+        })
       }
-      if (rainOn && !field.radarRequested) {
+      if (slot.radar && rainOn && !field.radarRequested) {
         field.radarRequested = true
-        void fetchRadarWindow(station.lat, station.lon, AREA_NM, signal).then(
-          (result) => {
-            if (signal.aborted) return
-            field.radar = result
-            schedule()
-          },
-        )
+        void fetchRadarWindow(
+          station.lat,
+          station.lon,
+          AREA_NM,
+          signal,
+          slot.radarAt,
+        ).then((result) => {
+          if (signal.aborted) return
+          field.radar = result
+          schedule()
+        })
       }
       return field
     }
@@ -320,12 +355,11 @@ export const SketchLayer = clientEntry(
     /** The stations whose fields are drawn, and the circle they are cut to. */
     function frameSource(): FieldFrame | null {
       let station = session.selected
-      if (
-        station !== null &&
-        station.facts !== null &&
-        station.lat !== null &&
-        station.lon !== null
-      ) {
+      if (station !== null && station.lat !== null && station.lon !== null) {
+        // An hour with no report leaves the station without a reading, but
+        // its radar and the model still cover the hour, so the field stays.
+        let reading = readingAt(station, session.viewHour, session.timelineBase)
+
         return {
           lat: station.lat,
           lon: station.lon,
@@ -336,8 +370,8 @@ export const SketchLayer = clientEntry(
               icao: station.icao,
               lat: station.lat,
               lon: station.lon,
-              temperature: station.facts.temperature?.c ?? null,
-              wind: station.facts.wind,
+              temperature: reading?.temperature_c ?? null,
+              wind: reading?.wind ?? null,
             },
           ],
         }
@@ -395,24 +429,42 @@ export const SketchLayer = clientEntry(
       let tempOn = weatherLayers.temp
       let windOn = weatherLayers.wind
 
-      // The field is measured now: radar and model wind say nothing about an
-      // hour the timeline is reading, so they step aside for it.
-      if (session.viewHour !== 0) {
-        clearDrawing()
-        return
-      }
+      // The map follows the rail: a past hour reads the archive and the model
+      // at that hour, an hour ahead the model's forecast, now the live frame.
+      // Radar is a measurement, so it has no say about an hour still to come.
+      let { timelineBase, viewHour } = session
+      let slot: HourSlot =
+        viewHour === 0
+          ? {
+              stamp: 'live',
+              gridAt: undefined,
+              radarAt: undefined,
+              radar: true,
+            }
+          : {
+              // The hour alone, not the moment: the base slides with the
+              // clock while the report is fresh, and following it would
+              // refetch the same hour forever.
+              stamp: String(viewHour),
+              gridAt: timelineBase + viewHour * HOUR_MS,
+              radarAt:
+                viewHour < 0 ? timelineBase + viewHour * HOUR_MS : undefined,
+              radar: viewHour < 0,
+            }
 
       keepFields(new Set(source.stations.map((station) => station.icao)))
       let fields = source.stations.map((station) => ({
         station,
-        field: loadField(station, rainOn),
+        field: loadField(station, rainOn, slot),
       }))
 
       let picked =
         session.selected === null
           ? null
           : (stationFields.get(session.selected.icao)?.radar ?? null)
-      session.setEchoShare(rainOn && picked !== null ? picked.total : null)
+      session.setEchoShare(
+        slot.radar && rainOn && picked !== null ? picked.total : null,
+      )
 
       let { x, y, pxPerNm } = anchor
       let frameRadius = source.radiusNm * pxPerNm
@@ -427,6 +479,7 @@ export const SketchLayer = clientEntry(
         rainOn,
         tempOn,
         windOn,
+        slot.stamp,
         fields
           .map(({ station, field }) =>
             [
@@ -461,7 +514,14 @@ export const SketchLayer = clientEntry(
             station.lon,
             pxPerNm,
           )
-          let ink = temperatureColor(station.temperature)
+          // A forecast hour has no thermometer reading, so the bloom takes
+          // the model's own temperature at the station instead of a default.
+          let warmth =
+            station.temperature ??
+            (field.grid === null
+              ? null
+              : (sampleGrid(field.grid, 0, 0)?.temperature ?? null))
+          let ink = temperatureColor(warmth)
           let node = stationNode(
             station.icao,
             x + offset.x,
@@ -471,7 +531,7 @@ export const SketchLayer = clientEntry(
             tempOn && source.glow,
           )
           frame.layer.append(node.group)
-          if (rainOn && field.radar !== null) {
+          if (slot.radar && rainOn && field.radar !== null) {
             rain.push(
               ...rainFor(
                 offset,
@@ -888,7 +948,7 @@ function windArrowsFor(
   step: number,
   reach: number,
   grid: WeatherGrid | null,
-  stationWind: BundleWind | null,
+  stationWind: FieldWind | null,
   ink: string,
   seed: number,
   colorByTemp: boolean,

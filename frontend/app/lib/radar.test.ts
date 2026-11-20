@@ -5,6 +5,7 @@ import {
   RAIN_FALL,
   RAIN_LENGTH,
   SECTORS,
+  archiveLayer,
   dropsFor,
   markScale,
   radarCoverage,
@@ -33,6 +34,14 @@ function pixels(
   }
   return data
 }
+
+describe('radar archive', () => {
+  it('names the archived mosaic frame on the five-minute mark', () => {
+    let at = Date.parse('2026-11-19T15:38:24Z')
+
+    assert.equal(archiveLayer(at), 'ridge::USCOMP-N0Q-202611191535')
+  })
+})
 
 describe('radar coverage', () => {
   it('measures echo inside the disc and in each compass sector', () => {

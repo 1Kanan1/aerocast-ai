@@ -344,8 +344,25 @@ interface WindowTiles {
   tiles: { url: string; x: number; y: number }[]
 }
 
+/**
+ * The archived CONUS mosaic layer for a time, rounded down to the five-minute
+ * frames the archive keeps. The layer name carries the timestamp, so a cached
+ * tile is never confused with another hour's.
+ */
+export function archiveLayer(at: number): string {
+  let frame = Math.floor(at / (5 * 60 * 1000)) * 5 * 60 * 1000
+  let stamp = new Date(frame).toISOString().replace(/[-:T]/g, '').slice(0, 12)
+  return `ridge::USCOMP-N0Q-${stamp}`
+}
+
 /** The square of tiles that covers the disc, and where the disc sits in it. */
-function windowTiles(lat: number, lon: number, radiusNm: number): WindowTiles {
+function windowTiles(
+  lat: number,
+  lon: number,
+  radiusNm: number,
+  at?: number,
+): WindowTiles {
+  let layer = at === undefined ? 'nexrad-n0q-900913' : archiveLayer(at)
   let scale = TILE_SIZE * 2 ** TILE_ZOOM
   let worldX = ((lon + 180) / 360) * scale
   let latRadians = (lat * Math.PI) / 180
@@ -369,7 +386,7 @@ function windowTiles(lat: number, lon: number, radiusNm: number): WindowTiles {
   for (let tileY = firstTileY; tileY <= lastTileY; tileY++) {
     for (let tileX = firstTileX; tileX <= lastTileX; tileX++) {
       tiles.push({
-        url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/${TILE_ZOOM}/${tileX}/${tileY}.png`,
+        url: `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${layer}/${TILE_ZOOM}/${tileX}/${tileY}.png`,
         x: tileX,
         y: tileY,
       })
@@ -383,15 +400,17 @@ function windowTiles(lat: number, lon: number, radiusNm: number): WindowTiles {
  * Fetch only the tiles that cover the disc around the station, composite them,
  * soften the pixel edges, then measure the coverage and place the echo as
  * droplets. One request set per station, and nothing outside the radius is
- * read.
+ * read. With a time, the disc comes from the archive for that hour instead of
+ * the latest frame.
  */
 export async function fetchRadarWindow(
   lat: number,
   lon: number,
   radiusNm: number,
   signal: AbortSignal,
+  at?: number,
 ): Promise<RadarWindow | null> {
-  let box = windowTiles(lat, lon, radiusNm)
+  let box = windowTiles(lat, lon, radiusNm, at)
   let { half, radius, originX, originY } = box
 
   let canvas = document.createElement('canvas')

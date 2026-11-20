@@ -31,6 +31,7 @@ export async function fetchWeatherGrid(
   lon: number,
   radiusNm: number,
   signal: AbortSignal,
+  at?: number,
 ): Promise<WeatherGrid | null> {
   let latitudes: number[] = []
   let longitudes: number[] = []
@@ -49,12 +50,27 @@ export async function fetchWeatherGrid(
   let query = new URLSearchParams({
     latitude: latitudes.join(','),
     longitude: longitudes.join(','),
-    current:
-      'wind_speed_10m,wind_direction_10m,temperature_2m,relative_humidity_2m',
     models: MODEL,
     wind_speed_unit: 'kn',
     timezone: 'UTC',
   })
+
+  if (at === undefined) {
+    query.set(
+      'current',
+      'wind_speed_10m,wind_direction_10m,temperature_2m,relative_humidity_2m',
+    )
+  } else {
+    // The same model answers for an hour in the past or ahead when asked for
+    // that hour, so the timeline reads one grid shape either way.
+    let hour = `${new Date(at).toISOString().slice(0, 13)}:00`
+    query.set(
+      'hourly',
+      'wind_speed_10m,wind_direction_10m,temperature_2m,relative_humidity_2m',
+    )
+    query.set('start_hour', hour)
+    query.set('end_hour', hour)
+  }
 
   try {
     let response = await fetch(`${ENDPOINT}?${query}`, { signal })
@@ -64,7 +80,9 @@ export async function fetchWeatherGrid(
     let rows = Array.isArray(payload) ? payload : [payload]
     if (rows.length !== GRID_SIZE * GRID_SIZE) return null
 
-    let cells = rows.map((row) => toCell(row))
+    let cells = rows.map((row) =>
+      at === undefined ? toCell(row) : toHourCell(row),
+    )
     if (cells.some((cell) => cell === null)) return null
 
     return { size: GRID_SIZE, cells: cells as WindCell[] }
@@ -80,29 +98,59 @@ interface OpenMeteoRow {
     temperature_2m?: number
     relative_humidity_2m?: number
   }
+  hourly?: {
+    wind_speed_10m?: number[]
+    wind_direction_10m?: number[]
+    temperature_2m?: number[]
+    relative_humidity_2m?: number[]
+  }
 }
 
 function toCell(row: unknown): WindCell | null {
   let current = (row as OpenMeteoRow).current
-  if (
-    current?.wind_speed_10m === undefined ||
-    current.wind_direction_10m === undefined ||
-    current.temperature_2m === undefined
-  ) {
+  return cell(
+    current?.wind_speed_10m,
+    current?.wind_direction_10m,
+    current?.temperature_2m,
+    current?.relative_humidity_2m,
+  )
+}
+
+function toHourCell(row: unknown): WindCell | null {
+  let hourly = (row as OpenMeteoRow).hourly
+  return cell(
+    hourly?.wind_speed_10m?.[0],
+    hourly?.wind_direction_10m?.[0],
+    hourly?.temperature_2m?.[0],
+    hourly?.relative_humidity_2m?.[0],
+  )
+}
+
+function cell(
+  speed: number | undefined,
+  direction: number | undefined,
+  temperature: number | undefined,
+  humidity: number | undefined,
+): WindCell | null {
+  // The model leaves an hour it cannot answer as null, which would otherwise
+  // become a NaN arrow.
+  if (!isNumber(speed) || !isNumber(direction) || !isNumber(temperature))
     return null
-  }
 
   // The API reports the direction the wind comes from; the field draws where
   // it goes.
-  let radians = (current.wind_direction_10m * Math.PI) / 180
-  let speed = current.wind_speed_10m
+  let radians = (direction * Math.PI) / 180
   return {
     u: Math.sin(radians) * speed,
     v: -Math.cos(radians) * speed,
     speed,
-    temperature: current.temperature_2m,
-    humidity: current.relative_humidity_2m ?? 0,
+    temperature,
+    humidity: isNumber(humidity) ? humidity : 0,
   }
+}
+
+function isNumber(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 /**
