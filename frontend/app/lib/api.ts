@@ -16,6 +16,8 @@ import type { Answer } from './answer.ts'
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8000'
 const DEFAULT_TIMEOUT_MS = 3000
+/** Above the API's 8 s on-demand history backfill timeout. */
+const HISTORY_TIMEOUT_MS = 10_000
 /**
  * Above the API's own answer budget of 35 s: a client that gives up first
  * throws away an answer that was about to arrive, and the reader is told the
@@ -184,9 +186,12 @@ export function apiGetHistory(
   hours: number,
   signal?: AbortSignal,
 ): Promise<ApiResult<StationHistory>> {
-  return apiGet<StationHistory>(
+  return request<StationHistory>(
     `/api/stations/${encodeURIComponent(icao)}/observations?hours=${hours}`,
     signal,
+    (status) => status >= 200 && status < 300,
+    {},
+    HISTORY_TIMEOUT_MS,
   )
 }
 

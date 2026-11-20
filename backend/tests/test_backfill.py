@@ -1,7 +1,7 @@
 """First-open history: a station with holes gets filled before it is drawn."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -101,3 +101,35 @@ async def test_a_failed_load_is_swallowed_and_waited_out() -> None:
         "KSEA", [], 48, now=NOW, clock=lambda: clock[0], loader=loader
     )
     assert calls == ["KSEA", "KSEA"]
+
+
+async def test_backfill_encodes_query_and_skips_unrequested_stations(
+    monkeypatch,
+) -> None:
+    urls: list[str] = []
+    inserted: list[list[dict[str, Any]]] = []
+
+    def fake_download(url: str, attempts: int, timeout: float) -> bytes:
+        urls.append(url)
+        return (
+            b'[{"reportTime":"2026-11-19T14:56:00Z",'
+            b'"rawOb":"METAR KSFO 191456Z 27010KT 10SM CLR 15/10 A3000",'
+            b'"fltCat":"VFR"},'
+            b'{"reportTime":"2026-11-19T14:56:00Z",'
+            b'"rawOb":"METAR KOTH 191456Z 27010KT 10SM CLR 15/10 A3000",'
+            b'"fltCat":"VFR"}]'
+        )
+
+    class FakeConnection:
+        async def execute(self, stmt, records):
+            inserted.append(records)
+
+    monkeypatch.setattr(module, "download", fake_download)
+
+    count = await module.backfill(cast(Any, FakeConnection()), ["KSFO"], 48)
+
+    assert count == 1
+    assert urls == [
+        "https://aviationweather.gov/api/data/metar?format=json&ids=KSFO&hours=48"
+    ]
+    assert [row["station_icao"] for row in inserted[0]] == ["KSFO"]

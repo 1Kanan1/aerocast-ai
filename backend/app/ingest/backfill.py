@@ -13,6 +13,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlencode
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -29,10 +30,7 @@ from app.sources.awc.cache import as_timestamp, download
 
 logger = logging.getLogger(__name__)
 
-HISTORY_URL = (
-    "https://aviationweather.gov/api/data/metar"
-    "?format=json&ids={ids}&hours={hours}"
-)
+HISTORY_BASE_URL = "https://aviationweather.gov/api/data/metar"
 
 #: The API returns at most 400 rows, so a station's history is fetched in small
 #: batches rather than one long list.
@@ -142,9 +140,13 @@ async def _load_batch(
     attempts: int,
     timeout: float,
 ) -> int:
+    requested = {code.upper() for code in stations}
+    query = urlencode(
+        {"format": "json", "ids": ",".join(stations), "hours": hours}
+    )
     payload = await asyncio.to_thread(
         download,
-        HISTORY_URL.format(ids=",".join(stations), hours=hours),
+        f"{HISTORY_BASE_URL}?{query}",
         attempts,
         timeout,
     )
@@ -159,6 +161,8 @@ async def _load_batch(
         try:
             observation = parse_metar(raw, reference=observed_at)
         except MetarParseError:
+            continue
+        if observation.station not in requested:
             continue
         category = classify(observation).category
         records.append(

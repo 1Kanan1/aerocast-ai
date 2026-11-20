@@ -133,6 +133,14 @@ async def observations(
     icao: str,
     hours: int = Query(default=48, ge=1, le=720),
 ) -> dict[str, Any]:
+    code = icao.upper()
+    station = await fetch_one(
+        "select icao from stations where icao = :icao",
+        {"icao": code},
+    )
+    if station is None:
+        raise HTTPException(status_code=404, detail="unknown station")
+
     sql = (
         "select obs_time, report_time, category, raw, decoded, "
         "parse_status, fetched_at from metar_observations "
@@ -140,12 +148,12 @@ async def observations(
         "and obs_time > now() - make_interval(hours => :hours) "
         "order by obs_time desc"
     )
-    params: dict[str, object] = {"icao": icao.upper(), "hours": hours}
+    params: dict[str, object] = {"icao": code, "hours": hours}
     rows = await fetch_all(sql, params)
 
     # A station the minute ingest has never seen has an empty history, and its
     # timeline has nothing to show. Fill it once, then read the wider window.
-    if await ensure_history(icao.upper(), rows, hours):
+    if await ensure_history(code, rows, hours):
         rows = await fetch_all(sql, params)
 
     return wrap(

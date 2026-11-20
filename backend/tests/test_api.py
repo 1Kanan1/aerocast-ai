@@ -295,6 +295,23 @@ async def test_history_fills_a_station_the_ingest_has_not_seen(
     assert [row["category"] for row in body["data"]] == ["MVFR"]
 
 
+async def test_history_answers_404_for_an_unknown_station(monkeypatch) -> None:
+    install(monkeypatch, stations=[])
+    called = False
+
+    async def fail(*args: object, **kwargs: object) -> bool:
+        nonlocal called
+        called = True
+        return False
+
+    monkeypatch.setattr(stations_module, "ensure_history", fail)
+
+    response = await get("/api/stations/KZZZ/observations")
+
+    assert response.status_code == 404
+    assert called is False
+
+
 async def test_map_layers_keeps_what_the_viewport_contains(
     monkeypatch,
 ) -> None:
@@ -670,6 +687,28 @@ async def test_area_ask_uses_every_station_in_the_prompt(monkeypatch) -> None:
     assert "Several stations are in scope" in system
     assert "metar.KSFO" in payload
     assert "metar.KOAK" in payload
+
+
+async def test_area_ask_refuses_a_verdict_without_calling_a_model(
+    monkeypatch,
+) -> None:
+    install(monkeypatch, stations=[KSFO, KOAK])
+
+    async def fail(*args: object, **kwargs: object):
+        raise AssertionError("verdict question must not reach a model")
+
+    monkeypatch.setattr(ask_module, "complete", fail)
+    monkeypatch.setattr(area_module, "classify_scope", fail)
+
+    response = await post(
+        "/api/area/ask",
+        {"lat": 37.62, "lon": -122.4, "question": "Is it safe to fly here?"},
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["refusal"]
+    assert "go/no-go" in body["refusal"]
 
 
 async def test_area_ask_says_when_nothing_is_near(monkeypatch) -> None:

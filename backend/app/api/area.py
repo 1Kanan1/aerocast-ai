@@ -20,7 +20,7 @@ from app.api.stations import brief_station, nearby_stations
 from app.config import get_settings
 from app.domain.brief import BriefStation, build_brief
 from app.llm.contract import Answer, wire_answer
-from app.llm.guardrails import fixed_refusal
+from app.llm.guardrails import asks_for_verdict, fixed_refusal
 from app.llm.scope import classify_scope
 
 router = APIRouter(prefix="/api", tags=["area"])
@@ -62,6 +62,9 @@ async def area_ask(request: models.AreaAskRequest) -> dict[str, object]:
         raise HTTPException(
             status_code=404, detail="no station within range of that point"
         )
+
+    if asks_for_verdict(question):
+        return wire_answer(Answer("", (), (), fixed_refusal("decision")))
 
     if await classify_scope(get_settings(), question) is False:
         return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
