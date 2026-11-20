@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -155,48 +156,62 @@ def taf_record(
 
 
 async def ingest_stations(connection: AsyncConnection, _: datetime) -> int:
-    payload = decompress(download(stations.CACHE_URL))
-    records = [
-        {
-            "icao": station.icao,
-            "name": station.name,
-            "state": station.state,
-            "country": station.country,
-            "lat": station.lat,
-            "lon": station.lon,
-            "elev_m": station.elev_m,
-        }
-        for station in stations.read_stations(payload)
-    ]
-    await connection.execute(text(STATION_SQL), records)
+    def load() -> list[dict[str, object]]:
+        payload = decompress(download(stations.CACHE_URL))
+        return [
+            {
+                "icao": station.icao,
+                "name": station.name,
+                "state": station.state,
+                "country": station.country,
+                "lat": station.lat,
+                "lon": station.lon,
+                "elev_m": station.elev_m,
+            }
+            for station in stations.read_stations(payload)
+        ]
+
+    records = await asyncio.to_thread(load)
+    if records:
+        await connection.execute(text(STATION_SQL), records)
     return len(records)
 
 
 async def ingest_metars(connection: AsyncConnection, now: datetime) -> int:
-    payload = decompress(download(metars.CACHE_URL))
     known = await _known_stations(connection)
-    records = [
-        record
-        for row in metars.read_metars(payload)
-        if is_us(row.station)
-        and row.station in known
-        and (record := metar_record(row, now)) is not None
-    ]
-    await connection.execute(text(METAR_SQL), records)
+
+    def load() -> list[dict[str, object]]:
+        payload = decompress(download(metars.CACHE_URL))
+        return [
+            record
+            for row in metars.read_metars(payload)
+            if is_us(row.station)
+            and row.station in known
+            and (record := metar_record(row, now)) is not None
+        ]
+
+    records = await asyncio.to_thread(load)
+    if records:
+        await connection.execute(text(METAR_SQL), records)
     return len(records)
 
 
 async def ingest_tafs(connection: AsyncConnection, now: datetime) -> int:
-    payload = decompress(download(tafs.CACHE_URL))
     known = await _known_stations(connection)
-    records = [
-        record
-        for row in tafs.read_tafs(payload)
-        if is_us(row.station)
-        and row.station in known
-        and (record := taf_record(row, now)) is not None
-    ]
-    await connection.execute(text(TAF_SQL), records)
+
+    def load() -> list[dict[str, object]]:
+        payload = decompress(download(tafs.CACHE_URL))
+        return [
+            record
+            for row in tafs.read_tafs(payload)
+            if is_us(row.station)
+            and row.station in known
+            and (record := taf_record(row, now)) is not None
+        ]
+
+    records = await asyncio.to_thread(load)
+    if records:
+        await connection.execute(text(TAF_SQL), records)
     return len(records)
 
 
@@ -218,7 +233,8 @@ async def run_job(engine: AsyncEngine, name: str, job: Job) -> int:
 
         try:
             rows = await job(connection, started)
-        except Exception as exc:  # noqa: BLE001 - recorded, then re-raised
+        except Exception as exc:  # noqa: BLE001 - recorded in ingest_runs
+            await connection.rollback()
             status, error = "error", f"{type(exc).__name__}: {exc}"[:500]
             logger.exception("%s failed", name)
         finally:
@@ -244,47 +260,55 @@ async def run_job(engine: AsyncEngine, name: str, job: Job) -> int:
 
 
 async def ingest_advisories(connection: AsyncConnection, now: datetime) -> int:
-    records = [
-        {
-            "kind": advisory.kind,
-            "source_id": advisory.source_id,
-            "hazard": advisory.hazard,
-            "severity": advisory.severity,
-            "base_ft": advisory.base_ft,
-            "top_ft": advisory.top_ft,
-            "due_to": advisory.due_to,
-            "raw": advisory.raw,
-            "valid_from": advisory.valid_from,
-            "valid_to": advisory.valid_to,
-            "geom": json.dumps(advisory.geometry),
-            "fetched_at": now,
-        }
-        for advisory in (
-            *advisories.read_gairmets(_get(advisories.GAIRMET_URL)),
-            *advisories.read_sigmets(_get(advisories.SIGMET_URL)),
-        )
-    ]
-    await connection.execute(text(ADVISORY_SQL), records)
+    def load() -> list[dict[str, object]]:
+        return [
+            {
+                "kind": advisory.kind,
+                "source_id": advisory.source_id,
+                "hazard": advisory.hazard,
+                "severity": advisory.severity,
+                "base_ft": advisory.base_ft,
+                "top_ft": advisory.top_ft,
+                "due_to": advisory.due_to,
+                "raw": advisory.raw,
+                "valid_from": advisory.valid_from,
+                "valid_to": advisory.valid_to,
+                "geom": json.dumps(advisory.geometry),
+                "fetched_at": now,
+            }
+            for advisory in (
+                *advisories.read_gairmets(_get(advisories.GAIRMET_URL)),
+                *advisories.read_sigmets(_get(advisories.SIGMET_URL)),
+            )
+        ]
+
+    records = await asyncio.to_thread(load)
+    if records:
+        await connection.execute(text(ADVISORY_SQL), records)
     return len(records)
 
 
 async def ingest_pireps(connection: AsyncConnection, _: datetime) -> int:
-    records = [
-        {
-            "report_time": report.observed_at,
-            "station_icao": report.station,
-            "lat": report.lat,
-            "lon": report.lon,
-            "altitude_ft": report.altitude_ft,
-            "kind": report.kind,
-            "turbulence": report.turbulence,
-            "icing": report.icing,
-            "clouds": report.clouds,
-            "raw": report.raw,
-        }
-        for report in pireps.read_pireps(_get(pireps.PIREP_URL))
-    ]
-    await connection.execute(text(PIREP_SQL), records)
+    def load() -> list[dict[str, object]]:
+        return [
+            {
+                "report_time": report.observed_at,
+                "station_icao": report.station,
+                "lat": report.lat,
+                "lon": report.lon,
+                "altitude_ft": report.altitude_ft,
+                "kind": report.kind,
+                "turbulence": report.turbulence,
+                "icing": report.icing,
+                "clouds": report.clouds,
+                "raw": report.raw,
+            }
+            for report in pireps.read_pireps(_get(pireps.PIREP_URL))
+        ]
+
+    records = await asyncio.to_thread(load)
+    if records:
+        await connection.execute(text(PIREP_SQL), records)
     return len(records)
 
 

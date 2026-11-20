@@ -1,8 +1,20 @@
+import asyncio
+import contextlib
 import json
+import threading
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from app.domain.taf import parse_taf
-from app.ingest.jobs import metar_record, taf_record
+from app.ingest import jobs as jobs_module
+from app.ingest import scheduler as scheduler_module
+from app.ingest.jobs import (
+    ingest_stations,
+    metar_record,
+    run_job,
+    taf_record,
+)
 from app.sources.awc.metars import UpstreamMetar
 from app.sources.awc.tafs import UpstreamForecast, UpstreamTaf
 
@@ -115,3 +127,98 @@ def test_unparseable_taf_is_skipped() -> None:
     )
 
     assert taf_record(row, NOW) is None
+
+
+async def test_run_job_rolls_back_before_unlocking_and_recording_an_error():
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.aborted = False
+            self.rolled_back = False
+            self.committed = False
+            self.statements: list[tuple[str, object]] = []
+
+        async def scalar(self, stmt, params=None):
+            return True
+
+        async def execute(self, stmt, params=None):
+            if self.aborted:
+                raise RuntimeError("current transaction is aborted")
+            self.statements.append((str(stmt), params))
+
+        async def rollback(self) -> None:
+            self.aborted = False
+            self.rolled_back = True
+
+        async def commit(self) -> None:
+            self.committed = True
+
+    connection = FakeConnection()
+
+    class FakeEngine:
+        @asynccontextmanager
+        async def connect(self):
+            yield connection
+
+    async def failing_job(conn, now):
+        conn.aborted = True
+        raise RuntimeError("sql failed")
+
+    rows = await run_job(cast(Any, FakeEngine()), "metars", failing_job)
+
+    assert rows == 0
+    assert connection.rolled_back is True
+    assert connection.committed is True
+    assert any("pg_advisory_unlock" in sql for sql, _ in connection.statements)
+    run_params = [
+        params
+        for sql, params in connection.statements
+        if "ingest_runs" in sql and isinstance(params, dict)
+    ]
+    assert len(run_params) == 1
+    assert run_params[0]["status"] == "error"
+
+
+async def test_scheduler_survives_a_failed_job(monkeypatch) -> None:
+    seen: list[str] = []
+
+    async def fake_run_job(engine, name, job):
+        seen.append(name)
+        if name == "first":
+            raise RuntimeError("db down")
+        return 0
+
+    async def stop_sleep(_: float) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(
+        scheduler_module,
+        "JOBS",
+        (("first", 60, fake_run_job), ("second", 60, fake_run_job)),
+    )
+    monkeypatch.setattr(scheduler_module, "run_job", fake_run_job)
+    monkeypatch.setattr(asyncio, "sleep", stop_sleep)
+
+    with contextlib.suppress(asyncio.CancelledError):
+        await scheduler_module.run_forever(cast(Any, None))
+
+    assert seen == ["first", "second"]
+
+
+async def test_ingest_downloads_in_a_worker_thread(monkeypatch) -> None:
+    main_thread = threading.get_ident()
+    download_threads: list[int] = []
+
+    def fake_download(url: str) -> bytes:
+        download_threads.append(threading.get_ident())
+        return b"[]"
+
+    class FakeConnection:
+        async def execute(self, stmt, params=None):
+            raise AssertionError("empty payload should not execute SQL")
+
+    monkeypatch.setattr(jobs_module, "download", fake_download)
+
+    count = await ingest_stations(cast(Any, FakeConnection()), NOW)
+
+    assert count == 0
+    assert download_threads and download_threads[0] != main_thread

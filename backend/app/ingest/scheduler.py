@@ -29,7 +29,10 @@ async def run_forever(engine: AsyncEngine) -> None:
             if time.monotonic() < due[name]:
                 continue
             due[name] = time.monotonic() + interval
-            await run_job(engine, name, job)
+            try:
+                await run_job(engine, name, job)
+            except Exception:  # noqa: BLE001 - a DB blip must not kill ingest
+                logger.exception("scheduler tick failed for %s", name)
 
         await asyncio.sleep(TICK_SECONDS)
 
