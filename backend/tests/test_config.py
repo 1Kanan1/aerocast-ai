@@ -9,11 +9,10 @@ from app.config import Settings
 def make_settings(**overrides: Any) -> Settings:
     """Build settings without reading .env or the environment.
 
-    Every key is cleared explicitly: a developer with ZAI_API_KEY or
+    Every key is cleared explicitly: a developer with GEMINI_API_KEY or
     OPENAI_API_KEY exported would otherwise change what these assert.
     """
     keys: dict[str, Any] = {
-        "zai_api_key": None,
         "gemini_api_key": None,
         "openai_api_key": None,
         "groq_api_key": None,
@@ -58,23 +57,17 @@ def test_database_url_rejects_anything_not_postgres(url: str) -> None:
 
 
 def test_each_provider_carries_its_own_transport() -> None:
-    zai, gemini, openai, groq = make_settings(
-        zai_models=" glm-a , glm-b,,glm-a ",
-        gemini_models="gemini-a",
+    gemini, openai, groq = make_settings(
+        gemini_models=" gemini-a , gemini-b,,gemini-a ",
         gemini_reasoning_effort="medium",
         openai_models="luna-a",
         openai_reasoning_effort="none",
         groq_models="qwen/qwen3.8-27b",
+        groq_reasoning_effort="low",
     ).llm_providers
 
-    assert zai.name == "zai"
-    assert zai.models == ("glm-a", "glm-b")
-    assert zai.base_url.startswith("https://api.z.ai/")
-    assert zai.response_format == "json"
-    assert zai.reasoning_effort is None
-
     assert gemini.name == "gemini"
-    assert gemini.models == ("gemini-a",)
+    assert gemini.models == ("gemini-a", "gemini-b")
     assert gemini.base_url.startswith("https://generativelanguage")
     assert gemini.response_format == "schema"
     assert gemini.reasoning_effort == "medium"
@@ -89,19 +82,18 @@ def test_each_provider_carries_its_own_transport() -> None:
     assert groq.models == ("qwen/qwen3.8-27b",)
     assert groq.base_url == "https://api.groq.com/openai/v1/"
     assert groq.response_format == "json"
-    assert groq.reasoning_effort is None
+    assert groq.reasoning_effort == "low"
     # Every other provider takes a pinned temperature; Luna rejects it.
     assert openai.temperature is None
-    assert zai.temperature == gemini.temperature == groq.temperature == 0.0
+    assert gemini.temperature == groq.temperature == 0.0
 
 
 def test_a_provider_is_configured_by_a_non_empty_key() -> None:
-    zai, gemini, openai, groq = make_settings(
-        zai_api_key="",
+    gemini, openai, groq = make_settings(
         gemini_api_key="secret",
+        openai_api_key="",
     ).llm_providers
 
-    assert zai.configured is False
     assert gemini.configured is True
     assert openai.configured is False
     assert groq.configured is False
@@ -124,7 +116,7 @@ def test_no_provider_uses_a_moving_model_alias() -> None:
 
 
 def test_secrets_do_not_render_in_repr() -> None:
-    settings = make_settings(zai_api_key="super-secret-key")
+    settings = make_settings(gemini_api_key="super-secret-key")
     assert "super-secret-key" not in repr(settings)
     assert "super-secret-key" not in str(settings.model_dump())
     assert "super-secret-key" not in repr(settings.llm_providers)

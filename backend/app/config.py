@@ -47,11 +47,8 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://aerocast:aerocast@localhost:5432/aerocast"
     )
 
-    zai_api_key: SecretStr | None = None
-    zai_models: str = "glm-4.5-flash,glm-4.7-flash"
-
     gemini_api_key: SecretStr | None = None
-    gemini_models: str = "gemini-3.5-flash-lite"
+    gemini_models: str = "gemini-3.5-flash-lite,gemini-4-hydrogen"
     gemini_reasoning_effort: str = "low"
 
     openai_api_key: SecretStr | None = None
@@ -59,7 +56,8 @@ class Settings(BaseSettings):
     openai_reasoning_effort: str = "low"
 
     groq_api_key: SecretStr | None = None
-    groq_models: str = "qwen/qwen3.8-27b"
+    groq_models: str = "qwen/qwen3.8-27b,openai/gpt-oss-120b"
+    groq_reasoning_effort: str = "low"
 
     @field_validator("database_url")
     @classmethod
@@ -84,13 +82,6 @@ class Settings(BaseSettings):
         a copy in settings lets the two drift apart.
         """
         return (
-            Provider(
-                name="zai",
-                models=_models(self.zai_models),
-                base_url="https://api.z.ai/api/paas/v4/",
-                api_key=self.zai_api_key,
-                response_format="json",
-            ),
             Provider(
                 name="gemini",
                 models=_models(self.gemini_models),
@@ -117,6 +108,7 @@ class Settings(BaseSettings):
                 base_url="https://api.groq.com/openai/v1/",
                 api_key=self.groq_api_key,
                 response_format="json",
+                reasoning_effort=self.groq_reasoning_effort,
             ),
         )
 

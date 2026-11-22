@@ -12,9 +12,8 @@ async def test_remote_providers_report_configured_without_being_probed() -> (
     None
 ):
     settings = make_settings(
-        zai_api_key="secret",
-        zai_models="glm-a",
-        gemini_models="",
+        gemini_api_key="secret",
+        gemini_models="gemini-a",
         openai_models="",
         groq_models="",
     )
@@ -22,16 +21,14 @@ async def test_remote_providers_report_configured_without_being_probed() -> (
     described = await statuses(settings)
 
     assert described == [
-        {"name": "zai", "model": "glm-a", "configured": True},
+        {"name": "gemini", "model": "gemini-a", "configured": True},
     ]
 
 
 async def test_provider_and_model_order_is_preserved() -> None:
     settings = make_settings(
-        zai_api_key="secret",
-        zai_models="glm-a,glm-b",
         gemini_api_key="secret",
-        gemini_models="gemini-a",
+        gemini_models="gemini-a,gemini-b",
         openai_api_key="secret",
         openai_models="luna-a",
         groq_api_key="secret",
@@ -43,9 +40,8 @@ async def test_provider_and_model_order_is_preserved() -> None:
     assert [
         (provider["name"], provider["model"]) for provider in described
     ] == [
-        ("zai", "glm-a"),
-        ("zai", "glm-b"),
         ("gemini", "gemini-a"),
+        ("gemini", "gemini-b"),
         ("openai", "luna-a"),
         ("groq", "qwen/qwen3.8-27b"),
     ]
@@ -54,7 +50,6 @@ async def test_provider_and_model_order_is_preserved() -> None:
 
 async def test_an_unconfigured_provider_still_lists_its_models() -> None:
     settings = make_settings(
-        zai_models="",
         gemini_api_key="",
         gemini_models="gemini-a",
         openai_models="",
@@ -68,9 +63,8 @@ async def test_an_unconfigured_provider_still_lists_its_models() -> None:
 
 async def test_the_same_model_twice_appears_once() -> None:
     settings = make_settings(
-        zai_api_key="secret",
-        zai_models="glm-a,glm-a",
-        gemini_models="",
+        gemini_api_key="secret",
+        gemini_models="gemini-a,gemini-a",
         openai_models="",
         groq_models="",
     )

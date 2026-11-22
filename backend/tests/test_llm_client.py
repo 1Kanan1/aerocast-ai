@@ -25,10 +25,9 @@ def settings(**overrides: object) -> Settings:
     defaults = Settings(
         _env_file=None,
         database_url="postgresql://user:pass@localhost:5432/aerocast",
-        zai_api_key=SecretStr("zai-key"),
         gemini_api_key=SecretStr("gemini-key"),
         openai_api_key=None,
-        groq_api_key=None,
+        groq_api_key=SecretStr("groq-key"),
     )
     return defaults.model_copy(update=overrides)
 
@@ -60,32 +59,31 @@ def test_rungs_walk_the_providers_and_skip_unconfigured_ones():
     chain = rungs(
         settings(
             gemini_api_key=None,
-            zai_models="glm-a,glm-b",
+            groq_models="qwen-a,qwen-b",
         )
     )
 
-    assert [rung.name for rung in chain] == ["zai", "zai"]
-    assert [rung.model for rung in chain] == ["glm-a", "glm-b"]
+    assert [rung.name for rung in chain] == ["groq", "groq"]
+    assert [rung.model for rung in chain] == ["qwen-a", "qwen-b"]
     assert chain[0].response_format == "json"
 
 
-def test_zai_lists_its_models():
+def test_groq_lists_its_models():
     chain = rungs(
         settings(
             gemini_api_key=None,
-            zai_models="zai-a,zai-b",
+            groq_models="groq-a,groq-b",
         )
     )
 
-    assert [rung.model for rung in chain] == ["zai-a", "zai-b"]
-    assert all(rung.name == "zai" for rung in chain)
+    assert [rung.model for rung in chain] == ["groq-a", "groq-b"]
+    assert all(rung.name == "groq" for rung in chain)
 
 
-def test_the_default_providers_are_zai_then_gemini_then_openai():
+def test_the_default_providers_are_gemini_then_openai_then_groq():
     chain = rungs(
         Settings(
             _env_file=None,
-            zai_api_key=SecretStr("zai-key"),
             gemini_api_key=SecretStr("gemini-key"),
             openai_api_key=SecretStr("openai-key"),
             groq_api_key=SecretStr("groq-key"),
@@ -93,18 +91,18 @@ def test_the_default_providers_are_zai_then_gemini_then_openai():
     )
 
     assert [(rung.name, rung.model) for rung in chain] == [
-        ("zai", "glm-4.5-flash"),
-        ("zai", "glm-4.7-flash"),
         ("gemini", "gemini-3.5-flash-lite"),
+        ("gemini", "gemini-4-hydrogen"),
         ("openai", "gpt-6-luna"),
         ("groq", "qwen/qwen3.8-27b"),
+        ("groq", "openai/gpt-oss-120b"),
     ]
 
 
 def test_gemini_lists_its_models():
     chain = rungs(
         settings(
-            zai_api_key=None,
+            groq_api_key=None,
             gemini_models="gemini-a,gemini-b",
             gemini_reasoning_effort="medium",
         )
@@ -120,11 +118,11 @@ def test_a_repeated_model_is_asked_once():
     chain = rungs(
         settings(
             gemini_api_key=None,
-            zai_models="glm-a,glm-a,glm-b",
+            groq_models="qwen-a,qwen-a,qwen-b",
         )
     )
 
-    assert [rung.model for rung in chain] == ["glm-a", "glm-b"]
+    assert [rung.model for rung in chain] == ["qwen-a", "qwen-b"]
 
 
 async def test_a_dead_provider_does_not_stop_the_answer(monkeypatch):
@@ -134,8 +132,8 @@ async def test_a_dead_provider_does_not_stop_the_answer(monkeypatch):
         json: dict[str, object],
         headers: dict[str, str],
     ) -> FakeResponse:
-        if "z.ai" in url:
-            raise httpx.ConnectError("zai down")
+        if "groq.com" in url:
+            raise httpx.ConnectError("groq down")
         return FakeResponse(answer_payload())
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
@@ -173,7 +171,7 @@ async def test_a_timeout_does_not_stop_the_answer(monkeypatch):
         json: dict[str, object],
         headers: dict[str, str],
     ) -> FakeResponse:
-        if "z.ai" in url:
+        if "groq.com" in url:
             raise TimeoutError
         return FakeResponse(answer_payload())
 
@@ -202,7 +200,7 @@ async def test_the_fastest_reply_wins_and_the_slow_one_is_cancelled(
     monkeypatch.setattr(client_module, "_call", fake_call)
     chain = settings(
         gemini_api_key=None,
-        zai_models="slow-model,fast-model",
+        groq_models="slow-model,fast-model",
     )
 
     started = time.monotonic()
@@ -232,7 +230,7 @@ async def test_race_false_tries_the_rungs_in_turn(monkeypatch):
     monkeypatch.setattr(client_module, "_call", fake_call)
     chain = settings(
         gemini_api_key=None,
-        zai_models="first-model,second-model",
+        groq_models="first-model,second-model",
     )
     messages = [{"role": "user", "content": "hi"}]
     schema: dict[str, object] = {"type": "object"}
@@ -266,7 +264,7 @@ async def test_a_failed_rung_is_skipped_during_its_cooldown(monkeypatch):
         headers: dict[str, str],
     ) -> FakeResponse:
         attempts.append(url)
-        if "z.ai" in url:
+        if "groq.com" in url:
             raise httpx.ConnectError("down")
         return FakeResponse(answer_payload())
 
@@ -275,7 +273,7 @@ async def test_a_failed_rung_is_skipped_during_its_cooldown(monkeypatch):
     await complete(settings(), [], {})
     second = await complete(settings(), [], {})
 
-    assert len([url for url in attempts if "z.ai" in url]) == 2
+    assert len([url for url in attempts if "groq.com" in url]) == 2
     # The cooled rungs must not block the provider behind them.
     assert second is not None
     assert second.provider == "gemini"
@@ -291,7 +289,7 @@ async def test_every_rung_that_failed_is_benched(monkeypatch):
         raise httpx.ConnectError("down")
 
     monkeypatch.setattr(client_module, "_call", fake_call)
-    chain = settings(gemini_api_key=None, zai_models="one,two,three")
+    chain = settings(gemini_api_key=None, groq_models="one,two,three")
 
     assert await complete(chain, [], {}, budget_seconds=5) is None
     assert sorted(attempted) == ["one", "three", "two"]
@@ -305,7 +303,7 @@ async def test_a_rung_that_ignores_its_timeout_still_ends(monkeypatch):
         await asyncio.sleep(30)
 
     monkeypatch.setattr(client_module, "_call", stuck)
-    chain = settings(gemini_api_key=None, zai_models="only-model")
+    chain = settings(gemini_api_key=None, groq_models="only-model")
 
     started = time.monotonic()
     assert await complete(chain, [], {}, budget_seconds=0.2) is None
@@ -322,14 +320,14 @@ async def test_the_rung_gets_what_it_was_given(monkeypatch):
         return {"summary": "ok"}
 
     monkeypatch.setattr(client_module, "_call", fake_call)
-    chain = settings(gemini_api_key=None, zai_models="only-model")
+    chain = settings(gemini_api_key=None, groq_models="only-model")
     messages = [{"role": "user", "content": "hi"}]
     schema: dict[str, object] = {"type": "object"}
 
     completion = await complete(chain, messages, schema, budget_seconds=5)
 
     assert completion is not None
-    assert completion.provider == "zai"
+    assert completion.provider == "groq"
     assert completion.model == "only-model"
     assert completion.payload == {"summary": "ok"}
     assert seen == [(messages, schema, 5)]
@@ -344,7 +342,7 @@ async def test_the_scope_check_asks_one_model(monkeypatch):
         return {"in_scope": True, "reason": "weather"}
 
     monkeypatch.setattr(client_module, "_call", fake_call)
-    chain = settings(zai_api_key=None, gemini_models="first,second,third")
+    chain = settings(groq_api_key=None, gemini_models="first,second,third")
 
     assert await classify_scope(chain, "what is the wind?") is True
     assert calls == ["first"]
@@ -393,7 +391,7 @@ async def test_a_scope_timeout_does_not_bench_the_rung_for_the_answer(
         return answer_payload()
 
     monkeypatch.setattr(client_module, "_call", fake_call)
-    one_rung = settings(gemini_api_key=None, zai_models="only-model")
+    one_rung = settings(gemini_api_key=None, groq_models="only-model")
 
     assert await complete(one_rung, [], {}, 1, namespace="scope") is None
 
@@ -418,14 +416,14 @@ async def test_each_rung_sends_its_key(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
     await complete(
-        settings(gemini_api_key=None, zai_models="zai-only"), [], {}
+        settings(gemini_api_key=None, groq_models="groq-only"), [], {}
     )
     await complete(
-        settings(zai_api_key=None, gemini_models="gemini-only"), [], {}
+        settings(groq_api_key=None, gemini_models="gemini-only"), [], {}
     )
 
     assert [header.get("authorization") for header in seen] == [
-        "Bearer zai-key",
+        "Bearer groq-key",
         "Bearer gemini-key",
     ]
 
@@ -446,7 +444,7 @@ async def test_a_model_that_only_takes_its_default_temperature(monkeypatch):
 
     await complete(
         settings(
-            zai_api_key=None,
+            groq_api_key=None,
             gemini_api_key=None,
             openai_api_key=SecretStr("openai-key"),
         ),
@@ -454,7 +452,7 @@ async def test_a_model_that_only_takes_its_default_temperature(monkeypatch):
         {},
     )
     await complete(
-        settings(gemini_api_key=None, zai_models="zai-only"), [], {}
+        settings(gemini_api_key=None, groq_models="groq-only"), [], {}
     )
 
     # Luna answers 400 to any temperature but its default, so the key is
@@ -479,7 +477,7 @@ async def test_a_rung_that_names_a_reasoning_effort_sends_it(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
     await complete(
-        settings(zai_api_key=None, gemini_models="gemini-only"), [], {}
+        settings(groq_api_key=None, gemini_models="gemini-only"), [], {}
     )
 
     assert bodies[0]["reasoning_effort"] == "low"
@@ -500,10 +498,10 @@ async def test_a_rung_posts_to_its_own_base_url(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
     await complete(
-        settings(gemini_api_key=None, zai_models="only-model"), [], {}
+        settings(gemini_api_key=None, groq_models="only-model"), [], {}
     )
 
-    assert urls == ["https://api.z.ai/api/paas/v4/chat/completions"]
+    assert urls == ["https://api.groq.com/openai/v1/chat/completions"]
 
 
 async def test_every_rung_receives_the_system_prompt(monkeypatch):
@@ -522,10 +520,10 @@ async def test_every_rung_receives_the_system_prompt(monkeypatch):
 
     messages = [{"role": "system", "content": "our own rules"}]
     await complete(
-        settings(gemini_api_key=None, zai_models="zai-only"), messages, {}
+        settings(gemini_api_key=None, groq_models="groq-only"), messages, {}
     )
     await complete(
-        settings(zai_api_key=None, gemini_models="gemini-only"),
+        settings(groq_api_key=None, gemini_models="gemini-only"),
         messages,
         {},
     )
@@ -546,7 +544,7 @@ async def test_race_skips_a_rejected_reply_and_takes_a_valid_slower_one(
     monkeypatch.setattr(client_module, "_call", fake_call)
     chain = settings(
         gemini_api_key=None,
-        zai_models="fast-invalid,slow-valid",
+        groq_models="fast-invalid,slow-valid",
     )
 
     completion = await complete(
@@ -570,7 +568,7 @@ async def test_serial_skips_a_rejected_reply_and_takes_the_next(monkeypatch):
     monkeypatch.setattr(client_module, "_call", fake_call)
     chain = settings(
         gemini_api_key=None,
-        zai_models="first-invalid,second-valid",
+        groq_models="first-invalid,second-valid",
     )
 
     completion = await complete(
@@ -603,7 +601,7 @@ async def test_provider_calls_reuse_one_http_client(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
     await close_client()
     try:
-        one = settings(gemini_api_key=None, zai_models="zai-only")
+        one = settings(gemini_api_key=None, groq_models="groq-only")
         await complete(one, [], {})
         await complete(one, [], {})
         assert len(seen) == 2

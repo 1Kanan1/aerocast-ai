@@ -59,7 +59,7 @@ still to come. See [PLAN.md](PLAN.md) for the build order and
 | Web | Remix 3.1 on Node 26.13.0 LTS, Bun for packages and scripts |
 | Map | MapLibre GL JS (Phase 4) |
 | Weather data | aviationweather.gov (AWC Data API and bulk cache files) |
-| Explanations | GLM-4.5/4.7-Flash and Gemini Flash, behind a citation validator |
+| Explanations | GroqCloud, Gemini, and OpenAI, raced behind a citation validator |
 
 ## Run it
 
