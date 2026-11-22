@@ -24,10 +24,27 @@ RUNG_BUDGET_SECONDS = 35.0
 COOLDOWN_SECONDS = 60.0
 
 _cooldowns: dict[str, float] = {}
+_http: httpx.AsyncClient | None = None
 
 
 def reset_cooldowns() -> None:
     _cooldowns.clear()
+
+
+def _http_client() -> httpx.AsyncClient:
+    """Shared client so provider calls reuse pooled TLS connections."""
+    global _http
+    if _http is None or _http.is_closed:
+        _http = httpx.AsyncClient(timeout=RUNG_BUDGET_SECONDS)
+    return _http
+
+
+async def close_client() -> None:
+    """Close the shared HTTP client on shutdown or between test loops."""
+    global _http
+    if _http is not None and not _http.is_closed:
+        await _http.aclose()
+    _http = None
 
 
 @dataclass(frozen=True)
@@ -245,12 +262,11 @@ async def _call(
         {"authorization": f"Bearer {rung.api_key}"} if rung.api_key else {}
     )
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            rung.base_url.rstrip("/") + "/chat/completions",
-            json=body,
-            headers=headers,
-        )
+    response = await _http_client().post(
+        rung.base_url.rstrip("/") + "/chat/completions",
+        json=body,
+        headers=headers,
+    )
     response.raise_for_status()
 
     data = response.json()

@@ -8,7 +8,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.llm import client as client_module
-from app.llm.client import complete, reset_cooldowns, rungs
+from app.llm.client import close_client, complete, reset_cooldowns, rungs
 from app.llm.scope import classify_scope
 
 
@@ -585,3 +585,28 @@ async def test_serial_skips_a_rejected_reply_and_takes_the_next(monkeypatch):
 
     assert completion is not None
     assert completion.model == "second-valid"
+
+
+async def test_provider_calls_reuse_one_http_client(monkeypatch):
+    seen: list[httpx.AsyncClient] = []
+
+    async def fake_post(
+        client: httpx.AsyncClient,
+        url: str,
+        json: dict[str, object],
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        seen.append(client)
+        return FakeResponse(answer_payload())
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    await close_client()
+    try:
+        one = settings(gemini_api_key=None, zai_models="zai-only")
+        await complete(one, [], {})
+        await complete(one, [], {})
+        assert len(seen) == 2
+        assert seen[0] is seen[1]
+    finally:
+        await close_client()
+    assert seen[0].is_closed is True

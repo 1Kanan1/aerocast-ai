@@ -20,6 +20,7 @@ from app.config import get_settings
 from app.db.migrate import upgrade_async
 from app.db.session import dispose_engine, get_engine, ping
 from app.ingest import scheduler
+from app.llm.client import close_client
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +51,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     async with scheduler.running(get_engine()):
         yield
 
+    await close_client()
     await dispose_engine()
 
 
