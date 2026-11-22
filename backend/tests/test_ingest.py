@@ -3,15 +3,17 @@ import contextlib
 import json
 import threading
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from app.domain.taf import parse_taf
 from app.ingest import jobs as jobs_module
 from app.ingest import scheduler as scheduler_module
 from app.ingest.jobs import (
+    JOBS,
     ingest_stations,
     metar_record,
+    prune_history,
     run_job,
     taf_record,
 )
@@ -222,3 +224,44 @@ async def test_ingest_downloads_in_a_worker_thread(monkeypatch) -> None:
 
     assert count == 0
     assert download_threads and download_threads[0] != main_thread
+
+
+async def test_prune_history_deletes_each_table_past_its_retention_window():
+    class FakeResult:
+        def __init__(self, rowcount: int | None) -> None:
+            self.rowcount = rowcount
+
+    counts = iter([10, 4, 2, -1, None])
+    seen: list[tuple[str, dict[str, object]]] = []
+
+    class FakeConnection:
+        async def execute(self, stmt, params=None):
+            seen.append((str(stmt), dict(params or {})))
+            return FakeResult(next(counts))
+
+    deleted = await prune_history(cast(Any, FakeConnection()), NOW)
+
+    assert deleted == 16
+    assert seen == [
+        (
+            "delete from metar_observations where obs_time < :cutoff",
+            {"cutoff": NOW - timedelta(days=31)},
+        ),
+        (
+            "delete from taf_forecasts where valid_to < :cutoff",
+            {"cutoff": NOW - timedelta(days=7)},
+        ),
+        (
+            "delete from advisories where valid_to < :cutoff",
+            {"cutoff": NOW - timedelta(days=7)},
+        ),
+        (
+            "delete from pireps where report_time < :cutoff",
+            {"cutoff": NOW - timedelta(days=7)},
+        ),
+        (
+            "delete from ingest_runs where started_at < :cutoff",
+            {"cutoff": NOW - timedelta(days=14)},
+        ),
+    ]
+    assert ("prune", 24 * 60 * 60, prune_history) in JOBS

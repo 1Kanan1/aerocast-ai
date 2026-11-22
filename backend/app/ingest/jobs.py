@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -312,6 +312,29 @@ async def ingest_pireps(connection: AsyncConnection, _: datetime) -> int:
     return len(records)
 
 
+#: Retention windows for append-only tables. METARs cover the 720-hour history
+#: endpoint with a one-day margin; the rest keep a week or two of telemetry.
+RETENTION: tuple[tuple[str, str, timedelta], ...] = (
+    ("metar_observations", "obs_time", timedelta(days=31)),
+    ("taf_forecasts", "valid_to", timedelta(days=7)),
+    ("advisories", "valid_to", timedelta(days=7)),
+    ("pireps", "report_time", timedelta(days=7)),
+    ("ingest_runs", "started_at", timedelta(days=14)),
+)
+
+
+async def prune_history(connection: AsyncConnection, now: datetime) -> int:
+    """Drop rows older than each append-only table's retention window."""
+    deleted = 0
+    for table, column, window in RETENTION:
+        result = await connection.execute(
+            text(f"delete from {table} where {column} < :cutoff"),
+            {"cutoff": now - window},
+        )
+        deleted += max(result.rowcount or 0, 0)
+    return deleted
+
+
 def _get(url: str) -> list[dict[str, object]]:
     payload = decompress(download(url))
     return [row for row in json.loads(payload) if isinstance(row, dict)]
@@ -328,4 +351,5 @@ JOBS: tuple[tuple[str, int, Job], ...] = (
     ("tafs", 600, ingest_tafs),
     ("advisories", 300, ingest_advisories),
     ("pireps", 300, ingest_pireps),
+    ("prune", 24 * 60 * 60, prune_history),
 )
