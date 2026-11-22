@@ -224,9 +224,10 @@ export const SketchLayer = clientEntry(
 
     /** Redraw the field, but not on every frame the screen offers. */
     function flowWind(): void {
-      if (windFrame !== 0) return
+      if (windFrame !== 0 || document.hidden) return
       windFrame = window.setTimeout(() => {
         windFrame = 0
+        if (document.hidden) return
         renderField(performance.now())
         flowWind()
       }, WIND_FRAME_MS)
@@ -238,7 +239,11 @@ export const SketchLayer = clientEntry(
      * redrawing the rain and arrows would be work about to be scaled.
      */
     function resumeWind(): void {
-      if (moving || (windArrows.length === 0 && rainStreaks.length === 0))
+      if (
+        moving ||
+        document.hidden ||
+        (windArrows.length === 0 && rainStreaks.length === 0)
+      )
         return
       if (windCanvas === undefined || windCanvas.style.display === 'none')
         return
@@ -719,6 +724,14 @@ export const SketchLayer = clientEntry(
         signal: handle.signal,
       })
       window.addEventListener('resize', schedule, { signal: handle.signal })
+      document.addEventListener(
+        'visibilitychange',
+        () => {
+          if (document.hidden) stopWind()
+          else resumeWind()
+        },
+        { signal: handle.signal },
+      )
       handle.signal.addEventListener(
         'abort',
         () => {
