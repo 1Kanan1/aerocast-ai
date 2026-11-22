@@ -9,6 +9,40 @@ export const GRID_SIZE = 4
 
 const ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
 const MODEL = 'ncep_rrfs_conus'
+const CACHE_TTL_MS = 15 * 60 * 1000
+const CACHE_MAX_ENTRIES = 256
+
+interface CachedGrid {
+  grid: WeatherGrid
+  expiresAt: number
+}
+
+const gridCache = new Map<string, CachedGrid>()
+
+export function clearWeatherGridCache(): void {
+  gridCache.clear()
+}
+
+function readCache(key: string): WeatherGrid | null {
+  let entry = gridCache.get(key)
+  if (entry === undefined) return null
+  if (Date.now() >= entry.expiresAt) {
+    gridCache.delete(key)
+    return null
+  }
+  gridCache.delete(key)
+  gridCache.set(key, entry)
+  return entry.grid
+}
+
+function writeCache(key: string, grid: WeatherGrid): void {
+  gridCache.delete(key)
+  if (gridCache.size >= CACHE_MAX_ENTRIES) {
+    let oldest = gridCache.keys().next().value
+    if (oldest !== undefined) gridCache.delete(oldest)
+  }
+  gridCache.set(key, { grid, expiresAt: Date.now() + CACHE_TTL_MS })
+}
 
 export interface WindCell {
   /** Flow towards the east, knots. */
@@ -33,6 +67,14 @@ export async function fetchWeatherGrid(
   signal: AbortSignal,
   at?: number,
 ): Promise<WeatherGrid | null> {
+  if (signal.aborted) return null
+
+  let hour =
+    at === undefined ? null : `${new Date(at).toISOString().slice(0, 13)}:00`
+  let cacheKey = `${lat.toFixed(3)},${lon.toFixed(3)},${radiusNm},${hour ?? 'current'}`
+  let cached = readCache(cacheKey)
+  if (cached !== null) return cached
+
   let latitudes: number[] = []
   let longitudes: number[] = []
   let latitudeSpan = radiusNm / 60
@@ -55,7 +97,7 @@ export async function fetchWeatherGrid(
     timezone: 'UTC',
   })
 
-  if (at === undefined) {
+  if (hour === null) {
     query.set(
       'current',
       'wind_speed_10m,wind_direction_10m,temperature_2m,relative_humidity_2m',
@@ -63,7 +105,6 @@ export async function fetchWeatherGrid(
   } else {
     // The same model answers for an hour in the past or ahead when asked for
     // that hour, so the timeline reads one grid shape either way.
-    let hour = `${new Date(at).toISOString().slice(0, 13)}:00`
     query.set(
       'hourly',
       'wind_speed_10m,wind_direction_10m,temperature_2m,relative_humidity_2m',
@@ -81,11 +122,13 @@ export async function fetchWeatherGrid(
     if (rows.length !== GRID_SIZE * GRID_SIZE) return null
 
     let cells = rows.map((row) =>
-      at === undefined ? toCell(row) : toHourCell(row),
+      hour === null ? toCell(row) : toHourCell(row),
     )
     if (cells.some((cell) => cell === null)) return null
 
-    return { size: GRID_SIZE, cells: cells as WindCell[] }
+    let grid: WeatherGrid = { size: GRID_SIZE, cells: cells as WindCell[] }
+    writeCache(cacheKey, grid)
+    return grid
   } catch {
     return null
   }

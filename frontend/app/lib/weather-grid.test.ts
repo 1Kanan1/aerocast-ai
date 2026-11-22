@@ -4,6 +4,7 @@ import { describe, it } from 'remix/test'
 import {
   GRID_SIZE,
   type WeatherGrid,
+  clearWeatherGridCache,
   fetchWeatherGrid,
   sampleGrid,
 } from './weather-grid.ts'
@@ -143,6 +144,7 @@ describe('weather grid for an hour', () => {
     ]
 
     for (let [direction, expectedU, expectedV] of cases) {
+      clearWeatherGridCache()
       let row = {
         current: {
           wind_speed_10m: 10,
@@ -167,6 +169,76 @@ describe('weather grid for an hour', () => {
       } finally {
         stub.restore()
       }
+    }
+  })
+
+  it('reuses a cached grid for the same station and hour until it expires', async () => {
+    clearWeatherGridCache()
+    let calls = 0
+    let now = Date.parse('2026-11-19T15:00:00Z')
+    let originalFetch = globalThis.fetch
+    let originalNow = Date.now
+    let row = {
+      hourly: {
+        wind_speed_10m: [10],
+        wind_direction_10m: [270],
+        temperature_2m: [12],
+        relative_humidity_2m: [50],
+      },
+    }
+    let payload = Array.from({ length: GRID_SIZE * GRID_SIZE }, () => row)
+
+    globalThis.fetch = (async () => {
+      calls += 1
+      return new Response(JSON.stringify(payload), { status: 200 })
+    }) as typeof fetch
+    Date.now = () => now
+
+    try {
+      let signal = new AbortController().signal
+      let first = await fetchWeatherGrid(47.45, -122.31, 30, signal, HOUR)
+      let second = await fetchWeatherGrid(47.45, -122.31, 30, signal, HOUR)
+      assert.ok(first !== null)
+      assert.equal(second, first)
+      assert.equal(calls, 1)
+
+      // Different hour misses the cache.
+      await fetchWeatherGrid(47.45, -122.31, 30, signal, HOUR + 60 * 60 * 1000)
+      assert.equal(calls, 2)
+
+      // After TTL, the original key refetches.
+      now += 15 * 60 * 1000 + 1
+      await fetchWeatherGrid(47.45, -122.31, 30, signal, HOUR)
+      assert.equal(calls, 3)
+    } finally {
+      globalThis.fetch = originalFetch
+      Date.now = originalNow
+      clearWeatherGridCache()
+    }
+  })
+
+  it('does not cache failed grid fetches', async () => {
+    clearWeatherGridCache()
+    let calls = 0
+    let originalFetch = globalThis.fetch
+    globalThis.fetch = (async () => {
+      calls += 1
+      return new Response('rate limited', { status: 429 })
+    }) as typeof fetch
+
+    try {
+      let signal = new AbortController().signal
+      assert.equal(
+        await fetchWeatherGrid(47.45, -122.31, 30, signal, HOUR),
+        null,
+      )
+      assert.equal(
+        await fetchWeatherGrid(47.45, -122.31, 30, signal, HOUR),
+        null,
+      )
+      assert.equal(calls, 2)
+    } finally {
+      globalThis.fetch = originalFetch
     }
   })
 })
