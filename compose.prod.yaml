@@ -1,0 +1,126 @@
+name: aerocast
+
+# Production Compose for a single VPS (tuned for 2 OCPUs, 12 GB RAM, 200 GB SSD).
+# Usage: docker compose -f compose.prod.yaml up -d --build
+#
+# Put a reverse proxy (Caddy, Nginx, or Cloudflare Tunnel) in front of
+# 127.0.0.1:44100. Postgres and the API stay on the private Docker network.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "25m"
+    max-file: "4"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    init: true
+    shm_size: 256m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=100
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - wal_compression=on
+      - -c
+      - max_wal_size=2GB
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aerocast}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-aerocast}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 4g
+    cpus: 1.5
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-aerocast} -d ${POSTGRES_DB:-aerocast}",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      AEROCAST_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aerocast}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-aerocast}
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 2g
+    cpus: 1.5
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    init: true
+    environment:
+      API_BASE_URL: http://api:8000
+      PORT: "44100"
+      NODE_OPTIONS: "--max-old-space-size=768"
+    ports:
+      # Loopback-only by default; put Caddy/Nginx/Cloudflare Tunnel in front.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-44100}:44100"
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 1g
+    cpus: 1.0
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:44100/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  pgdata:
