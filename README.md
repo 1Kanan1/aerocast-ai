@@ -70,12 +70,11 @@ Full stack in local containers:
 make up
 ```
 
-Production on a single VPS (keeps Postgres and the API private, binds the web app to `127.0.0.1:44100` for Caddy, Nginx, or a Cloudflare Tunnel):
+Production with Dokploy (keeps Postgres and the API private, exposes `web` on container port `44100` for Traefik):
 
-```sh
-cp .env.prod.example .env # set POSTGRES_PASSWORD and at least one model key
-docker compose -f compose.prod.yaml up -d --build
-```
+- Point a Dokploy Compose service at `compose.prod.yaml`.
+- Copy the keys from `.env.prod.example` into Dokploy's Environment tab and set `POSTGRES_PASSWORD` plus at least one model key.
+- In the Domains tab, route your domain to service `web` on port `44100`.
 
 ## Layout
 

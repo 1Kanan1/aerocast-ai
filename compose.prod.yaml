@@ -1,10 +1,7 @@
-name: aerocast
-
-# Production Compose for a single VPS (tuned for 2 OCPUs, 12 GB RAM, 200 GB SSD).
-# Usage: docker compose -f compose.prod.yaml up -d --build
-#
-# Put a reverse proxy (Caddy, Nginx, or Cloudflare Tunnel) in front of
-# 127.0.0.1:44100. Postgres and the API stay on the private Docker network.
+# Production Compose for Dokploy on a single VPS (2 OCPUs, 12 GB RAM, 200 GB SSD).
+# In Dokploy: point the Compose service at compose.prod.yaml, set variables from
+# .env.prod.example in the Environment tab, and attach your domain to service
+# "web" on container port 44100 in the Domains tab.
 
 x-logging: &default-logging
   driver: json-file
@@ -40,7 +37,7 @@ services:
       - max_wal_size=2GB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-aerocast}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-aerocast}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -64,11 +61,18 @@ services:
     build: ./backend
     restart: unless-stopped
     init: true
-    env_file:
-      - .env
     environment:
       AEROCAST_ENV: production
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aerocast}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-aerocast}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aerocast}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-aerocast}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODELS: ${GEMINI_MODELS:-gemini-3.5-flash-lite,gemini-4-hydrogen}
+      GEMINI_REASONING_EFFORT: ${GEMINI_REASONING_EFFORT:-low}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODELS: ${OPENAI_MODELS:-gpt-6-luna}
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-low}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODELS: ${GROQ_MODELS:-qwen/qwen3.8-27b,openai/gpt-oss-120b}
+      GROQ_REASONING_EFFORT: ${GROQ_REASONING_EFFORT:-low}
     depends_on:
       db:
         condition: service_healthy
@@ -98,9 +102,8 @@ services:
       API_BASE_URL: http://api:8000
       PORT: "44100"
       NODE_OPTIONS: "--max-old-space-size=768"
-    ports:
-      # Loopback-only by default; put Caddy/Nginx/Cloudflare Tunnel in front.
-      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-44100}:44100"
+    expose:
+      - "44100"
     depends_on:
       api:
         condition: service_healthy
