@@ -105,6 +105,18 @@ def test_bundle_hash_is_deterministic() -> None:
     assert str(first["brief_hash"]).startswith("sha256:")
 
 
+def test_bundle_hash_is_stable_as_time_passes() -> None:
+    later = datetime(2026, 11, 1, 9, 45, tzinfo=UTC)
+    first = build_brief([station()], GENERATED_AT)
+    second = build_brief([station()], later)
+
+    assert first["brief_hash"] == second["brief_hash"]
+    assert (
+        first["stations"][0]["metar"]["age_seconds"]
+        != second["stations"][0]["metar"]["age_seconds"]
+    )
+
+
 def test_bundle_hash_changes_when_a_fact_changes() -> None:
     changed = BriefStation(
         icao="KSFO",

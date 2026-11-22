@@ -77,7 +77,7 @@ class BriefStation:
 def build_brief(
     stations: Sequence[BriefStation], generated_at: datetime
 ) -> dict[str, Any]:
-    """Assemble the bundle. Same inputs and time produce the same hash."""
+    """Assemble the bundle. Same facts produce the same hash across time."""
     bundle: dict[str, Any] = {
         "generated_at": generated_at.isoformat(),
         "definition_version": DEFINITION_VERSION,
@@ -288,7 +288,25 @@ def _ref(*parts: str) -> str:
 
 
 def _hash(bundle: dict[str, Any]) -> str:
+    """Hash only the weather facts, excluding wall-clock fields."""
+    stable = {
+        "definition_version": bundle["definition_version"],
+        "definitions": bundle["definitions"],
+        "stations": [
+            {
+                **station,
+                "metar": None
+                if station["metar"] is None
+                else {
+                    key: value
+                    for key, value in station["metar"].items()
+                    if key != "age_seconds"
+                },
+            }
+            for station in bundle["stations"]
+        ],
+    }
     canonical = json.dumps(
-        bundle, sort_keys=True, separators=(",", ":"), default=str
+        stable, sort_keys=True, separators=(",", ":"), default=str
     )
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()

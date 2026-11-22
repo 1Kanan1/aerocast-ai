@@ -181,6 +181,7 @@ def install(monkeypatch, **tables: list[dict[str, Any]]) -> FakeDb:
     # The scope check is a provider call; tests never make one.
     monkeypatch.setattr(ask_module, "classify_scope", no_scope)
     monkeypatch.setattr(area_module, "classify_scope", no_scope)
+    ask_module.reset_cache()
     # The history backfill reaches AWC; tests say whether it ran.
     monkeypatch.setattr(stations_module, "ensure_history", no_history)
     return db
@@ -786,3 +787,76 @@ async def test_ask_answers_404_for_an_unknown_station(monkeypatch) -> None:
     )
 
     assert response.status_code == 404
+
+
+async def test_ask_caches_validated_answers_for_the_same_brief(
+    monkeypatch,
+) -> None:
+    install(monkeypatch)
+    calls = 0
+
+    async def fake_complete(*args: object, **kwargs: object):
+        nonlocal calls
+        calls += 1
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    first = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+    second = await post(
+        "/api/ask", {"icao": "KSFO", "question": "  what  is the ceiling? "}
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["summary"] == first.json()["summary"]
+    assert calls == 1
+
+
+async def test_ask_misses_the_cache_when_the_ttl_expires(monkeypatch) -> None:
+    install(monkeypatch)
+    calls = 0
+    now = [100.0]
+
+    async def fake_complete(*args: object, **kwargs: object):
+        nonlocal calls
+        calls += 1
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+    monkeypatch.setattr(ask_module.time, "monotonic", lambda: now[0])
+
+    await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+    now[0] += ask_module.CACHE_TTL_SECONDS + 1
+    await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+
+    assert calls == 2
+
+
+async def test_ask_never_caches_a_template_fallback(monkeypatch) -> None:
+    install(monkeypatch)
+    calls = 0
+
+    async def fake_complete(*args: object, **kwargs: object):
+        nonlocal calls
+        calls += 1
+        return None if calls == 1 else completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    first = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+    second = await post(
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+    )
+
+    assert first.json()["notice"] is not None
+    assert second.json()["notice"] is None
+    assert calls == 2
