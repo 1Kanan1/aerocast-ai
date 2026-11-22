@@ -199,6 +199,41 @@ async def station_bundle(
     return bundle, observation
 
 
+async def brief_stations(
+    stations: list[dict[str, Any]],
+) -> list[BriefStation]:
+    """Build brief inputs for several stations using three batched queries."""
+    if not stations:
+        return []
+
+    icaos = [station["icao"] for station in stations]
+    metars = await _latest_by_station("metar_observations", "obs_time", icaos)
+    tafs = await _latest_by_station("taf_forecasts", "issue_time", icaos)
+    active = await _active_advisories()
+
+    return [
+        BriefStation(
+            icao=station["icao"],
+            name=station["name"],
+            lat=station["lat"],
+            lon=station["lon"],
+            observation=_observation(metars.get(station["icao"])),
+            taf=_taf(tafs.get(station["icao"])),
+            advisories=tuple(
+                BriefAdvisory(
+                    kind=row["kind"],
+                    hazard=row["hazard"],
+                    valid_to=row["valid_to"],
+                    distance_nm=row["distance_nm"],
+                    due_to=row["due_to"],
+                )
+                for row in _nearby_from(active, station["lat"], station["lon"])
+            ),
+        )
+        for station in stations
+    ]
+
+
 async def brief_station(
     station: dict[str, Any],
 ) -> tuple[BriefStation, dict[str, Any] | None]:
@@ -267,6 +302,19 @@ async def _latest(table: str, order: str, icao: str) -> Any:
         f"order by {order} desc limit 1",
         {"icao": icao.upper()},
     )
+
+
+async def _latest_by_station(
+    table: str, order: str, icaos: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Latest row per station in one query. Table/column are literals."""
+    rows = await fetch_all(
+        f"select distinct on (station_icao) * from {table} "
+        "where station_icao = any(:icaos) "
+        f"order by station_icao, {order} desc",
+        {"icaos": [code.upper() for code in icaos]},
+    )
+    return {row["station_icao"]: row for row in rows}
 
 
 def _observation(row: dict[str, Any] | None) -> Observation | None:
@@ -339,20 +387,32 @@ def _intersects(
     )
 
 
-async def _nearby(
-    lat: float, lon: float, radius_nm: float = 50.0
-) -> list[dict[str, Any]]:
+async def _active_advisories() -> list[tuple[dict[str, Any], Any]]:
     rows = await fetch_all(
         "select kind, source_id, hazard, severity, base_ft, top_ft, "
         "due_to, valid_from, valid_to, geom from advisories "
         "where valid_to > now()"
     )
+    return [(row, shape(row["geom"])) for row in rows]
 
+
+def _nearby_from(
+    active: list[tuple[dict[str, Any], Any]],
+    lat: float,
+    lon: float,
+    radius_nm: float = 50.0,
+) -> list[dict[str, Any]]:
     point = Point(lon, lat)
     nearby: list[dict[str, Any]] = []
-    for row in rows:
-        distance = shape(row["geom"]).distance(point) * NM_PER_DEGREE
+    for row, geom in active:
+        distance = geom.distance(point) * NM_PER_DEGREE
         if distance <= radius_nm:
             nearby.append({**row, "distance_nm": round(distance, 1)})
 
     return sorted(nearby, key=lambda item: item["distance_nm"])
+
+
+async def _nearby(
+    lat: float, lon: float, radius_nm: float = 50.0
+) -> list[dict[str, Any]]:
+    return _nearby_from(await _active_advisories(), lat, lon, radius_nm)

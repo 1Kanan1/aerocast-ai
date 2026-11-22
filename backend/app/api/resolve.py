@@ -236,9 +236,7 @@ async def resolve(
 
         return {
             "station": None,
-            "candidates": [
-                await _candidate(row) for row in rows[:CANDIDATE_LIMIT]
-            ],
+            "candidates": await _candidates(rows[:CANDIDATE_LIMIT]),
             "suggested": [],
             "message": f"\u201c{phrase}\u201d matches several stations.",
         }
@@ -281,15 +279,23 @@ def _phrases(question: str) -> list[str]:
 
 
 async def _by_code(question: str) -> dict[str, Any] | None:
-    for token in _WORD.findall(question.lower()):
-        if not 3 <= len(token) <= 5:
-            continue
-        row = await fetch_one(
-            f"select {STATION_COLUMNS} from stations where icao = :icao",
-            {"icao": token.upper()},
+    codes = list(
+        dict.fromkeys(
+            token.upper()
+            for token in _WORD.findall(question.lower())
+            if 3 <= len(token) <= 5
         )
-        if row is not None:
-            return row
+    )
+    if not codes:
+        return None
+    rows = await fetch_all(
+        f"select {STATION_COLUMNS} from stations where icao = any(:codes)",
+        {"codes": codes},
+    )
+    by_icao = {row["icao"]: row for row in rows}
+    for code in codes:
+        if code in by_icao:
+            return by_icao[code]
     return None
 
 
@@ -360,14 +366,28 @@ def _place(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _candidate(row: dict[str, Any]) -> dict[str, Any]:
-    """A place, plus the report that would tell the two apart."""
-    observation = await fetch_one(
-        "select raw, obs_time from metar_observations "
-        "where station_icao = :icao order by obs_time desc limit 1",
-        {"icao": row["icao"].upper()},
+async def _candidates(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Candidate places, each paired with its newest report in one query."""
+    if not rows:
+        return []
+    icaos = [row["icao"].upper() for row in rows]
+    observations = await fetch_all(
+        "select distinct on (station_icao) station_icao, raw, obs_time "
+        "from metar_observations "
+        "where station_icao = any(:icaos) "
+        "order by station_icao, obs_time desc",
+        {"icaos": icaos},
     )
-    return {**_place(row), "metar": station_metar(row, observation)}
+    by_icao = {obs["station_icao"]: obs for obs in observations}
+    return [
+        {
+            **_place(row),
+            "metar": station_metar(row, by_icao.get(row["icao"])),
+        }
+        for row in rows
+    ]
 
 
 async def latest_age(icao: str, now: datetime) -> int | None:

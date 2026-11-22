@@ -126,6 +126,7 @@ class FakeDb:
 
     def __init__(self, tables: dict[str, list[dict[str, Any]]]) -> None:
         self.tables = tables
+        self.queries: list[str] = []
 
     def _rows(self, sql: str) -> list[dict[str, Any]]:
         for table in (
@@ -142,12 +143,14 @@ class FakeDb:
     async def fetch_one(
         self, sql: str, params: dict[str, object] | None = None
     ) -> dict[str, Any] | None:
+        self.queries.append(sql)
         rows = self._rows(sql)
         return rows[0] if rows else None
 
     async def fetch_all(
         self, sql: str, params: dict[str, object] | None = None
     ) -> list[dict[str, Any]]:
+        self.queries.append(sql)
         rows = self._rows(sql)
         if params and "min_lat" in params:
             rows = [
@@ -156,6 +159,9 @@ class FakeDb:
                 if params["min_lat"] <= row["lat"] <= params["max_lat"]
                 and params["min_lon"] <= row["lon"] <= params["max_lon"]
             ]
+        if params and isinstance(icaos := params.get("icaos"), list):
+            wanted = set(icaos)
+            rows = [row for row in rows if row.get("station_icao") in wanted]
         return rows
 
 
@@ -584,7 +590,11 @@ async def test_a_bare_station_code_is_answered_without_the_scope_check(
 
 
 async def test_area_gathers_the_stations_around_a_point(monkeypatch) -> None:
-    install(monkeypatch, stations=[KSFO, KOAK, KJFK])
+    install(
+        monkeypatch,
+        stations=[KSFO, KOAK, KJFK],
+        metar_observations=[METAR_ROW, {**METAR_ROW, "station_icao": "KOAK"}],
+    )
 
     response = await get("/api/area?lat=37.62&lon=-122.4")
 
@@ -651,8 +661,33 @@ async def test_area_has_no_shortlist_of_its_own(monkeypatch) -> None:
     assert len(body["stations"]) == 25
 
 
+async def test_area_brief_batches_station_queries(monkeypatch) -> None:
+    crowd = [
+        {
+            **KSFO,
+            "icao": f"KT{index:02d}",
+            "name": f"Field {index}",
+            "lat": 37.615 + index * 0.004,
+            "lon": -122.4,
+        }
+        for index in range(10)
+    ]
+    db = install(monkeypatch, stations=crowd)
+
+    response = await get("/api/area?lat=37.62&lon=-122.4")
+
+    assert response.status_code == 200
+    assert len(response.json()["data"]["stations"]) == 10
+    # 1 nearby stations + 1 METAR batch + 1 TAF batch + 1 active advisories.
+    assert len(db.queries) == 4
+
+
 async def test_area_ask_uses_every_station_in_the_prompt(monkeypatch) -> None:
-    install(monkeypatch, stations=[KSFO, KOAK])
+    install(
+        monkeypatch,
+        stations=[KSFO, KOAK],
+        metar_observations=[METAR_ROW, {**METAR_ROW, "station_icao": "KOAK"}],
+    )
     seen: dict[str, object] = {}
 
     async def fake_complete(*args: object, **kwargs: object):

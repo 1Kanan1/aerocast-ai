@@ -16,9 +16,9 @@ from fastapi import APIRouter, HTTPException, Query
 from app.api import models
 from app.api.ask import explain
 from app.api.envelope import wrap
-from app.api.stations import brief_station, nearby_stations
+from app.api.stations import brief_stations, nearby_stations
 from app.config import get_settings
-from app.domain.brief import BriefStation, build_brief
+from app.domain.brief import build_brief
 from app.llm.contract import Answer, wire_answer
 from app.llm.guardrails import asks_for_verdict, fixed_refusal
 from app.llm.scope import classify_scope
@@ -75,9 +75,4 @@ async def area_ask(request: models.AreaAskRequest) -> dict[str, object]:
 
 async def area_brief(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """One bundle describing every station around the point."""
-    stations: list[BriefStation] = []
-    for row in rows:
-        built, _ = await brief_station(row)
-        stations.append(built)
-
-    return build_brief(stations, datetime.now(UTC))
+    return build_brief(await brief_stations(rows), datetime.now(UTC))

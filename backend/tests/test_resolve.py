@@ -58,21 +58,13 @@ class FakeDb:
     ) -> None:
         self.stations = stations
         self.ages = ages or {}
+        self.queries: list[str] = []
 
     async def fetch_one(
         self, sql: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
+        self.queries.append(sql)
         params = params or {}
-        if "where icao = :icao" in sql:
-            for station in self.stations:
-                if station["icao"] == params.get("icao"):
-                    return station
-            return None
-        if "raw, obs_time from metar_observations" in sql:
-            age = self.ages.get(str(params.get("icao")))
-            if age is None:
-                return None
-            return {"raw": METAR, "obs_time": NOW - timedelta(seconds=age)}
         if "obs_time from metar_observations" in sql:
             age = self.ages.get(str(params.get("icao")))
             if age is None:
@@ -83,7 +75,21 @@ class FakeDb:
     async def fetch_all(
         self, sql: str, params: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
+        self.queries.append(sql)
         params = params or {}
+        if "where icao = any(:codes)" in sql:
+            wanted = set(params.get("codes", ()))
+            return [s for s in self.stations if s["icao"] in wanted]
+        if "where station_icao = any(:icaos)" in sql:
+            return [
+                {
+                    "station_icao": icao,
+                    "raw": METAR,
+                    "obs_time": NOW - timedelta(seconds=age),
+                }
+                for icao in params.get("icaos", ())
+                if (age := self.ages.get(icao)) is not None
+            ]
         if "join lateral" in sql:
             return [
                 {**station, "obs_time": NOW - timedelta(seconds=age)}
@@ -212,3 +218,31 @@ def test_the_place_phrase_prefers_what_follows_a_locator() -> None:
     )
     assert resolve_module._phrases("wind at new york")[0] == "new york"
     assert resolve_module._phrases("KIXD tomorrow")[0] == "kixd"
+
+
+async def test_code_lookup_batches_all_words_into_one_query(
+    monkeypatch,
+) -> None:
+    db = FakeDb([KDEN, KIXD], {"KDEN": 60, "KIXD": 60})
+    install(monkeypatch, db)
+
+    response = await get(
+        "/api/resolve?q=compare+wind+near+KIXD+and+KDEN+this+hour"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["station"]["icao"] == "KIXD"
+    code_queries = [q for q in db.queries if "icao = any(:codes)" in q]
+    assert len(code_queries) == 1
+
+
+async def test_candidate_reports_are_fetched_in_one_query(monkeypatch) -> None:
+    db = FakeDb([KSGF, KSPI], {"KSGF": 60, "KSPI": 60})
+    install(monkeypatch, db)
+
+    response = await get("/api/resolve?q=weather+in+Springfield")
+
+    assert response.status_code == 200
+    assert len(response.json()["candidates"]) == 2
+    metar_queries = [q for q in db.queries if "from metar_observations" in q]
+    assert len(metar_queries) == 1
