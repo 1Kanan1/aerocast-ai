@@ -37,67 +37,64 @@ within 50 nm.
 
 ![Ceiling and visibility history chart with the advisory list underneath](images/history.png)
 
-## Status
-
-Phases 0 to 4 are complete. The API serves stations, observations, advisories, PIREPs and
-the fact bundle; the web app is a dark, glassy map workspace with an icon navbar, a search
-popover, a station card anchored above the selected dot that carries the full station
-detail, and an explanation drawer that slides in on ask. It also serves the station pages
-with the 48 hour timeline, the advisory list and the about page.
-
-Phase 5 is in progress: `POST /api/ask` builds the fact bundle, checks for verdict
-requests, walks the provider chain, validates citations and falls back to a deterministic
-template with a quiet notice. Answer caching, per-IP rate limits and stored answers are
-still to come. See [PLAN.md](PLAN.md) for the build order and
-[CHANGELOG.md](CHANGELOG.md) for what has landed so far.
-
 ## Stack
 
 | | |
 |---|---|
 | API | FastAPI, Python 3.13, SQLAlchemy + asyncpg, PostgreSQL 16 |
 | Web | Remix 3.1 on Node 26.13.0 LTS, Bun for packages and scripts |
-| Map | MapLibre GL JS (Phase 4) |
-| Weather data | aviationweather.gov (AWC Data API and bulk cache files) |
-| Explanations | GroqCloud, Gemini, and OpenAI, raced behind a citation validator |
+| Map | MapLibre GL JS v6 with OpenFreeMap basemap tiles |
+| Weather data | aviationweather.gov (AWC Data API & cache files), IEM NEXRAD radar, Open-Meteo RRFS |
+| Explanations | GroqCloud, Gemini, and OpenAI (EWMA-hedged, citation-validated, 15-minute cache) |
 
 ## Run it
 
+Local development:
+
 ```sh
-cp .env.example .env      # set DATABASE_URL and one model key
+cp .env.example .env      # set DATABASE_URL and at least one model key
 make install
 make api                  # http://localhost:8000/api/docs
 make web                  # http://localhost:44100
 ```
 
-If you would rather use the containerised database than a local one:
+If you would rather use a containerised database than a local one:
 
 ```sh
 make db                   # Postgres on localhost:5433
 ```
 
-Full stack in containers, which is what production looks like:
+Full stack in local containers:
 
 ```sh
 make up
 ```
 
+Production on a single VPS (keeps Postgres and the API private, binds the web app to `127.0.0.1:44100` for Caddy, Nginx, or a Cloudflare Tunnel):
+
+```sh
+cp .env.prod.example .env # set POSTGRES_PASSWORD and at least one model key
+docker compose -f compose.prod.yaml up -d --build
+```
+
 ## Layout
 
 ```
-backend/    FastAPI. Owns the database, parsers, ingestion, and the model keys.
-  app/domain/   pure logic, no IO: METAR, TAF, flight category, fact bundle
-frontend/   Remix 3. Presentation plus a same-origin proxy to the API.
-  app/actions/public/  the four browser islands: map, station card, search, drawer
-  app/ui/public/  the session they share, icons and the fact labels they format
-  public/vendor/maplibre/  pinned MapLibre build, worker and stylesheet
-PLAN.md     Scope, schema, API surface, safety requirements, build order.
+backend/            FastAPI. Owns the database, parsers, ingestion, and model keys.
+  app/domain/         pure logic, no IO: METAR, TAF, flight category, fact bundle
+frontend/           Remix 3. Presentation plus a same-origin proxy to the API.
+  app/actions/public/ browser islands: map, sketch layer, station card, search, timeline, drawer
+  app/ui/public/      shared client session, icons, and fact formatters
+  public/vendor/maplibre/  pinned MapLibre build, worker, and stylesheet
+compose.yaml        Local container stack.
+compose.prod.yaml   Hardened single-VPS container stack.
+PLAN.md             Scope, schema, API surface, and safety requirements.
 ```
 
 The split is deliberate: `app/domain/` has no framework imports, because the parsing is
 the part that has to be right and the part that is worth reading.
 
-The map needs network access for basemap tiles from OpenFreeMap. Everything else,
+The map needs network access for basemap tiles, radar, and wind grids. Everything else,
 including the station list and every decoded fact, is server-rendered and works offline
 against whatever is already in Postgres.
 
@@ -105,8 +102,9 @@ against whatever is already in Postgres.
 
 ```sh
 make test    # pytest, then Remix's test runner
-make lint    # ruff, ty, then tsc
-make types   # regenerate frontend/app/lib/api-types.ts from the schema
+make lint    # ruff, ty, oxlint, oxfmt, tsc
+make types   # regenerate frontend/app/lib/api-types.ts from the OpenAPI schema
+make check   # full gate: hook tests, lint, tests, OpenAPI type diff, mutmut
 ```
 
 Both parsers are checked against AWC's own decoder, which needs network:
@@ -117,15 +115,15 @@ make crosscheck   # writes backend/tests/golden/crosscheck*.md
 
 ## Commits
 
-Conventional Commits, enforced by a hook:
+Conventional Commits, enforced by git hooks:
 
 ```sh
 make hooks   # installs commit-msg and pre-commit
 ```
 
-`commit-msg` rejects a subject that is not `type(scope): summary` or a subject or
-body line longer than 72 characters. `pre-commit` runs `make lint test`, which is
-under a second here and needs no network or database.
+`commit-msg` enforces `type(scope): summary`, 72-column lines, and optional `Why:`,
+`Decision:`, and `Consequences:` body sections. `pre-commit` runs `make check` with no
+network or database required.
 
 ```
 feat(map): add advisory polygons
@@ -138,7 +136,12 @@ Types: `feat fix chore docs refactor test build ci perf style`. Git-generated
 
 ## Data and attribution
 
-Weather data comes from the US National Weather Service Aviation Weather Center
-(aviationweather.gov) and is US Government public domain. AeroCast caches it and shows the
-observation time and fetch time with every value. When upstream is stale or unavailable
-the UI says so rather than showing a blank panel.
+- **Observations, forecasts, advisories, PIREPs**: US National Weather Service Aviation
+  Weather Center ([aviationweather.gov](https://aviationweather.gov)), US Government
+  public domain. AeroCast caches it and shows the observation time and fetch time with
+  every value. When upstream is stale or unavailable the UI says so rather than showing a
+  blank panel.
+- **Radar mosaic**: [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/ogc/)
+  (NEXRAD).
+- **Wind & temperature grids**: [Open-Meteo](https://open-meteo.com/) (NCEP RRFS).
+- **Basemap tiles**: [OpenFreeMap](https://openfreemap.org/).
