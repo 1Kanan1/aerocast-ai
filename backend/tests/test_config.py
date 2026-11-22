@@ -16,6 +16,7 @@ def make_settings(**overrides: Any) -> Settings:
         "zai_api_key": None,
         "gemini_api_key": None,
         "openai_api_key": None,
+        "groq_api_key": None,
     }
     return Settings(_env_file=None, **{**keys, **overrides})
 
@@ -57,12 +58,13 @@ def test_database_url_rejects_anything_not_postgres(url: str) -> None:
 
 
 def test_each_provider_carries_its_own_transport() -> None:
-    zai, gemini, openai = make_settings(
+    zai, gemini, openai, groq = make_settings(
         zai_models=" glm-a , glm-b,,glm-a ",
         gemini_models="gemini-a",
         gemini_reasoning_effort="medium",
         openai_models="luna-a",
         openai_reasoning_effort="none",
+        groq_models="qwen/qwen3.8-27b",
     ).llm_providers
 
     assert zai.name == "zai"
@@ -82,13 +84,19 @@ def test_each_provider_carries_its_own_transport() -> None:
     assert openai.base_url == "https://api.openai.com/v1/"
     assert openai.response_format == "schema"
     assert openai.reasoning_effort == "none"
+
+    assert groq.name == "groq"
+    assert groq.models == ("qwen/qwen3.8-27b",)
+    assert groq.base_url == "https://api.groq.com/openai/v1/"
+    assert groq.response_format == "json"
+    assert groq.reasoning_effort is None
     # Every other provider takes a pinned temperature; Luna rejects it.
     assert openai.temperature is None
-    assert zai.temperature == gemini.temperature == 0.0
+    assert zai.temperature == gemini.temperature == groq.temperature == 0.0
 
 
 def test_a_provider_is_configured_by_a_non_empty_key() -> None:
-    zai, gemini, openai = make_settings(
+    zai, gemini, openai, groq = make_settings(
         zai_api_key="",
         gemini_api_key="secret",
     ).llm_providers
@@ -96,20 +104,23 @@ def test_a_provider_is_configured_by_a_non_empty_key() -> None:
     assert zai.configured is False
     assert gemini.configured is True
     assert openai.configured is False
+    assert groq.configured is False
 
 
 def test_no_provider_uses_a_moving_model_alias() -> None:
     """`-latest` aliases drift without a commit. Pinned ids only."""
-    models = [
-        model
+    pairs = [
+        (provider.name, model)
         for provider in make_settings().llm_providers
         for model in provider.models
     ]
 
-    assert models
-    for model in models:
+    assert pairs
+    for provider_name, model in pairs:
         assert not model.endswith("-latest"), model
-        assert "/" not in model, model
+        # Groq's canonical Qwen/Llama model ids include a vendor slash.
+        if provider_name != "groq":
+            assert "/" not in model, model
 
 
 def test_secrets_do_not_render_in_repr() -> None:

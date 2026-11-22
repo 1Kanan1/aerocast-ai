@@ -16,6 +16,7 @@ async def test_remote_providers_report_configured_without_being_probed() -> (
         zai_models="glm-a",
         gemini_models="",
         openai_models="",
+        groq_models="",
     )
 
     described = await statuses(settings)
@@ -33,6 +34,8 @@ async def test_provider_and_model_order_is_preserved() -> None:
         gemini_models="gemini-a",
         openai_api_key="secret",
         openai_models="luna-a",
+        groq_api_key="secret",
+        groq_models="qwen/qwen3.8-27b",
     )
 
     described = await statuses(settings)
@@ -44,6 +47,7 @@ async def test_provider_and_model_order_is_preserved() -> None:
         ("zai", "glm-b"),
         ("gemini", "gemini-a"),
         ("openai", "luna-a"),
+        ("groq", "qwen/qwen3.8-27b"),
     ]
     assert all(provider["configured"] is True for provider in described)
 
@@ -54,6 +58,7 @@ async def test_an_unconfigured_provider_still_lists_its_models() -> None:
         gemini_api_key="",
         gemini_models="gemini-a",
         openai_models="",
+        groq_models="",
     )
 
     assert await statuses(settings) == [
@@ -67,6 +72,7 @@ async def test_the_same_model_twice_appears_once() -> None:
         zai_models="glm-a,glm-a",
         gemini_models="",
         openai_models="",
+        groq_models="",
     )
 
     assert len(await statuses(settings)) == 1

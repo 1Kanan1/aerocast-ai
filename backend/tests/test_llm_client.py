@@ -28,6 +28,7 @@ def settings(**overrides: object) -> Settings:
         zai_api_key=SecretStr("zai-key"),
         gemini_api_key=SecretStr("gemini-key"),
         openai_api_key=None,
+        groq_api_key=None,
     )
     return defaults.model_copy(update=overrides)
 
@@ -87,6 +88,7 @@ def test_the_default_providers_are_zai_then_gemini_then_openai():
             zai_api_key=SecretStr("zai-key"),
             gemini_api_key=SecretStr("gemini-key"),
             openai_api_key=SecretStr("openai-key"),
+            groq_api_key=SecretStr("groq-key"),
         )
     )
 
@@ -97,6 +99,7 @@ def test_the_default_providers_are_zai_then_gemini_then_openai():
         ("gemini", "gemini-3.5-flash-lite"),
         ("gemini", "gemini-3.8-flash"),
         ("openai", "gpt-6-luna"),
+        ("groq", "qwen/qwen3.8-27b"),
     ]
 
 

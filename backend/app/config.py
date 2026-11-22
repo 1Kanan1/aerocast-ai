@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     openai_models: str = "gpt-6-luna"
     openai_reasoning_effort: str = "low"
 
+    groq_api_key: SecretStr | None = None
+    groq_models: str = "qwen/qwen3.8-27b"
+
     @field_validator("database_url")
     @classmethod
     def name_the_async_driver(cls, value: str) -> str:
@@ -109,6 +112,13 @@ class Settings(BaseSettings):
                 # Luna rejects any temperature but its default.
                 temperature=None,
                 reasoning_effort=self.openai_reasoning_effort,
+            ),
+            Provider(
+                name="groq",
+                models=_models(self.groq_models),
+                base_url="https://api.groq.com/openai/v1/",
+                api_key=self.groq_api_key,
+                response_format="json",
             ),
         )
 

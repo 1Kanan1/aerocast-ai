@@ -43,6 +43,7 @@ def _fake_providers(monkeypatch, database_ok: bool) -> None:
         zai_models="glm-4.7-flash",
         gemini_models="gemini-3.5-flash-lite",
         openai_models="gpt-6-luna",
+        groq_models="",
     )
 
     monkeypatch.setattr(health_module, "get_settings", lambda: settings)
