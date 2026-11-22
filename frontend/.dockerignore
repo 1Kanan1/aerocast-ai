@@ -2,5 +2,8 @@ node_modules
 .git
 tmp
 .agents
+.env*
+**/*.test.ts
+**/*.test.tsx
 Dockerfile
 .dockerignore

@@ -3,6 +3,11 @@ __pycache__
 *.pyc
 .pytest_cache
 .ruff_cache
+.mypy_cache
+.coverage
+mutants
+mutants-baseline.txt
 tests
+.env*
 Dockerfile
 .dockerignore
