@@ -51,9 +51,7 @@ class Settings(BaseSettings):
     zai_models: str = "glm-4.5-flash,glm-4.7-flash"
 
     gemini_api_key: SecretStr | None = None
-    gemini_models: str = (
-        "gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.8-flash"
-    )
+    gemini_models: str = "gemini-3.5-flash-lite"
     gemini_reasoning_effort: str = "low"
 
     openai_api_key: SecretStr | None = None

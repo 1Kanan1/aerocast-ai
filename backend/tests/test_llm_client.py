@@ -95,9 +95,7 @@ def test_the_default_providers_are_zai_then_gemini_then_openai():
     assert [(rung.name, rung.model) for rung in chain] == [
         ("zai", "glm-4.5-flash"),
         ("zai", "glm-4.7-flash"),
-        ("gemini", "gemini-3.6-flash"),
         ("gemini", "gemini-3.5-flash-lite"),
-        ("gemini", "gemini-3.8-flash"),
         ("openai", "gpt-6-luna"),
         ("groq", "qwen/qwen3.8-27b"),
     ]
