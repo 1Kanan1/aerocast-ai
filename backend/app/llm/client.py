@@ -23,12 +23,42 @@ RUNG_BUDGET_SECONDS = 35.0
 #: A rung that just timed out or returned 429 is skipped for a while.
 COOLDOWN_SECONDS = 60.0
 
+#: Wait this long for the leading rung before hedging onto the next one.
+HEDGE_DELAY_SECONDS = 1.5
+
+#: Smoothing factor for per-rung EWMA latency (reacts within ~3 replies).
+EWMA_ALPHA = 0.3
+
+#: Prior latency for unmeasured rungs so fast rungs (<1.5 s) stay ahead of
+#: them while slow rungs (>1.5 s) yield to unmeasured candidates.
+EWMA_PRIOR_MS = HEDGE_DELAY_SECONDS * 1000.0
+
 _cooldowns: dict[str, float] = {}
+_ewma_ms: dict[str, float] = {}
 _http: httpx.AsyncClient | None = None
 
 
 def reset_cooldowns() -> None:
     _cooldowns.clear()
+    _ewma_ms.clear()
+
+
+def _record_latency(key: str, latency_ms: int) -> None:
+    previous = _ewma_ms.get(key)
+    sample = float(latency_ms)
+    _ewma_ms[key] = (
+        sample
+        if previous is None
+        else EWMA_ALPHA * sample + (1.0 - EWMA_ALPHA) * previous
+    )
+
+
+def _rank(eligible: list[tuple[Rung, str]]) -> list[tuple[Rung, str]]:
+    """Order rungs by lowest EWMA latency, preserving config order on ties."""
+    return sorted(
+        eligible,
+        key=lambda item: _ewma_ms.get(item[1], EWMA_PRIOR_MS),
+    )
 
 
 def _http_client() -> httpx.AsyncClient:
@@ -99,23 +129,23 @@ async def complete(
     namespace: str = "answer",
     race: bool = True,
     accept: Callable[[object], bool] | None = None,
+    hedge_delay: float = HEDGE_DELAY_SECONDS,
 ) -> Completion | None:
-    """Answer with the first rung that replies. None means no reply in budget.
+    """Answer with the fastest valid rung using EWMA-ordered hedged requests.
 
-    Racing is what keeps one bad model from owning the request: tried in
-    turn, a rung that never answers spends the whole budget on itself and
-    the reader gets the fallback while a usable answer sat one rung
-    further down. Sent together, the wait is the fastest reply instead of
-    the sum of the failures in front of it, and the losers are cancelled
-    the moment a winner lands.
+    The leading rung (lowest EWMA latency) starts alone. If it answers within
+    `hedge_delay`, no other provider is called. If it fails or returns a
+    rejected draft, the next rung starts immediately; if it is still in flight
+    after `hedge_delay`, the next rung launches alongside it and the first
+    valid reply cancels the rest.
 
     `race=False` sends them one at a time, for a caller that wants one
-    cheap opinion rather than the fastest of several.
+    cheap opinion rather than hedged tail-latency protection.
 
-    `namespace` separates the cooldowns, so a rung that timed out on the
-    short scope check is still tried for the answer itself.
+    `namespace` separates cooldowns and EWMA stats, so a rung that timed out
+    on the short scope check is still tried for the answer itself.
 
-    `accept` lets the caller reject a draft inside the race so a fast,
+    `accept` lets the caller reject a draft inside the hedge loop so a fast,
     ungrounded reply does not cancel slower models that may still pass.
     """
     budget = RUNG_BUDGET_SECONDS if budget_seconds is None else budget_seconds
@@ -134,8 +164,11 @@ async def complete(
     if not eligible:
         return None
 
-    driver = _race if race else _serial
-    return await driver(eligible, messages, schema, budget, accept)
+    if not race:
+        return await _serial(eligible, messages, schema, budget, accept)
+    return await _hedge(
+        eligible, messages, schema, budget, accept, hedge_delay
+    )
 
 
 async def _serial(
@@ -159,29 +192,53 @@ async def _serial(
         _cooldowns.pop(key, None)
         if accept is not None and not accept(completion.payload):
             continue
+        _record_latency(key, completion.latency_ms)
         return completion
     return None
 
 
-async def _race(
+async def _hedge(
     eligible: list[tuple[Rung, str]],
     messages: list[dict[str, str]],
     schema: dict[str, object],
     budget: float,
     accept: Callable[[object], bool] | None,
+    hedge_delay: float,
 ) -> Completion | None:
-    tasks = {
-        asyncio.ensure_future(_attempt(rung, messages, schema, budget)): (
-            rung,
-            key,
+    deadline = time.monotonic() + budget
+    queue = iter(_rank(eligible))
+    tasks: dict[asyncio.Task[Completion], tuple[Rung, str]] = {}
+
+    def launch_next() -> bool:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        nxt = next(queue, None)
+        if nxt is None:
+            return False
+        rung, key = nxt
+        task = asyncio.ensure_future(
+            _attempt(rung, messages, schema, remaining)
         )
-        for rung, key in eligible
-    }
+        tasks[task] = (rung, key)
+        return True
+
     try:
+        if not launch_next():
+            return None
+        next_hedge = time.monotonic() + hedge_delay
+
         while tasks:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            wait_for = min(remaining, max(0.0, next_hedge - time.monotonic()))
             done, _ = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED
+                tasks,
+                timeout=wait_for,
+                return_when=asyncio.FIRST_COMPLETED,
             )
+
             winner: tuple[Completion, str] | None = None
             for task in done:
                 rung, key = tasks.pop(task)
@@ -194,10 +251,18 @@ async def _race(
                     result = task.result()
                     if accept is None or accept(result.payload):
                         winner = (result, key)
+
             if winner is not None:
                 completion, key = winner
                 _cooldowns.pop(key, None)
+                _record_latency(key, completion.latency_ms)
                 return completion
+
+            if not tasks or time.monotonic() >= next_hedge:
+                if launch_next():
+                    next_hedge = time.monotonic() + hedge_delay
+                else:
+                    next_hedge = deadline
     finally:
         for task in tasks:
             task.cancel()

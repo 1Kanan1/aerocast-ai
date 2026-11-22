@@ -132,8 +132,8 @@ async def test_a_dead_provider_does_not_stop_the_answer(monkeypatch):
         json: dict[str, object],
         headers: dict[str, str],
     ) -> FakeResponse:
-        if "groq.com" in url:
-            raise httpx.ConnectError("groq down")
+        if "generativelanguage" in url:
+            raise httpx.ConnectError("gemini down")
         return FakeResponse(answer_payload())
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
@@ -141,7 +141,7 @@ async def test_a_dead_provider_does_not_stop_the_answer(monkeypatch):
     completion = await complete(settings(), [], {})
 
     assert completion is not None
-    assert completion.provider == "gemini"
+    assert completion.provider == "groq"
     assert isinstance(completion.payload, dict)
     assert completion.payload["summary"] == "KSFO is VFR."
 
@@ -171,7 +171,7 @@ async def test_a_timeout_does_not_stop_the_answer(monkeypatch):
         json: dict[str, object],
         headers: dict[str, str],
     ) -> FakeResponse:
-        if "groq.com" in url:
+        if "generativelanguage" in url:
             raise TimeoutError
         return FakeResponse(answer_payload())
 
@@ -180,7 +180,7 @@ async def test_a_timeout_does_not_stop_the_answer(monkeypatch):
     completion = await complete(settings(), [], {}, budget_seconds=5)
 
     assert completion is not None
-    assert completion.provider == "gemini"
+    assert completion.provider == "groq"
 
 
 async def test_the_fastest_reply_wins_and_the_slow_one_is_cancelled(
@@ -204,7 +204,9 @@ async def test_the_fastest_reply_wins_and_the_slow_one_is_cancelled(
     )
 
     started = time.monotonic()
-    completion = await complete(chain, [], {}, budget_seconds=30)
+    completion = await complete(
+        chain, [], {}, budget_seconds=30, hedge_delay=0.05
+    )
     waited = time.monotonic() - started
 
     assert completion is not None
@@ -212,10 +214,14 @@ async def test_the_fastest_reply_wins_and_the_slow_one_is_cancelled(
     assert waited < 1
     assert cancelled == ["slow-model"]
 
-    # A loser was cut short, not broken, so it is still offered next time.
-    completion = await complete(chain, [], {}, budget_seconds=30)
+    # After winning, EWMA promotes fast-model to first place so slow-model is
+    # not even started on the next call.
+    completion = await complete(
+        chain, [], {}, budget_seconds=30, hedge_delay=0.05
+    )
     assert completion is not None
-    assert cancelled == ["slow-model", "slow-model"]
+    assert completion.model == "fast-model"
+    assert cancelled == ["slow-model"]
 
 
 async def test_race_false_tries_the_rungs_in_turn(monkeypatch):
@@ -264,7 +270,7 @@ async def test_a_failed_rung_is_skipped_during_its_cooldown(monkeypatch):
         headers: dict[str, str],
     ) -> FakeResponse:
         attempts.append(url)
-        if "groq.com" in url:
+        if "generativelanguage" in url:
             raise httpx.ConnectError("down")
         return FakeResponse(answer_payload())
 
@@ -273,10 +279,10 @@ async def test_a_failed_rung_is_skipped_during_its_cooldown(monkeypatch):
     await complete(settings(), [], {})
     second = await complete(settings(), [], {})
 
-    assert len([url for url in attempts if "groq.com" in url]) == 2
+    assert len([url for url in attempts if "generativelanguage" in url]) == 2
     # The cooled rungs must not block the provider behind them.
     assert second is not None
-    assert second.provider == "gemini"
+    assert second.provider == "groq"
 
 
 async def test_every_rung_that_failed_is_benched(monkeypatch):
@@ -330,7 +336,10 @@ async def test_the_rung_gets_what_it_was_given(monkeypatch):
     assert completion.provider == "groq"
     assert completion.model == "only-model"
     assert completion.payload == {"summary": "ok"}
-    assert seen == [(messages, schema, 5)]
+    assert len(seen) == 1
+    assert seen[0][0] is messages
+    assert seen[0][1] is schema
+    assert 4 < seen[0][2] <= 5
     assert 20 <= completion.latency_ms < 3000
 
 
@@ -609,3 +618,81 @@ async def test_provider_calls_reuse_one_http_client(monkeypatch):
     finally:
         await close_client()
     assert seen[0].is_closed is True
+
+
+async def test_fast_primary_does_not_hedge_to_other_rungs(monkeypatch):
+    called: list[str] = []
+
+    async def fake_call(rung, messages, schema, timeout):
+        called.append(rung.model)
+        await asyncio.sleep(0.02)
+        return {"summary": "fast"}
+
+    monkeypatch.setattr(client_module, "_call", fake_call)
+    chain = settings(gemini_api_key=None, groq_models="primary,backup")
+
+    completion = await complete(
+        chain, [], {}, budget_seconds=5, hedge_delay=1.5
+    )
+
+    assert completion is not None
+    assert completion.model == "primary"
+    assert called == ["primary"]
+
+
+async def test_fast_failure_advances_without_waiting_for_hedge_delay(
+    monkeypatch,
+):
+    called: list[str] = []
+
+    async def fake_call(rung, messages, schema, timeout):
+        called.append(rung.model)
+        if rung.model == "broken":
+            raise httpx.ConnectError("down")
+        return {"summary": "ok"}
+
+    monkeypatch.setattr(client_module, "_call", fake_call)
+    chain = settings(gemini_api_key=None, groq_models="broken,healthy")
+
+    started = time.monotonic()
+    completion = await complete(
+        chain, [], {}, budget_seconds=10, hedge_delay=5.0
+    )
+    waited = time.monotonic() - started
+
+    assert completion is not None
+    assert completion.model == "healthy"
+    assert called == ["broken", "healthy"]
+    assert waited < 1.0
+
+
+async def test_ewma_promotes_faster_rung_above_slower_one(monkeypatch):
+    called: list[str] = []
+
+    async def fake_call(rung, messages, schema, timeout):
+        called.append(rung.model)
+        if rung.model == "slower":
+            await asyncio.sleep(0.08)
+        return {"summary": rung.model}
+
+    monkeypatch.setattr(client_module, "_call", fake_call)
+    chain = settings(gemini_api_key=None, groq_models="slower,faster")
+
+    first = await complete(chain, [], {}, budget_seconds=5, hedge_delay=0.02)
+    assert first is not None
+    assert first.model == "faster"
+    assert called == ["slower", "faster"]
+
+    called.clear()
+    second = await complete(chain, [], {}, budget_seconds=5, hedge_delay=1.5)
+    assert second is not None
+    assert second.model == "faster"
+    assert called == ["faster"]
+
+
+def test_ewma_smooths_latency_across_samples():
+    client_module._record_latency("answer:groq:m", 1000)
+    assert client_module._ewma_ms["answer:groq:m"] == 1000.0
+
+    client_module._record_latency("answer:groq:m", 2000)
+    assert client_module._ewma_ms["answer:groq:m"] == 1300.0
