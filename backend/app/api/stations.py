@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 from datetime import UTC, datetime
 from typing import Any
@@ -109,15 +110,18 @@ async def detail(icao: str) -> dict[str, Any]:
     if station is None:
         raise HTTPException(status_code=404, detail="unknown station")
 
-    observation = await _latest("metar_observations", "obs_time", icao)
-    forecast = await _latest("taf_forecasts", "issue_time", icao)
+    observation, forecast, nearby = await asyncio.gather(
+        _latest("metar_observations", "obs_time", icao),
+        _latest("taf_forecasts", "issue_time", icao),
+        _nearby(station["lat"], station["lon"]),
+    )
 
     return wrap(
         {
             "station": station,
             "metar": observation,
             "taf": forecast,
-            "advisories": await _nearby(station["lat"], station["lon"]),
+            "advisories": nearby,
         },
         source="aviationweather.gov",
         observed_at=observation["obs_time"] if observation else None,
@@ -207,9 +211,11 @@ async def brief_stations(
         return []
 
     icaos = [station["icao"] for station in stations]
-    metars = await _latest_by_station("metar_observations", "obs_time", icaos)
-    tafs = await _latest_by_station("taf_forecasts", "issue_time", icaos)
-    active = await _active_advisories()
+    metars, tafs, active = await asyncio.gather(
+        _latest_by_station("metar_observations", "obs_time", icaos),
+        _latest_by_station("taf_forecasts", "issue_time", icaos),
+        _active_advisories(),
+    )
 
     return [
         BriefStation(
@@ -239,9 +245,11 @@ async def brief_station(
 ) -> tuple[BriefStation, dict[str, Any] | None]:
     """One station's report, forecast and nearby advisories, for a bundle."""
     icao = station["icao"]
-    observation = await _latest("metar_observations", "obs_time", icao)
-    forecast = await _latest("taf_forecasts", "issue_time", icao)
-    nearby = await _nearby(station["lat"], station["lon"])
+    observation, forecast, nearby = await asyncio.gather(
+        _latest("metar_observations", "obs_time", icao),
+        _latest("taf_forecasts", "issue_time", icao),
+        _nearby(station["lat"], station["lon"]),
+    )
 
     return (
         BriefStation(

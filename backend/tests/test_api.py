@@ -1,5 +1,6 @@
 """Contract tests for the API surface, with the database faked."""
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -895,3 +896,44 @@ async def test_ask_never_caches_a_template_fallback(monkeypatch) -> None:
     assert first.json()["notice"] is not None
     assert second.json()["notice"] is None
     assert calls == 2
+
+
+async def test_station_detail_and_brief_run_independent_queries_in_parallel(
+    monkeypatch,
+) -> None:
+    db = install(monkeypatch)
+    in_flight = 0
+    max_in_flight = 0
+
+    async def tracked_one(sql: str, params: dict[str, object] | None = None):
+        nonlocal in_flight, max_in_flight
+        in_flight += 1
+        max_in_flight = max(max_in_flight, in_flight)
+        await asyncio.sleep(0.01)
+        try:
+            return await db.fetch_one(sql, params)
+        finally:
+            in_flight -= 1
+
+    async def tracked_all(sql: str, params: dict[str, object] | None = None):
+        nonlocal in_flight, max_in_flight
+        in_flight += 1
+        max_in_flight = max(max_in_flight, in_flight)
+        await asyncio.sleep(0.01)
+        try:
+            return await db.fetch_all(sql, params)
+        finally:
+            in_flight -= 1
+
+    monkeypatch.setattr(stations_module, "fetch_one", tracked_one)
+    monkeypatch.setattr(stations_module, "fetch_all", tracked_all)
+
+    for path in (
+        "/api/stations/KSFO",
+        "/api/stations/KSFO/brief",
+        "/api/area?lat=37.62&lon=-122.37",
+    ):
+        max_in_flight = 0
+        response = await get(path)
+        assert response.status_code == 200
+        assert max_in_flight == 3
