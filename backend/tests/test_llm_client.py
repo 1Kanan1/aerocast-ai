@@ -696,3 +696,36 @@ def test_ewma_smooths_latency_across_samples():
 
     client_module._record_latency("answer:groq:m", 2000)
     assert client_module._ewma_ms["answer:groq:m"] == 1300.0
+
+
+async def test_serial_prefers_faster_ewma_rung_after_cooldown_expires(
+    monkeypatch,
+):
+    called: list[str] = []
+
+    async def fake_call(rung, messages, schema, timeout):
+        called.append(rung.model)
+        if rung.model == "slow-first":
+            raise TimeoutError
+        return {"in_scope": True, "reason": "weather"}
+
+    monkeypatch.setattr(client_module, "_call", fake_call)
+    chain = settings(gemini_api_key=None, groq_models="slow-first,fast-second")
+
+    first = await complete(
+        chain, [], {}, budget_seconds=4, namespace="scope", race=False
+    )
+    assert first is not None
+    assert first.model == "fast-second"
+    assert called == ["slow-first", "fast-second"]
+
+    # Simulate cooldown expiry while keeping learned EWMA latency.
+    client_module._cooldowns.clear()
+    called.clear()
+
+    second = await complete(
+        chain, [], {}, budget_seconds=4, namespace="scope", race=False
+    )
+    assert second is not None
+    assert second.model == "fast-second"
+    assert called == ["fast-second"]

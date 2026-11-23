@@ -179,7 +179,7 @@ async def _serial(
     accept: Callable[[object], bool] | None,
 ) -> Completion | None:
     deadline = time.monotonic() + budget
-    for rung, key in eligible:
+    for rung, key in _rank(eligible):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             logger.info("answer budget exhausted before %s", rung.name)
