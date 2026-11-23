@@ -8,6 +8,7 @@ import httpx
 
 from app.api import area as area_module
 from app.api import ask as ask_module
+from app.api import ratelimit as ratelimit_module
 from app.api import stations as stations_module
 from app.api import weather as weather_module
 from app.llm.client import Completion
@@ -189,6 +190,7 @@ def install(monkeypatch, **tables: list[dict[str, Any]]) -> FakeDb:
     monkeypatch.setattr(ask_module, "classify_scope", no_scope)
     monkeypatch.setattr(area_module, "classify_scope", no_scope)
     ask_module.reset_cache()
+    ratelimit_module.reset_rate_limits()
     # The history backfill reaches AWC; tests say whether it ran.
     monkeypatch.setattr(stations_module, "ensure_history", no_history)
     return db
@@ -202,12 +204,16 @@ async def get(path: str) -> httpx.Response:
         return await client.get(path)
 
 
-async def post(path: str, body: dict[str, object]) -> httpx.Response:
+async def post(
+    path: str,
+    body: dict[str, object],
+    headers: dict[str, str] | None = None,
+) -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport, base_url="http://test"
     ) as client:
-        return await client.post(path, json=body)
+        return await client.post(path, json=body, headers=headers)
 
 
 async def test_station_search_wraps_its_rows(monkeypatch) -> None:
@@ -970,3 +976,50 @@ async def test_area_ask_skips_scope_check_on_cache_hit(monkeypatch) -> None:
     assert second.json()["summary"] == first.json()["summary"]
     assert scope_calls == 1
     assert model_calls == 1
+
+
+async def test_ask_rate_limits_a_single_ip_across_station_and_area(
+    monkeypatch,
+) -> None:
+    install(monkeypatch)
+    now = [1000.0]
+    monkeypatch.setattr(ratelimit_module.time, "monotonic", lambda: now[0])
+
+    async def fake_complete(*args: object, **kwargs: object):
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    client_a = {"x-forwarded-for": "198.51.100.1, 10.0.0.1"}
+    client_b = {"x-forwarded-for": "198.51.100.2"}
+
+    for _ in range(ratelimit_module.ASK_LIMIT):
+        res = await post(
+            "/api/ask",
+            {"icao": "KSFO", "question": "What is the ceiling?"},
+            headers=client_a,
+        )
+        assert res.status_code == 200
+
+    blocked = await post(
+        "/api/area/ask",
+        {"lat": 37.62, "lon": -122.37, "question": "What is the ceiling?"},
+        headers=client_a,
+    )
+    assert blocked.status_code == 429
+    assert int(blocked.headers["retry-after"]) >= 1
+
+    other = await post(
+        "/api/ask",
+        {"icao": "KSFO", "question": "What is the ceiling?"},
+        headers=client_b,
+    )
+    assert other.status_code == 200
+
+    now[0] += ratelimit_module.ASK_WINDOW_SECONDS + 1
+    recovered = await post(
+        "/api/ask",
+        {"icao": "KSFO", "question": "What is the ceiling?"},
+        headers=client_a,
+    )
+    assert recovered.status_code == 200

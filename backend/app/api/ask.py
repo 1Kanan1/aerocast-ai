@@ -8,9 +8,10 @@ import time
 from collections import OrderedDict
 from dataclasses import replace
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.api import models
+from app.api.ratelimit import enforce_ask_limit
 from app.api.stations import station_bundle
 from app.config import get_settings
 from app.llm.client import RUNG_BUDGET_SECONDS, complete
@@ -86,11 +87,15 @@ def cached_answer(
 
 
 @router.post("/ask", response_model=models.Answer)
-async def ask(request: models.AskRequest) -> dict[str, object]:
+async def ask(
+    request: models.AskRequest, http_request: Request
+) -> dict[str, object]:
     started = time.monotonic()
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="question is empty")
+
+    enforce_ask_limit(http_request)
 
     bundle, _ = await station_bundle(request.icao)
 

@@ -11,11 +11,12 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.api import models
 from app.api.ask import cached_answer, explain
 from app.api.envelope import wrap
+from app.api.ratelimit import enforce_ask_limit
 from app.api.stations import brief_stations, nearby_stations
 from app.config import get_settings
 from app.domain.brief import build_brief
@@ -50,12 +51,16 @@ async def area(
 
 
 @router.post("/area/ask", response_model=models.Answer)
-async def area_ask(request: models.AreaAskRequest) -> dict[str, object]:
+async def area_ask(
+    request: models.AreaAskRequest, http_request: Request
+) -> dict[str, object]:
     """Answer a question about a point from the stations around it."""
     started = time.monotonic()
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="question is empty")
+
+    enforce_ask_limit(http_request)
 
     rows = await nearby_stations(request.lat, request.lon, AREA_NM)
     if not rows:
