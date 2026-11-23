@@ -937,3 +937,36 @@ async def test_station_detail_and_brief_run_independent_queries_in_parallel(
         response = await get(path)
         assert response.status_code == 200
         assert max_in_flight == 3
+
+
+async def test_area_ask_skips_scope_check_on_cache_hit(monkeypatch) -> None:
+    install(monkeypatch)
+    scope_calls = 0
+    model_calls = 0
+
+    async def fake_scope(*args: object, **kwargs: object) -> bool:
+        nonlocal scope_calls
+        scope_calls += 1
+        return True
+
+    async def fake_complete(*args: object, **kwargs: object):
+        nonlocal model_calls
+        model_calls += 1
+        return completion(grounded_answer())
+
+    monkeypatch.setattr(area_module, "classify_scope", fake_scope)
+    monkeypatch.setattr(ask_module, "complete", fake_complete)
+
+    body: dict[str, object] = {
+        "lat": 37.62,
+        "lon": -122.37,
+        "question": "What is the ceiling?",
+    }
+    first = await post("/api/area/ask", body)
+    second = await post("/api/area/ask", body)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["summary"] == first.json()["summary"]
+    assert scope_calls == 1
+    assert model_calls == 1

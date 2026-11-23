@@ -70,6 +70,21 @@ def _remember(key: str, answer: Answer, now: float) -> None:
         _cache.popitem(last=False)
 
 
+def cached_answer(
+    bundle: dict[str, object],
+    question: str,
+    *,
+    area: bool = False,
+    started: float,
+) -> dict[str, object] | None:
+    hit = _cached(_cache_key(bundle, question, area=area), time.monotonic())
+    if hit is None:
+        return None
+    return wire_answer(
+        replace(hit, elapsed_ms=int((time.monotonic() - started) * 1000))
+    )
+
+
 @router.post("/ask", response_model=models.Answer)
 async def ask(request: models.AskRequest) -> dict[str, object]:
     started = time.monotonic()
@@ -82,14 +97,9 @@ async def ask(request: models.AskRequest) -> dict[str, object]:
     if asks_for_verdict(question):
         return wire_answer(Answer("", (), (), fixed_refusal("decision")))
 
-    cached = _cached(_cache_key(bundle, question, area=False), started)
+    cached = cached_answer(bundle, question, area=False, started=started)
     if cached is not None:
-        return wire_answer(
-            replace(
-                cached,
-                elapsed_ms=int((time.monotonic() - started) * 1000),
-            )
-        )
+        return cached
 
     # A question that names the station is about that station, whatever else
     # it says: "KSEA" alone is a request, not small talk.

@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api import models
-from app.api.ask import explain
+from app.api.ask import cached_answer, explain
 from app.api.envelope import wrap
 from app.api.stations import brief_stations, nearby_stations
 from app.config import get_settings
@@ -66,10 +66,14 @@ async def area_ask(request: models.AreaAskRequest) -> dict[str, object]:
     if asks_for_verdict(question):
         return wire_answer(Answer("", (), (), fixed_refusal("decision")))
 
+    bundle = await area_brief(rows)
+    cached = cached_answer(bundle, question, area=True, started=started)
+    if cached is not None:
+        return cached
+
     if await classify_scope(get_settings(), question) is False:
         return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
 
-    bundle = await area_brief(rows)
     return await explain(bundle, question, area=True, started=started)
 
 
