@@ -147,14 +147,17 @@ export function apiAskArea(
   lon: number,
   question: string,
   signal?: AbortSignal,
+  forwardedHeaders?: HeadersInit,
 ): Promise<ApiResult<Answer>> {
+  let headers = new Headers(forwardedHeaders)
+  headers.set('content-type', 'application/json')
   return request<Answer>(
     '/api/area/ask',
     signal,
     (status) => status >= 200 && status < 300,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({ lat, lon, question }),
     },
     ASK_TIMEOUT_MS,
@@ -224,14 +227,17 @@ export function apiAsk(
   icao: string,
   question: string,
   signal?: AbortSignal,
+  forwardedHeaders?: HeadersInit,
 ): Promise<ApiResult<Answer>> {
+  let headers = new Headers(forwardedHeaders)
+  headers.set('content-type', 'application/json')
   return request<Answer>(
     '/api/ask',
     signal,
     (status) => status >= 200 && status < 300,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({ icao, question }),
     },
     ASK_TIMEOUT_MS,

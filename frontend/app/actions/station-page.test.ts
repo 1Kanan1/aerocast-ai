@@ -220,4 +220,50 @@ describe('station page', () => {
     assert.match(html, /Showing the decoded facts/)
     assert.equal(/invalid/i.test(html), false)
   })
+
+  it('sets defensive security headers on responses', async (t) => {
+    mockApi(t, stationHandlers())
+
+    let response = await get(routes.station.href({ icao: 'KSFO' }))
+
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff')
+    assert.equal(response.headers.get('x-frame-options'), 'DENY')
+    assert.equal(
+      response.headers.get('referrer-policy'),
+      'strict-origin-when-cross-origin',
+    )
+    assert.match(
+      response.headers.get('permissions-policy') ?? '',
+      /geolocation=\(\)/,
+    )
+  })
+
+  it('forwards client IP headers and returns 429 when rate limited', async (t) => {
+    let forwardedIp: string | null = null
+    t.mock.method(
+      globalThis,
+      'fetch',
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        forwardedIp = new Headers(init?.headers).get('x-forwarded-for')
+        return Response.json({ detail: 'too many questions' }, { status: 429 })
+      },
+    )
+
+    let body = new URLSearchParams({ question: 'What is the ceiling?' })
+    let response = await router.fetch(
+      new Request(new URL(routes.ask.href({ icao: 'KSFO' }), ORIGIN), {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-forwarded-for': '203.0.113.9',
+        },
+        body,
+      }),
+    )
+
+    assert.equal(forwardedIp, '203.0.113.9')
+    assert.equal(response.status, 429)
+    assert.match(JSON.stringify(await response.json()), /Too many questions/)
+  })
 })

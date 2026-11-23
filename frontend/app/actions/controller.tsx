@@ -29,6 +29,19 @@ import { MapShell } from '#app/ui/map-shell.tsx'
 /** Roughly the continental US, which is the default map view. */
 const CONUS_BBOX = '-125,24,-66,50'
 
+const RATE_LIMIT_MESSAGE =
+  'Too many questions right now. Please wait a minute and try again.'
+
+/** Forward reverse-proxy IP headers so the API rate-limits each end user. */
+function clientIpHeaders(request: Request): Record<string, string> {
+  let forwarded: Record<string, string> = {}
+  for (let name of ['cf-connecting-ip', 'x-real-ip', 'x-forwarded-for']) {
+    let value = request.headers.get(name)
+    if (value) forwarded[name] = value
+  }
+  return forwarded
+}
+
 export default createController(routes, {
   actions: {
     async assets(context) {
@@ -185,9 +198,18 @@ export default createController(routes, {
         )
       }
 
-      let result = await apiAskArea(lat, lon, question, context.request.signal)
+      let result = await apiAskArea(
+        lat,
+        lon,
+        question,
+        context.request.signal,
+        clientIpHeaders(context.request),
+      )
 
       if (!result.ok || !result.data) {
+        if (result.status === 429) {
+          return Response.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 })
+        }
         return Response.json(
           { error: 'the explanation layer is not available right now' },
           { status: 502 },
@@ -295,21 +317,30 @@ export default createController(routes, {
         )
       }
 
-      let result = await apiAsk(icao, question, context.request.signal)
+      let result = await apiAsk(
+        icao,
+        question,
+        context.request.signal,
+        clientIpHeaders(context.request),
+      )
       let answer: Answer | null = null
       let problem: string | null = null
       let refusal: string | null = null
+      let errorStatus = 503
 
       if (result.ok && result.data) {
         if (result.data.refusal) refusal = result.data.refusal
         else answer = result.data
+      } else if (result.status === 429) {
+        problem = RATE_LIMIT_MESSAGE
+        errorStatus = 429
       } else {
         problem = 'The explanation layer is not available right now.'
       }
 
       if (wantsJson) {
         if (problem !== null) {
-          return Response.json({ error: problem }, { status: 503 })
+          return Response.json({ error: problem }, { status: errorStatus })
         }
 
         return Response.json(result.data)
@@ -325,7 +356,7 @@ export default createController(routes, {
             </p>
           </section>
         </Page>,
-        { status: problem === null ? 200 : 503 },
+        { status: problem === null ? 200 : errorStatus },
       )
     },
   },
