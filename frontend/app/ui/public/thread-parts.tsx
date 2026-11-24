@@ -1,6 +1,7 @@
 import type { Handle } from 'remix/component'
 import { css, on, ref } from 'remix/component'
 
+import type { Claim } from '#app/lib/answer.ts'
 import type { ResolveCandidate } from '#app/lib/api-types.ts'
 import { modelLabel, tookLabel } from '#app/lib/format.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
@@ -32,7 +33,80 @@ interface WelcomeProps {
   suggestions: readonly Suggestion[]
 }
 
-/** The new-chat view: what this drawer can answer, and four ways in. */
+const METAR_FIELD_LABELS: Record<string, string> = {
+  flight_category: 'category',
+  wind: 'wind',
+  visibility: 'visibility',
+  ceiling: 'ceiling',
+  temperature: 'temp',
+  humidity: 'humidity',
+}
+
+/** Human-readable chip label for a bundle ref such as `metar.KSFO.wind`. */
+export function citationLabel(refPath: string): string {
+  let parts = refPath.split('.')
+  let kind = parts[0]
+  let icao = parts[1]
+  if (kind === 'metar' && icao) {
+    let field = parts[2]
+    if (!field) return `${icao} METAR`
+    return `${icao} ${METAR_FIELD_LABELS[field] ?? field.replace(/_/g, ' ')}`
+  }
+  if (kind === 'taf' && icao) {
+    if (parts[2] === 'period' && parts[3] !== undefined) {
+      let index = Number(parts[3])
+      return Number.isFinite(index)
+        ? `${icao} TAF #${index + 1}`
+        : `${icao} TAF`
+    }
+    return `${icao} TAF`
+  }
+  if (kind === 'adv' && icao) {
+    let index = Number(parts[2])
+    return Number.isFinite(index)
+      ? `${icao} advisory #${index + 1}`
+      : `${icao} advisory`
+  }
+  return refPath
+}
+
+export interface CitationTarget {
+  section: 'conditions' | 'forecast'
+  field: string | null
+}
+
+/** Maps a bundle ref to the panel section and fact key it points to. */
+export function citationTarget(refPath: string): CitationTarget {
+  let parts = refPath.split('.')
+  if (parts[0] === 'taf') {
+    return { section: 'forecast', field: refPath }
+  }
+  if (parts[0] === 'adv') {
+    return { section: 'conditions', field: 'advisories' }
+  }
+  if (parts[0] === 'metar') {
+    return { section: 'conditions', field: parts[2] ?? null }
+  }
+  return { section: 'conditions', field: null }
+}
+
+/** Unique citation refs in order, paired with the first claim text for title context. */
+export function collectCitations(
+  claims: readonly Claim[],
+): Array<{ ref: string; note: string }> {
+  let seen = new Set<string>()
+  let result: Array<{ ref: string; note: string }> = []
+  for (let claim of claims) {
+    for (let item of claim.refs) {
+      if (seen.has(item)) continue
+      seen.add(item)
+      result.push({ ref: item, note: claim.text })
+    }
+  }
+  return result
+}
+
+/** The new-chat view: what this drawer can answer, and starter prompts. */
 export function ThreadWelcome(handle: Handle<WelcomeProps>) {
   return () => {
     let { icao, name, category, disabled, onAsk, suggestions } = handle.props
@@ -40,24 +114,24 @@ export function ThreadWelcome(handle: Handle<WelcomeProps>) {
     return (
       <div mix={welcomeStyle}>
         <div mix={welcomeHeadStyle}>
-          <p mix={welcomeKickerStyle}>Explanation layer</p>
           <h2 mix={welcomeTitleStyle}>Ask about {icao}</h2>
           <p mix={welcomeSubStyle}>
             {name}
             {category === null ? '' : ` · ${category}`} · answers cite the facts
-            shown on the map
+            shown in Conditions and Forecast
           </p>
         </div>
 
         <div mix={suggestionListStyle}>
-          {suggestions.map((suggestion, index) => (
+          {suggestions.slice(0, 4).map((suggestion, index) => (
             <button
+              key={suggestion.prompt}
               disabled={disabled}
               mix={[
                 suggestionStyle,
                 on('click', () => onAsk(suggestion.prompt)),
               ]}
-              style={{ animationDelay: `${80 + index * 55}ms` }}
+              style={{ animationDelay: `${50 + index * 45}ms` }}
               type="button"
             >
               <span aria-hidden="true" mix={suggestionMarkStyle}>
@@ -153,83 +227,83 @@ export function UserTurn(
     handle.props.onEdit?.(next)
   }
 
-  return () => {
-    return (
-      <div mix={[userRowStyle, turnInStyle]}>
-        {editing || handle.props.onEdit === undefined ? null : (
-          <button
+  return () => (
+    <div mix={[userRowStyle, turnInStyle]}>
+      {editing || handle.props.onEdit === undefined ? null : (
+        <button
+          aria-label="Edit question"
+          mix={[editButtonStyle, on('click', startEdit)]}
+          type="button"
+        >
+          <PencilIcon />
+        </button>
+      )}
+      {editing ? (
+        <form
+          mix={[
+            userEditStyle,
+            on('submit', (event) => {
+              event.preventDefault()
+              submit()
+            }),
+          ]}
+        >
+          <textarea
             aria-label="Edit question"
-            mix={[editButtonStyle, on('click', startEdit)]}
-            type="button"
-          >
-            <PencilIcon />
-          </button>
-        )}
-        {editing ? (
-          <form
+            maxLength={400}
+            name="question"
             mix={[
-              userEditStyle,
-              on('submit', (event) => {
+              ref((node) => (field = node)),
+              on('input', (event) => {
+                draft = event.currentTarget.value
+                let node = event.currentTarget
+                node.style.height = 'auto'
+                node.style.height = `${Math.min(node.scrollHeight, 132)}px`
+                handle.update()
+              }),
+              on('keydown', (event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  stopEdit()
+                  return
+                }
+                if (event.key !== 'Enter' || event.shiftKey) return
                 event.preventDefault()
                 submit()
               }),
             ]}
-          >
-            <textarea
-              aria-label="Edit question"
-              maxLength={400}
-              name="question"
-              mix={[
-                ref((node) => (field = node)),
-                on('input', (event) => {
-                  draft = event.currentTarget.value
-                  let node = event.currentTarget
-                  node.style.height = 'auto'
-                  node.style.height = `${Math.min(node.scrollHeight, 132)}px`
-                  handle.update()
-                }),
-                on('keydown', (event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    stopEdit()
-                    return
-                  }
-                  if (event.key !== 'Enter' || event.shiftKey) return
-                  event.preventDefault()
-                  submit()
-                }),
-              ]}
-              rows={1}
-            />
-            <div mix={userEditActionsStyle}>
-              <button
-                mix={[cancelEditStyle, on('click', stopEdit)]}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={draft.trim() === ''}
-                mix={saveEditStyle}
-                type="submit"
-              >
-                Send
-              </button>
-            </div>
-          </form>
-        ) : (
-          <p mix={userBubbleStyle}>{handle.props.question}</p>
-        )}
-      </div>
-    )
-  }
+            rows={1}
+          />
+          <div mix={userEditActionsStyle}>
+            <button
+              mix={[cancelEditStyle, on('click', stopEdit)]}
+              type="button"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={draft.trim() === ''}
+              mix={saveEditStyle}
+              type="submit"
+            >
+              Send
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p mix={userBubbleStyle}>{handle.props.question}</p>
+      )}
+    </div>
+  )
 }
 
-/** An assistant turn: plain text, citations and any fallback notice. */
+/** An assistant turn: plain text, interactive citations, and any fallback notice. */
 export function AssistantTurn(
   handle: Handle<{
     entry: ThreadEntry
     onRegenerate?: () => void
+    onSelectRef?: (refPath: string) => void
     showName?: boolean
   }>,
 ) {
@@ -265,7 +339,9 @@ export function AssistantTurn(
   }
 
   return () => {
-    let { entry } = handle.props
+    let { entry, onSelectRef } = handle.props
+    let citations =
+      entry.answer === null ? [] : collectCitations(entry.answer.claims)
 
     return (
       <article mix={assistantStyle}>
@@ -307,7 +383,35 @@ export function AssistantTurn(
           <p mix={[problemStyle, turnInStyle]}>{entry.problem}</p>
         ) : entry.answer === null ? null : (
           <div mix={[answerBodyStyle, turnInStyle]}>
-            <RevealText text={entry.answer.summary} />
+            <p mix={summaryStyle}>{entry.answer.summary}</p>
+            {citations.length === 0 ? null : (
+              <div aria-label="Cited facts" mix={citationsStyle} role="group">
+                {citations.map((item) =>
+                  onSelectRef ? (
+                    <button
+                      key={item.ref}
+                      mix={[
+                        citationChipStyle,
+                        citationButtonStyle,
+                        on('click', () => onSelectRef(item.ref)),
+                      ]}
+                      title={item.note}
+                      type="button"
+                    >
+                      {citationLabel(item.ref)}
+                    </button>
+                  ) : (
+                    <span
+                      key={item.ref}
+                      mix={citationChipStyle}
+                      title={item.note}
+                    >
+                      {citationLabel(item.ref)}
+                    </span>
+                  ),
+                )}
+              </div>
+            )}
             {entry.answer.notice === null ? null : (
               <p mix={noticeStyle}>{entry.answer.notice}</p>
             )}
@@ -365,11 +469,6 @@ export function threadAnnouncement(entry: ThreadEntry | undefined): string {
   return entry.answer?.summary ?? ''
 }
 
-/**
- * The thread's status for screen readers. A live region announces changes to
- * text that was already in the document, so this mounts with the panel and
- * follows the latest turn instead of appearing inside the turn it describes.
- */
 export function ThreadAnnouncer(
   handle: Handle<{ thread: readonly ThreadEntry[] }>,
 ) {
@@ -380,10 +479,6 @@ export function ThreadAnnouncer(
   )
 }
 
-/**
- * The model behind an answer and the time its call took, beside the actions.
- * A refusal or the template fallback has neither, and prints nothing.
- */
 function AnswerCredit(
   handle: Handle<{ answer: NonNullable<ThreadEntry['answer']> }>,
 ) {
@@ -400,30 +495,6 @@ function AnswerCredit(
   }
 }
 
-/** Word-by-word reveal after the whole answer has already been validated. */
-function RevealText(handle: Handle<{ text: string }>) {
-  return () => {
-    let words = handle.props.text.split(' ')
-
-    return (
-      <p mix={summaryStyle}>
-        {words.map((word, index) => (
-          <span key={`${word}-${index}`}>
-            <span
-              mix={wordStyle}
-              style={{
-                animationDelay: `${Math.min(index, 80) * 12}ms`,
-              }}
-            >
-              {word}
-            </span>{' '}
-          </span>
-        ))}
-      </p>
-    )
-  }
-}
-
 function copyText(answer: NonNullable<ThreadEntry['answer']>): string {
   let parts = [answer.summary]
   if (answer.caveats.length > 0) {
@@ -434,42 +505,35 @@ function copyText(answer: NonNullable<ThreadEntry['answer']>): string {
 
 const turnInStyle = css({
   '@media (prefers-reduced-motion: no-preference)': {
-    animation: 'rmx-thread-in 220ms ease-out both',
+    animation: 'rmx-thread-in 240ms var(--ease-out) both',
   },
 })
 
 const welcomeStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '20px',
-  marginBlock: 'auto',
-  paddingBlock: '12px',
+  gap: '16px',
+  paddingBlock: '6px',
 })
 
 const welcomeHeadStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '8px',
-})
-
-const welcomeKickerStyle = css({
-  margin: 0,
-  fontSize: '11px',
-  color: 'var(--ink-3)',
+  gap: '4px',
 })
 
 const welcomeTitleStyle = css({
   margin: 0,
-  fontSize: '20px',
-  fontWeight: 400,
+  fontSize: '18px',
+  fontWeight: 600,
   color: 'var(--ink-0)',
 })
 
 const welcomeSubStyle = css({
   margin: 0,
-  fontSize: '12px',
+  fontSize: '13px',
   lineHeight: 1.5,
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const suggestionListStyle = css({
@@ -480,27 +544,31 @@ const suggestionListStyle = css({
 
 const suggestionStyle = css({
   display: 'grid',
-  gridTemplateColumns: '16px 1fr',
+  gridTemplateColumns: '14px 1fr',
   columnGap: '8px',
   alignItems: 'center',
   width: '100%',
+  minHeight: '42px',
   padding: '10px 12px',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '12px',
-  background: 'rgba(255, 255, 255, 0.025)',
+  border: '1px solid var(--line)',
+  borderRadius: '11px',
+  background: 'var(--paper)',
   color: 'var(--ink-1)',
   font: 'inherit',
   textAlign: 'left',
   cursor: 'pointer',
-  transition: 'background 120ms ease, border-color 120ms ease',
+  transition:
+    'background 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out)',
   '@media (prefers-reduced-motion: no-preference)': {
-    animation: 'rmx-thread-in 220ms ease-out both',
+    animation: 'rmx-thread-in 240ms var(--ease-out) both',
   },
   '&:hover': {
-    background: 'rgba(255, 255, 255, 0.06)',
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    background: 'var(--hover-bg)',
+    borderColor: 'var(--line-strong)',
+    transform: 'translateX(2px)',
   },
-  '&:disabled': { opacity: 0.4, cursor: 'not-allowed' },
+  '&:active': { transform: 'scale(0.99)' },
+  '&:disabled': { opacity: 0.45, cursor: 'not-allowed', transform: 'none' },
 })
 
 const suggestionMarkStyle = css({
@@ -509,7 +577,7 @@ const suggestionMarkStyle = css({
   color: 'var(--ink-3)',
 })
 
-const suggestionTitleStyle = css({ fontSize: '13px' })
+const suggestionTitleStyle = css({ fontSize: '13px', lineHeight: 1.4 })
 
 const clarifyStyle = css({
   display: 'flex',
@@ -527,11 +595,11 @@ const clarifyLeadStyle = css({
 const optionListStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  border: '1px solid var(--glass-border)',
+  border: '1px solid var(--line)',
   borderRadius: '12px',
   overflow: 'hidden',
   '& button + button': {
-    borderBlockStart: '1px solid var(--glass-border)',
+    borderBlockStart: '1px solid var(--line)',
   },
 })
 
@@ -539,6 +607,7 @@ const optionStyle = css({
   display: 'grid',
   gridTemplateColumns: '4.5rem 1fr',
   gap: '10px',
+  minHeight: '44px',
   padding: '10px 12px',
   border: 0,
   background: 'transparent',
@@ -546,14 +615,18 @@ const optionStyle = css({
   font: 'inherit',
   textAlign: 'left',
   cursor: 'pointer',
-  '&:hover': { background: 'rgba(255, 255, 255, 0.05)' },
+  transition: 'background 150ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)' },
   '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '-2px',
   },
 })
 
-const optionCodeStyle = css({ fontWeight: 700 })
+const optionCodeStyle = css({
+  fontFamily: 'var(--font-mono)',
+  fontWeight: 700,
+})
 
 const optionTextStyle = css({
   display: 'flex',
@@ -564,46 +637,46 @@ const optionTextStyle = css({
 
 const optionNameStyle = css({
   fontSize: '13px',
-  color: 'var(--ink-2)',
+  color: 'var(--ink-1)',
 })
 
 const optionFactsStyle = css({
-  fontSize: '11px',
+  fontSize: '12px',
   lineHeight: 1.45,
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const userRowStyle = css({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-end',
-  gap: '8px',
+  gap: '6px',
 })
 
 const editButtonStyle = css({
   display: 'grid',
   placeItems: 'center',
-  width: '28px',
-  height: '28px',
+  width: '32px',
+  height: '32px',
   flexShrink: 0,
   border: 0,
   borderRadius: '999px',
   background: 'transparent',
-  color: 'var(--ink-3)',
-  opacity: 0.55,
+  color: 'var(--ink-2)',
   cursor: 'pointer',
-  transition: 'opacity 120ms ease, color 120ms ease',
-  '&:hover': { opacity: 1, color: 'var(--ink-1)' },
-  '&:focus-visible': { opacity: 1, color: 'var(--ink-1)' },
+  transition:
+    'background 150ms var(--ease-out), color 150ms var(--ease-out), transform 140ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)', color: 'var(--ink-0)' },
+  '&:active': { transform: 'scale(0.92)' },
 })
 
 const userBubbleStyle = css({
   maxWidth: '86%',
   margin: 0,
-  padding: '9px 12px',
-  border: '1px solid rgba(255, 255, 255, 0.08)',
-  borderRadius: '16px',
-  background: 'rgba(255, 255, 255, 0.09)',
+  padding: '9px 13px',
+  border: '1px solid var(--line)',
+  borderRadius: '14px',
+  background: 'var(--paper-3)',
   fontSize: '13px',
   lineHeight: 1.55,
   color: 'var(--ink-0)',
@@ -613,20 +686,19 @@ const userBubbleStyle = css({
 const userEditStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '4px',
+  gap: '6px',
   width: '86%',
   padding: '8px 10px 6px',
-  border: '1px solid rgba(255, 255, 255, 0.2)',
-  borderRadius: '16px',
-  background: 'rgba(255, 255, 255, 0.06)',
-  // The textarea draws no outline of its own, so the ring goes on the bubble.
+  border: '1px solid var(--line-strong)',
+  borderRadius: '14px',
+  background: 'var(--paper)',
   '&:has(textarea:focus-visible)': {
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '2px',
   },
   '& textarea': {
     width: '100%',
-    minHeight: '34px',
+    minHeight: '36px',
     maxHeight: '132px',
     padding: '1px 2px 0',
     border: 0,
@@ -645,32 +717,36 @@ const userEditActionsStyle = css({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-end',
-  gap: '4px',
+  gap: '6px',
 })
 
 const cancelEditStyle = css({
   border: 0,
-  borderRadius: '999px',
-  padding: '4px 8px',
+  borderRadius: '8px',
+  padding: '6px 10px',
   background: 'none',
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
   font: 'inherit',
-  fontSize: '11px',
+  fontSize: '12px',
   cursor: 'pointer',
-  '&:hover': { color: 'var(--ink-1)' },
+  transition: 'background 150ms var(--ease-out), color 150ms var(--ease-out)',
+  '&:hover': { color: 'var(--ink-0)', background: 'var(--hover-bg)' },
 })
 
 const saveEditStyle = css({
   border: 0,
   borderRadius: '8px',
-  padding: '4px 10px',
-  background: 'var(--ink-0)',
-  color: 'var(--paper)',
+  padding: '6px 12px',
+  background: 'var(--accent)',
+  color: 'var(--accent-ink)',
   font: 'inherit',
-  fontSize: '11px',
+  fontSize: '12px',
+  fontWeight: 600,
   cursor: 'pointer',
-  '&:hover': { opacity: 0.9 },
-  '&:disabled': { opacity: 0.3, cursor: 'not-allowed' },
+  transition: 'opacity 140ms var(--ease-out), transform 140ms var(--ease-out)',
+  '&:hover': { opacity: 0.92 },
+  '&:active': { transform: 'scale(0.96)' },
+  '&:disabled': { opacity: 0.35, cursor: 'not-allowed', transform: 'none' },
 })
 
 const assistantStyle = css({
@@ -683,86 +759,116 @@ const assistantMetaStyle = css({
   display: 'flex',
   alignItems: 'center',
   gap: '6px',
-  fontSize: '11px',
-  color: 'var(--ink-3)',
+  fontSize: '12px',
+  fontWeight: 500,
+  color: 'var(--ink-2)',
 })
 
 const assistantIconStyle = css({
   display: 'grid',
   placeItems: 'center',
-  color: 'var(--ink-3)',
-  '& svg': { width: '12px', height: '12px' },
+  color: 'var(--ink-2)',
+  '& svg': { width: '13px', height: '13px' },
 })
 
 const answerBodyStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '10px',
-  paddingInlineStart: '2px',
 })
 
 const summaryStyle = css({
   margin: 0,
   fontSize: '14px',
-  lineHeight: 1.65,
+  lineHeight: 1.6,
   color: 'var(--ink-0)',
 })
 
-const wordStyle = css({
-  display: 'inline-block',
-  '@media (prefers-reduced-motion: no-preference)': {
-    animation: 'rmx-word-in 200ms ease-out both',
+const citationsStyle = css({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '6px',
+})
+
+const citationChipStyle = css({
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '3px 8px',
+  border: '1px solid var(--line)',
+  borderRadius: '6px',
+  background: 'var(--accent-soft)',
+  color: 'var(--accent)',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '11px',
+  fontWeight: 500,
+  lineHeight: 1.3,
+})
+
+const citationButtonStyle = css({
+  cursor: 'pointer',
+  transition:
+    'border-color 150ms var(--ease-out), transform 140ms var(--ease-spring)',
+  '&:hover': {
+    borderColor: 'var(--accent)',
+    transform: 'translateY(-1px)',
   },
+  '&:active': { transform: 'scale(0.96)' },
 })
 
 const noticeStyle = css({
   margin: 0,
-  paddingInlineStart: '9px',
-  borderInlineStart: '2px solid var(--glass-border)',
+  padding: '8px 10px',
+  border: '1px solid var(--line)',
+  borderRadius: '8px',
+  background: 'var(--paper)',
   fontSize: '12px',
   lineHeight: 1.5,
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const caveatsStyle = css({
   margin: 0,
-  paddingInlineStart: '16px',
+  paddingInlineStart: '18px',
   fontSize: '12px',
   lineHeight: 1.5,
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const refusalStyle = css({
   padding: '10px 12px',
-  border: '1px solid var(--accent)',
-  borderRadius: '12px',
-  background: 'rgba(255, 255, 255, 0.04)',
+  border: '1px solid var(--warn-border)',
+  borderRadius: '10px',
+  background: 'var(--warn-bg)',
 })
 
 const refusalNoteStyle = css({
   margin: '6px 0 0',
-  fontSize: '11px',
+  fontSize: '12px',
   lineHeight: 1.5,
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const problemStyle = css({
   margin: 0,
+  padding: '8px 10px',
+  border: '1px solid var(--danger-border)',
+  borderRadius: '8px',
+  background: 'var(--danger-bg)',
   fontSize: '12px',
-  color: 'var(--accent)',
+  color: 'var(--danger-ink)',
 })
 
 const stoppedStyle = css({
   margin: 0,
   fontSize: '12px',
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const answerFooterStyle = css({
   display: 'flex',
   alignItems: 'center',
-  gap: '2px',
-  marginBlockStart: '-6px',
+  gap: '4px',
+  marginBlockStart: '-2px',
 })
 
 const creditStyle = css({
@@ -771,33 +877,31 @@ const creditStyle = css({
   fontSize: '11px',
   color: 'var(--ink-3)',
   whiteSpace: 'nowrap',
+  fontVariantNumeric: 'tabular-nums',
 })
 
 const turnActionStyle = css({
   display: 'grid',
   placeItems: 'center',
-  width: '22px',
-  height: '22px',
+  width: '32px',
+  height: '32px',
   flexShrink: 0,
-  marginBlockStart: '1px',
   padding: 0,
   border: 0,
-  borderRadius: '6px',
+  borderRadius: '8px',
   background: 'transparent',
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
   cursor: 'pointer',
-  outline: 'none',
-  '&:hover': { color: 'var(--ink-1)' },
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '2px',
-  },
+  transition:
+    'background 150ms var(--ease-out), color 150ms var(--ease-out), transform 140ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)', color: 'var(--ink-0)' },
+  '&:active': { transform: 'scale(0.92)' },
 })
 
 const bodyTextStyle = css({
   margin: 0,
   fontSize: '13px',
-  lineHeight: 1.6,
+  lineHeight: 1.55,
 })
 
 const srOnlyStyle = css({
@@ -818,7 +922,7 @@ const pendingStyle = css({
   gap: '8px',
   margin: 0,
   fontSize: '12px',
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const thinkingStyle = css({

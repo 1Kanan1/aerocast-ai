@@ -10,8 +10,9 @@ import type {
 import type { Blend } from '#app/lib/public/blend.ts'
 import { blendStations } from '#app/lib/public/blend.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
-import { ChevronIcon } from '#app/ui/public/icons.tsx'
+import { CloseIcon } from '#app/ui/public/icons.tsx'
 import { prefersReducedMotion } from '#app/ui/public/motion.ts'
+import { CategoryBadge, SegmentedTabs } from '#app/ui/public/primitives.tsx'
 import type { AreaPoint, ThreadEntry } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
@@ -20,18 +21,18 @@ import {
   UserTurn,
 } from '#app/ui/public/thread-parts.tsx'
 
-/** How long the panel takes to leave, matching rmx-card-out. */
-const PANEL_EXIT_MS = 160
+type AreaSection = 'overview' | 'ask'
+
+const PANEL_EXIT_MS = 180
 
 /**
- * A click on the map is a question about a place. This panel answers it with
- * the stations around that point, each one still speaking for itself, and a
- * thread that may use all of them.
+ * Area drawer for a clicked map point: segmented Overview (blended summary +
+ * FAA-badged nearby station cards) and Ask sections.
  */
 export const AreaPanel = clientEntry(
   import.meta.url,
   function AreaPanel(handle: Handle) {
-    let collapsed = false
+    let activeSection: AreaSection = 'overview'
     let scroller: HTMLElement | undefined
     let closing = false
     let closingTimer: ReturnType<typeof setTimeout> | undefined
@@ -40,9 +41,10 @@ export const AreaPanel = clientEntry(
     let exitThread: ThreadEntry[] = []
     let exitError: string | null = null
     let exitLoading = false
+    let lastAreaTurns = 0
 
     function scrollToEnd(): void {
-      if (session.areaThread.length === 0) return
+      if (session.areaThread.length === 0 || activeSection !== 'ask') return
       if (scroller) scroller.scrollTop = scroller.scrollHeight
     }
 
@@ -61,6 +63,13 @@ export const AreaPanel = clientEntry(
         if (open) {
           clearTimeout(closingTimer)
           closing = false
+          let turns = session.areaThread.length
+          if (turns > lastAreaTurns) {
+            activeSection = 'ask'
+          } else if (turns === 0 && lastAreaTurns > 0) {
+            activeSection = 'overview'
+          }
+          lastAreaTurns = turns
           exitPoint = session.area
           exitPayload = session.areaPayload
           exitThread = session.areaThread
@@ -83,6 +92,8 @@ export const AreaPanel = clientEntry(
           exitPoint = null
           exitPayload = null
           exitThread = []
+          lastAreaTurns = 0
+          activeSection = 'overview'
           handle.update()
         }, PANEL_EXIT_MS)
       },
@@ -127,18 +138,17 @@ export const AreaPanel = clientEntry(
           style={{
             animation:
               closing && !prefersReducedMotion()
-                ? 'rmx-card-out 160ms ease-in forwards'
+                ? 'rmx-panel-out 180ms ease-in forwards'
                 : undefined,
             pointerEvents: closing ? 'none' : undefined,
           }}
         >
           <header mix={headerStyle}>
             <div mix={identityStyle}>
-              <span mix={kickerStyle}>Weather here</span>
               <span mix={pointStyle}>{pointLabel(point.lat, point.lon)}</span>
               <span mix={countStyle}>
                 {loading
-                  ? 'reading the nearest stations…'
+                  ? 'Reading nearby stations…'
                   : `${stations.length} station${stations.length === 1 ? '' : 's'} within ${payload?.radius_nm ?? 15} nm`}
               </span>
             </div>
@@ -147,115 +157,139 @@ export const AreaPanel = clientEntry(
               mix={[closeStyle, on('click', () => session.closeArea())]}
               type="button"
             >
-              ×
+              <CloseIcon />
             </button>
           </header>
 
-          {loading ? null : stations.length === 0 ? (
-            <p mix={emptyStyle}>
-              {error ??
-                `No station within ${payload?.radius_nm ?? 15} nm of that ` +
-                  'point. Pick a spot closer to one, or search by code.'}
-            </p>
-          ) : (
-            <>
-              <div
-                aria-hidden={collapsed ? 'true' : 'false'}
-                data-collapsed={collapsed ? 'true' : 'false'}
-                mix={infoStyle}
-              >
-                {error === null ? null : <p mix={mutedStyle}>{error}</p>}
+          <div mix={tabsWrapStyle}>
+            <SegmentedTabs<AreaSection>
+              active={activeSection}
+              onSelect={(next) => {
+                activeSection = next
+                handle.update()
+              }}
+              tabs={[
+                { id: 'overview', label: 'Overview' },
+                {
+                  id: 'ask',
+                  label: 'Ask',
+                  badge: thread.length || undefined,
+                },
+              ]}
+            />
+          </div>
 
-                {blend === null ? (
-                  <p mix={mutedStyle}>
-                    None of the stations in range has a report to blend.
-                  </p>
-                ) : (
-                  <section aria-label="Blended conditions" mix={blendStyle}>
-                    <span mix={blendKickerStyle}>Blended here</span>
-                    <p mix={blendLineStyle}>{blendLine(blend)}</p>
-                    <p mix={blendNoteStyle}>{blendNote(blend)}</p>
-                  </section>
-                )}
-
-                <ul mix={listStyle}>
-                  {stations.map((station) => (
-                    <li key={station.icao}>
-                      <button
-                        aria-label={`Open ${station.icao}`}
-                        mix={[
-                          rowStyle,
-                          on('click', () => void session.select(station.icao)),
-                        ]}
-                        type="button"
-                      >
-                        <span mix={rowHeadStyle}>
-                          <span mix={codeStyle}>{station.icao}</span>
-                          <span mix={nameStyle}>{station.name}</span>
-                          <span mix={distanceStyle}>
-                            {station.distance_nm} nm
-                          </span>
-                        </span>
-                        <span mix={factsStyle}>
-                          {stationFacts(station, brief)}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div mix={dividerStyle}>
-                <button
-                  aria-expanded={!collapsed}
-                  aria-label={collapsed ? 'Show stations' : 'Hide stations'}
-                  mix={[
-                    collapseStyle,
-                    on('click', () => {
-                      collapsed = !collapsed
-                      handle.update()
-                    }),
-                  ]}
-                  type="button"
-                >
-                  <span
-                    aria-hidden="true"
-                    mix={chevronStyle}
-                    style={{ transform: `rotate(${collapsed ? 180 : 0}deg)` }}
-                  >
-                    <ChevronIcon />
-                  </span>
-                </button>
-              </div>
-            </>
-          )}
-
-          <div mix={[threadStyle, ref((node) => (scroller = node))]}>
+          <div mix={[bodyStyle, ref((node) => (scroller = node))]}>
             <ThreadAnnouncer thread={thread} />
 
-            {thread.length === 0 ? (
-              <p mix={hintStyle}>
-                Ask about the weather here. Answers quote each station by name,
-                while the summary above blends them for the point. Open a
-                station for its forecast and history.
-              </p>
+            {activeSection === 'overview' ? (
+              <div key="overview" mix={[tabPaneStyle, stackStyle]}>
+                {loading ? (
+                  <p mix={mutedStyle}>Reading nearby stations…</p>
+                ) : error !== null ? (
+                  <div mix={errorBoxStyle} role="alert">
+                    <p mix={errorTextStyle}>{error}</p>
+                    <button
+                      mix={[
+                        retryButtonStyle,
+                        on('click', () => void session.retryArea()),
+                      ]}
+                      type="button"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : stations.length === 0 ? (
+                  <p mix={mutedStyle}>
+                    No station within {payload?.radius_nm ?? 15} nm of that
+                    point. Pick a spot closer to an airport or ask by code.
+                  </p>
+                ) : (
+                  <>
+                    {blend === null ? (
+                      <p mix={mutedStyle}>
+                        None of the nearby stations has a current report to
+                        blend.
+                      </p>
+                    ) : (
+                      <section aria-label="Blended conditions" mix={blendStyle}>
+                        <p mix={blendLineStyle}>{blendLine(blend)}</p>
+                        <p mix={blendNoteStyle}>{blendNote(blend)}</p>
+                      </section>
+                    )}
+
+                    <div mix={sectionBlockStyle}>
+                      <h3 mix={sectionHeadingStyle}>Nearby stations</h3>
+                      <ul mix={listStyle}>
+                        {stations.map((station) => {
+                          let metar = stationMetar(station, brief)
+                          let category = metar?.flight_category.value ?? null
+                          return (
+                            <li key={station.icao}>
+                              <button
+                                aria-label={`Open ${station.icao}`}
+                                mix={[
+                                  rowStyle,
+                                  on(
+                                    'click',
+                                    () => void session.select(station.icao),
+                                  ),
+                                ]}
+                                type="button"
+                              >
+                                <span mix={rowHeadStyle}>
+                                  <span mix={codeStyle}>{station.icao}</span>
+                                  <CategoryBadge
+                                    category={category}
+                                    size="sm"
+                                  />
+                                  <span mix={nameStyle}>{station.name}</span>
+                                  <span mix={distanceStyle}>
+                                    {station.distance_nm} nm
+                                  </span>
+                                </span>
+                                <span mix={factsStyle}>
+                                  {metar === null
+                                    ? 'No observation on file'
+                                    : reportLabel(metar)}
+                                </span>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
-              thread.map((entry, index) => (
-                <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
-                  <UserTurn
-                    onEdit={(next) => restartFrom(index, next)}
-                    question={entry.question}
-                  />
-                  <AssistantTurn
-                    entry={entry}
-                    onRegenerate={() => {
-                      let question = thread[index]?.question
-                      if (question !== undefined) restartFrom(index, question)
-                    }}
-                    showName={index === 0}
-                  />
-                </div>
-              ))
+              <div key="ask" mix={[tabPaneStyle, threadColumnStyle]}>
+                {thread.length === 0 ? (
+                  <p mix={mutedStyle}>
+                    Ask about the weather here. Answers cite each nearby station
+                    by name while Overview blends them for this point.
+                  </p>
+                ) : (
+                  thread.map((entry, index) => (
+                    <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
+                      <UserTurn
+                        onEdit={(next) => restartFrom(index, next)}
+                        question={entry.question}
+                      />
+                      <AssistantTurn
+                        entry={entry}
+                        onRegenerate={() => {
+                          let question = thread[index]?.question
+                          if (question !== undefined) {
+                            restartFrom(index, question)
+                          }
+                        }}
+                        showName={index === 0}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         </aside>
@@ -270,32 +304,32 @@ function pointLabel(lat: number, lon: number): string {
   return `${Math.abs(lat).toFixed(2)}°${north} ${Math.abs(lon).toFixed(2)}°${east}`
 }
 
-function stationFacts(station: AreaStation, brief: Bundle | null): string {
-  let metar: BundleMetar | null =
+function stationMetar(
+  station: AreaStation,
+  brief: Bundle | null,
+): BundleMetar | null {
+  return (
     brief?.stations.find((item) => item.icao === station.icao)?.metar ?? null
-  if (metar === null) return 'no observation on file'
-
-  return reportLabel(metar)
+  )
 }
 
 function blendLine(blend: Blend): string {
   let parts: string[] = []
 
   if (blend.wind !== null) {
-    let wind = `wind ${blend.wind.direction_deg}° at ${blend.wind.speed_kt} kt`
-    if (blend.wind.gust_kt !== null)
-      wind += `, gusting ${blend.wind.gust_kt} kt`
+    let wind = `Wind ${blend.wind.direction_deg}° at ${blend.wind.speed_kt} kt`
+    if (blend.wind.gust_kt !== null) wind += ` G${blend.wind.gust_kt}`
     parts.push(wind)
   }
 
   if (blend.visibility_sm !== null) {
     let { value, low, high } = blend.visibility_sm
-    let range = low === high ? '' : ` (${low} to ${high})`
-    parts.push(`visibility ${trim(value)} SM${range}`)
+    let range = low === high ? '' : ` (${low}–${high})`
+    parts.push(`Vis ${trim(value)} SM${range}`)
   }
 
   if (blend.ceiling_ft !== null) {
-    parts.push(`ceiling ${blend.ceiling_ft.value.toLocaleString()} ft`)
+    parts.push(`Ceiling ~${blend.ceiling_ft.value.toLocaleString()} ft`)
   }
 
   if (blend.temperature_c !== null) {
@@ -303,7 +337,7 @@ function blendLine(blend: Blend): string {
   }
 
   if (blend.humidity_pct !== null) {
-    parts.push(`humidity ${Math.round(blend.humidity_pct)}%`)
+    parts.push(`RH ${Math.round(blend.humidity_pct)}%`)
   }
 
   return parts.join(' · ')
@@ -319,10 +353,7 @@ function blendNote(blend: Blend): string {
   if (blend.distance_nm !== null) {
     parts.push(`nearest ${blend.distance_nm} nm`)
   }
-  if (blend.ceiling_ft !== null && blend.ceiling_ft.reports < blend.used) {
-    parts.push(`ceiling from ${blend.ceiling_ft.reports} of ${blend.used}`)
-  }
-  return `${parts.join(' · ')}. A summary, not an observation.`
+  return `${parts.join(' · ')}. Summary only, not a direct observation.`
 }
 
 function trim(value: number): string {
@@ -337,14 +368,16 @@ const panelStyle = css({
   zIndex: 4,
   display: 'flex',
   flexDirection: 'column',
-  width: 'min(520px, calc(100vw - 32px))',
+  width: 'min(500px, calc(100vw - 32px))',
   borderRadius: '20px',
-  border: '1px solid var(--line)',
+  border: '1px solid var(--glass-border)',
   background: 'var(--paper-2)',
   boxShadow: 'var(--shadow)',
   overflow: 'hidden',
+  transition:
+    'background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
   '@media (prefers-reduced-motion: no-preference)': {
-    animation: 'rmx-card-in 200ms ease-out',
+    animation: 'rmx-panel-in 260ms var(--ease-out) both',
   },
   '@media (max-width: 900px)': { bottom: '120px' },
 })
@@ -355,7 +388,7 @@ const headerStyle = css({
   justifyContent: 'space-between',
   gap: '12px',
   flexShrink: 0,
-  padding: '14px 20px',
+  padding: '14px 16px 12px',
   borderBlockEnd: '1px solid var(--line)',
 })
 
@@ -366,129 +399,107 @@ const identityStyle = css({
   minWidth: 0,
 })
 
-const kickerStyle = css({
-  fontSize: '10px',
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-3)',
+const pointStyle = css({
+  fontFamily: 'var(--font-mono)',
+  fontSize: '15px',
+  fontWeight: 700,
+  color: 'var(--ink-0)',
 })
 
-const pointStyle = css({ fontWeight: 700 })
-
-const countStyle = css({ fontSize: '11px', color: 'var(--ink-3)' })
+const countStyle = css({ fontSize: '12px', color: 'var(--ink-2)' })
 
 const closeStyle = css({
-  width: '28px',
-  height: '28px',
-  flexShrink: 0,
-  borderRadius: '999px',
-  border: '1px solid var(--glass-border)',
-  background: 'transparent',
-  color: 'var(--ink-2)',
-  font: 'inherit',
-  fontSize: '16px',
-  lineHeight: 1,
-  cursor: 'pointer',
-  '&:hover': { color: 'var(--ink-0)' },
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '2px',
-  },
-})
-
-/**
- * The blended summary sits still under the header, always in view: it is the
- * one line that answers "what is it like here". The chevron below it folds the
- * station list, which is the part that can run long.
- */
-/**
- * The summary and its stations stay put while the thread scrolls under them.
- * The chevron folds the block to nothing, and the block scrolls inside a
- * capped height, giving way before the thread when the window is short. Its
- * scrollbar is hidden: the seam is the cue that there is more.
- */
-const infoStyle = css({
-  flex: '0 1 auto',
-  minHeight: 0,
-  maxHeight: 'min(360px, 55vh)',
-  overflowY: 'auto',
-  overflowX: 'hidden',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-  padding: '20px',
-  borderBlockEnd: '1px solid var(--line)',
-  scrollbarWidth: 'none',
-  transition:
-    'max-height 220ms ease, padding 220ms ease, opacity 220ms ease, ' +
-    'border-bottom-width 220ms ease',
-  '&::-webkit-scrollbar': { display: 'none' },
-  '&[data-collapsed="true"]': {
-    maxHeight: '0px',
-    paddingTop: '0px',
-    paddingBottom: '0px',
-    borderBottomWidth: '0px',
-    opacity: 0,
-  },
-})
-
-/** A zero-height seam between the summary and the list, for the chevron. */
-const dividerStyle = css({
-  position: 'relative',
-  height: 0,
-  flexShrink: 0,
-  zIndex: 1,
-})
-
-/** The whole seam is the button; the chevron is the handle on it. */
-const collapseStyle = css({
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  top: '-13px',
-  height: '26px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 0,
-  border: 'none',
-  background: 'transparent',
-  color: 'var(--ink-3)',
-  cursor: 'pointer',
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '-2px',
-  },
-})
-
-const chevronStyle = css({
   display: 'grid',
   placeItems: 'center',
-  width: '26px',
-  height: '26px',
+  width: '32px',
+  height: '32px',
+  flexShrink: 0,
+  borderRadius: '999px',
   border: '1px solid var(--line)',
-  borderRadius: '50%',
-  background: 'var(--paper-2)',
-  transition: 'transform 200ms ease, color 120ms ease',
-  '&:hover': { color: 'var(--ink-0)' },
+  background: 'transparent',
+  color: 'var(--ink-2)',
+  cursor: 'pointer',
+  transition:
+    'background 150ms var(--ease-out), color 150ms var(--ease-out), transform 140ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)', color: 'var(--ink-0)' },
+  '&:active': { transform: 'scale(0.92)' },
 })
 
-const threadStyle = css({
+const tabsWrapStyle = css({
+  padding: '10px 16px 0',
+  flexShrink: 0,
+})
+
+const bodyStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',
   overflowX: 'hidden',
+  padding: '14px 16px 18px',
+  scrollBehavior: 'smooth',
+})
+
+const tabPaneStyle = css({
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-tab-in 220ms var(--ease-out) both',
+  },
+})
+
+const stackStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+})
+
+const threadColumnStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+})
+
+const sectionBlockStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
-  padding: '20px',
-  scrollBehavior: 'smooth',
+})
+
+const sectionHeadingStyle = css({
+  margin: 0,
+  fontSize: '13px',
+  fontWeight: 600,
+  color: 'var(--ink-2)',
+})
+
+const blendStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '5px',
+  padding: '12px 14px',
+  border: '1px solid var(--line)',
+  borderRadius: '12px',
+  background: 'var(--accent-soft)',
+})
+
+const blendLineStyle = css({
+  margin: 0,
+  fontSize: '14px',
+  fontWeight: 600,
+  lineHeight: 1.45,
+  color: 'var(--ink-0)',
+  fontVariantNumeric: 'tabular-nums',
+})
+
+const blendNoteStyle = css({
+  margin: 0,
+  fontSize: '12px',
+  lineHeight: 1.45,
+  color: 'var(--ink-2)',
 })
 
 const listStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '6px',
+  gap: '8px',
   margin: 0,
   padding: 0,
   listStyle: 'none',
@@ -497,103 +508,103 @@ const listStyle = css({
 const rowStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '4px',
+  gap: '5px',
   width: '100%',
-  padding: '8px 10px',
+  padding: '11px 12px',
   border: '1px solid var(--line)',
-  borderRadius: '10px',
-  background: 'rgba(255, 255, 255, 0.02)',
+  borderRadius: '12px',
+  background: 'var(--paper)',
   color: 'var(--ink-0)',
   font: 'inherit',
   textAlign: 'left',
   cursor: 'pointer',
-  '&:hover': { background: 'rgba(255, 255, 255, 0.06)' },
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '1px',
+  transition:
+    'background 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out)',
+  '&:hover': {
+    background: 'var(--hover-bg)',
+    borderColor: 'var(--line-strong)',
+    transform: 'translateY(-1px)',
   },
+  '&:active': { transform: 'scale(0.99)' },
 })
 
 const rowHeadStyle = css({
   display: 'grid',
-  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-  alignItems: 'baseline',
+  gridTemplateColumns: 'auto auto minmax(0, 1fr) auto',
+  alignItems: 'center',
   gap: '8px',
 })
 
-const codeStyle = css({ fontSize: '12px', fontWeight: 700 })
+const codeStyle = css({
+  fontFamily: 'var(--font-mono)',
+  fontSize: '13px',
+  fontWeight: 700,
+})
+
 const nameStyle = css({
   minWidth: 0,
-  fontSize: '12px',
-  color: 'var(--ink-2)',
+  fontSize: '13px',
+  color: 'var(--ink-1)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 })
+
 const distanceStyle = css({
-  fontSize: '10px',
+  fontSize: '12px',
   color: 'var(--ink-3)',
   whiteSpace: 'nowrap',
+  fontVariantNumeric: 'tabular-nums',
 })
+
 const factsStyle = css({
-  fontSize: '11px',
-  lineHeight: 1.45,
-  color: 'var(--ink-3)',
-})
-
-const hintStyle = css({
-  margin: 0,
   fontSize: '12px',
-  lineHeight: 1.5,
-  color: 'var(--ink-3)',
+  lineHeight: 1.45,
+  color: 'var(--ink-2)',
 })
 
-const blendStyle = css({
+const errorBoxStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '4px',
-  padding: '10px 12px',
-  border: '1px solid var(--line)',
-  borderRadius: '12px',
-  background: 'rgba(126, 199, 214, 0.08)',
+  alignItems: 'flex-start',
+  gap: '10px',
+  padding: '12px',
+  border: '1px solid var(--danger-border)',
+  borderRadius: '10px',
+  background: 'var(--danger-bg)',
 })
 
-const blendKickerStyle = css({
-  fontSize: '10px',
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-3)',
+const errorTextStyle = css({
+  margin: 0,
+  fontSize: '13px',
+  color: 'var(--danger-ink)',
 })
 
-const blendLineStyle = css({
+const retryButtonStyle = css({
+  padding: '7px 14px',
+  border: '1px solid var(--line-strong)',
+  borderRadius: '8px',
+  background: 'var(--paper-2)',
+  color: 'var(--ink-0)',
+  font: 'inherit',
+  fontSize: '12px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition:
+    'background 150ms var(--ease-out), transform 140ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)' },
+  '&:active': { transform: 'scale(0.96)' },
+})
+
+const mutedStyle = css({
   margin: 0,
   fontSize: '13px',
   lineHeight: 1.5,
-  color: 'var(--ink-0)',
-})
-
-const blendNoteStyle = css({
-  margin: 0,
-  fontSize: '11px',
-  lineHeight: 1.5,
-  color: 'var(--ink-3)',
-})
-
-const mutedStyle = css({ margin: 0, fontSize: '12px', color: 'var(--ink-3)' })
-
-/** A point with nothing in range needs a line, not a fold with nothing in it. */
-const emptyStyle = css({
-  flexShrink: 0,
-  margin: 0,
-  padding: '20px 20px 16px',
-  fontSize: '12px',
-  lineHeight: 1.5,
-  color: 'var(--ink-3)',
+  color: 'var(--ink-2)',
 })
 
 const exchangeStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '10px',
-  paddingBlockStart: '18px',
 })

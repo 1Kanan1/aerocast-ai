@@ -1,10 +1,8 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on, ref } from 'remix/component'
 
-import type { BundleMetar, BundlePeriod } from '#app/lib/api-types.ts'
 import { ageLabel, timeLabel } from '#app/lib/format.ts'
 import { decodedReport } from '#app/lib/observations.ts'
-import { ChevronIcon } from '#app/ui/public/icons.tsx'
 import {
   ceilingLabel,
   cloudsLabel,
@@ -14,19 +12,33 @@ import {
   windLabel,
 } from '#app/lib/public/labels.ts'
 import { conditionsAt } from '#app/lib/public/timeline.ts'
+import { routes } from '#app/routes.ts'
+import { CloseIcon } from '#app/ui/public/icons.tsx'
+import {
+  CategoryBadge,
+  DefinitionsDisclosure,
+  FactGrid,
+  type FactItem,
+  RawReport,
+  SegmentedTabs,
+  TafTableCompact,
+} from '#app/ui/public/primitives.tsx'
 import type { Clarification, SelectedStation } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
-  type Suggestion,
   AssistantTurn,
+  citationTarget,
   ClarificationView,
+  type Suggestion,
   ThreadAnnouncer,
   ThreadWelcome,
   UserTurn,
 } from '#app/ui/public/thread-parts.tsx'
+import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
-/** How long the panel takes to leave, matching rmx-card-out. */
-const PANEL_EXIT_MS = 160
+type Section = 'conditions' | 'forecast' | 'ask'
+
+const PANEL_EXIT_MS = 180
 const WHEN = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
   hour: '2-digit',
@@ -34,31 +46,29 @@ const WHEN = new Intl.DateTimeFormat(undefined, {
 })
 
 const SUGGESTIONS: readonly Suggestion[] = [
-  { prompt: 'What is the ceiling?' },
-  { prompt: 'What is the visibility?' },
+  { prompt: 'What is the ceiling and visibility?' },
   { prompt: 'What is the wind doing?' },
   { prompt: 'What does the forecast say?' },
-  { prompt: 'What does MVFR mean?' },
+  { prompt: 'Are there any active advisories nearby?' },
 ]
 
-/** The answer surface: conditions first, then the thread, over the map. */
+/** The station drawer: segmented Conditions, Forecast, and Ask sections over the map. */
 export const AnswerPanel = clientEntry(
   import.meta.url,
   function AnswerPanel(handle: Handle) {
     let scroller: HTMLElement | undefined
-    let collapsed = false
-    // The panel stays mounted for one beat after it closes, so the exit
-    // animation has something to play on.
+    let activeSection: Section = 'conditions'
     let closing = false
     let closingTimer: ReturnType<typeof setTimeout> | undefined
     let lastStation: SelectedStation | null = session.selected
     let lastClarification: Clarification | null = session.clarification
+    let lastIcao: string | null = session.selected?.icao ?? null
+    let lastTurns = session.selected?.thread.length ?? 0
 
     function scrollToEnd(): void {
-      // A station with no turns is showing the welcome: leave it at the top
-      // rather than parking the reader at the bottom of it.
       let station = session.selected
       if (station === null || station.thread.length === 0) return
+      if (activeSection !== 'ask') return
       if (scroller) scroller.scrollTop = scroller.scrollHeight
     }
 
@@ -67,6 +77,13 @@ export const AnswerPanel = clientEntry(
       if (text === '') return
       session.discardFrom(index)
       void session.ask(text)
+    }
+
+    function handleSelectCitation(refPath: string): void {
+      let target = citationTarget(refPath)
+      session.highlightRef(refPath)
+      activeSection = target.section
+      handle.update()
     }
 
     session.addEventListener(
@@ -82,6 +99,8 @@ export const AnswerPanel = clientEntry(
             closing = false
             lastStation = null
             lastClarification = null
+            lastIcao = null
+            lastTurns = 0
             handle.update()
           }, PANEL_EXIT_MS)
           return
@@ -89,7 +108,24 @@ export const AnswerPanel = clientEntry(
 
         clearTimeout(closingTimer)
         closing = false
-        lastStation = session.selected
+        let nextStation = session.selected
+        let nextTurns = nextStation?.thread.length ?? 0
+        if (nextStation !== null) {
+          if (nextStation.icao !== lastIcao) {
+            lastIcao = nextStation.icao
+            lastTurns = nextTurns
+            activeSection = nextTurns > 0 ? 'ask' : 'conditions'
+          } else if (nextTurns > lastTurns) {
+            lastTurns = nextTurns
+            activeSection = 'ask'
+          } else {
+            lastTurns = nextTurns
+          }
+        } else if (session.clarification !== null) {
+          activeSection = 'ask'
+        }
+
+        lastStation = nextStation
         lastClarification = session.clarification
         await handle.update()
         scrollToEnd()
@@ -127,110 +163,142 @@ export const AnswerPanel = clientEntry(
         >
           <header mix={headerStyle}>
             <div mix={identityStyle}>
-              <span mix={icaoStyle}>{station?.icao ?? 'AeroCast'}</span>
+              <div mix={titleRowStyle}>
+                <span mix={icaoStyle}>{station?.icao ?? 'AeroCast'}</span>
+                {station !== null ? (
+                  <CategoryBadge category={station.category} />
+                ) : null}
+              </div>
               <span mix={nameStyle}>
                 {station?.name ?? 'Which station did you mean?'}
               </span>
             </div>
-            <button
-              aria-label="Close answers"
-              mix={[closeStyle, on('click', () => session.clear())]}
-              type="button"
-            >
-              ×
-            </button>
+            <div mix={headerActionsStyle}>
+              {station !== null ? (
+                <a
+                  href={routes.station.href({ icao: station.icao })}
+                  mix={fullPageStyle}
+                >
+                  Full page →
+                </a>
+              ) : null}
+              <button
+                aria-label="Close answers"
+                mix={[closeStyle, on('click', () => session.clear())]}
+                type="button"
+              >
+                <CloseIcon />
+              </button>
+            </div>
           </header>
 
-          {station === null ? null : (
-            <>
-              <div
-                aria-hidden={collapsed ? 'true' : 'false'}
-                data-collapsed={collapsed ? 'true' : 'false'}
-                mix={infoStyle}
-              >
-                {station.loading ? (
-                  <p mix={mutedStyle}>Loading station facts…</p>
-                ) : station.error !== null ? (
-                  <p mix={mutedStyle}>{station.error}</p>
-                ) : station.facts === null ? (
-                  <p mix={mutedStyle}>No observation on file.</p>
-                ) : session.viewHour === 0 ? (
-                  <Conditions facts={station.facts} station={station} />
-                ) : (
-                  <TimedConditions hour={session.viewHour} station={station} />
-                )}
-              </div>
+          {station !== null ? (
+            <div mix={tabsWrapStyle}>
+              <SegmentedTabs<Section>
+                active={activeSection}
+                onSelect={(next) => {
+                  activeSection = next
+                  handle.update()
+                }}
+                tabs={[
+                  { id: 'conditions', label: 'Conditions' },
+                  {
+                    id: 'forecast',
+                    label: 'Forecast',
+                    badge: station.taf?.periods.length || undefined,
+                  },
+                  {
+                    id: 'ask',
+                    label: 'Ask',
+                    badge: station.thread.length || undefined,
+                  },
+                ]}
+              />
+            </div>
+          ) : null}
 
-              <div mix={dividerStyle}>
-                <button
-                  aria-expanded={!collapsed}
-                  aria-label={collapsed ? 'Show conditions' : 'Hide conditions'}
-                  mix={[
-                    collapseStyle,
-                    on('click', () => {
-                      collapsed = !collapsed
-                      handle.update()
-                    }),
-                  ]}
-                  type="button"
-                >
-                  <span
-                    aria-hidden="true"
-                    mix={chevronStyle}
-                    style={{
-                      transform: `rotate(${collapsed ? 180 : 0}deg)`,
-                    }}
-                  >
-                    <ChevronIcon />
-                  </span>
-                </button>
-              </div>
-            </>
-          )}
-
-          <div mix={[threadStyle, ref((node) => (scroller = node))]}>
+          <div mix={[bodyStyle, ref((node) => (scroller = node))]}>
             {station === null ? null : (
               <ThreadAnnouncer thread={station.thread} />
             )}
 
-            {clarification === null ? null : (
-              <ClarificationView
-                message={clarification.message}
-                onChoose={(icao) => session.choose(icao)}
-                options={clarification.options}
-              />
-            )}
-
-            {station === null ||
-            station.loading ||
-            station.error !== null ? null : station.thread.length === 0 ? (
-              <ThreadWelcome
-                category={station.category}
-                disabled={false}
-                icao={station.icao}
-                name={station.name}
-                onAsk={(prompt) => void session.ask(prompt)}
-                suggestions={SUGGESTIONS}
-              />
+            {clarification !== null ? (
+              <div key="clarify" mix={tabPaneStyle}>
+                <ClarificationView
+                  message={clarification.message}
+                  onChoose={(icao) => session.choose(icao)}
+                  options={clarification.options}
+                />
+              </div>
+            ) : station === null ? null : activeSection === 'conditions' ? (
+              <div key="conditions" mix={tabPaneStyle}>
+                <ConditionsSection
+                  highlightedRef={session.highlightedRef}
+                  station={station}
+                />
+              </div>
+            ) : activeSection === 'forecast' ? (
+              <div key="forecast" mix={tabPaneStyle}>
+                {station.loading ? (
+                  <p mix={mutedStyle}>Loading forecast…</p>
+                ) : station.taf !== null ? (
+                  <TafTableCompact
+                    highlightedRef={session.highlightedRef}
+                    source={station.source}
+                    taf={station.taf}
+                  />
+                ) : (
+                  <p mix={mutedStyle}>No TAF on file for {station.icao}.</p>
+                )}
+              </div>
             ) : (
-              station.thread.map((entry, index) => (
-                <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
-                  <UserTurn
-                    onEdit={(next) => restartFrom(index, next)}
-                    question={entry.question}
+              <div key="ask" mix={[tabPaneStyle, threadColumnStyle]}>
+                {station.loading ? (
+                  <p mix={mutedStyle}>Loading station facts…</p>
+                ) : station.error !== null ? (
+                  <div mix={errorBoxStyle} role="alert">
+                    <p mix={errorTextStyle}>{station.error}</p>
+                    <button
+                      mix={[
+                        retryButtonStyle,
+                        on('click', () => void session.retryStation()),
+                      ]}
+                      type="button"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : station.thread.length === 0 ? (
+                  <ThreadWelcome
+                    category={station.category}
+                    disabled={false}
+                    icao={station.icao}
+                    name={station.name}
+                    onAsk={(prompt) => void session.ask(prompt)}
+                    suggestions={SUGGESTIONS}
                   />
-                  <AssistantTurn
-                    entry={entry}
-                    onRegenerate={() => {
-                      let question = station.thread[index]?.question
-                      if (question !== undefined) {
-                        restartFrom(index, question)
-                      }
-                    }}
-                    showName={index === 0}
-                  />
-                </div>
-              ))
+                ) : (
+                  station.thread.map((entry, index) => (
+                    <div key={`${entry.question}-${index}`} mix={exchangeStyle}>
+                      <UserTurn
+                        onEdit={(next) => restartFrom(index, next)}
+                        question={entry.question}
+                      />
+                      <AssistantTurn
+                        entry={entry}
+                        onRegenerate={() => {
+                          let question = station.thread[index]?.question
+                          if (question !== undefined) {
+                            restartFrom(index, question)
+                          }
+                        }}
+                        onSelectRef={handleSelectCitation}
+                        showName={index === 0}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         </aside>
@@ -239,173 +307,236 @@ export const AnswerPanel = clientEntry(
   },
 )
 
-/** The facts every answer rests on, shown once above the prose. */
-function Conditions(
-  handle: Handle<{ facts: BundleMetar; station: SelectedStation }>,
+function ConditionsSection(
+  handle: Handle<{ highlightedRef: string | null; station: SelectedStation }>,
 ) {
   return () => {
-    let { facts, station } = handle.props
+    let { highlightedRef, station } = handle.props
+
+    if (station.loading) {
+      return <p mix={mutedStyle}>Loading station facts…</p>
+    }
+
+    if (station.error !== null) {
+      return (
+        <div mix={errorBoxStyle} role="alert">
+          <p mix={errorTextStyle}>{station.error}</p>
+          <button
+            mix={[
+              retryButtonStyle,
+              on('click', () => void session.retryStation()),
+            ]}
+            type="button"
+          >
+            Retry
+          </button>
+        </div>
+      )
+    }
+
+    if (station.facts === null) {
+      return <p mix={mutedStyle}>No observation on file for {station.icao}.</p>
+    }
+
+    if (session.viewHour !== 0) {
+      return <TimedConditions hour={session.viewHour} station={station} />
+    }
+
+    let facts = station.facts
+    let highlightedField = highlightedRef
+      ? citationTarget(highlightedRef).field
+      : null
+    let humidity = facts.humidity?.relative_pct ?? null
+    let echo =
+      weatherLayers.rain && session.echoShare !== null
+        ? Math.round(session.echoShare * 100)
+        : null
+
+    let items: FactItem[] = [
+      { key: 'wind', label: 'Wind', value: windLabel(facts) },
+      { key: 'visibility', label: 'Visibility', value: visibilityLabel(facts) },
+      { key: 'ceiling', label: 'Ceiling', value: ceilingLabel(facts) },
+      { key: 'clouds', label: 'Clouds', value: cloudsLabel(facts) },
+      {
+        key: 'temperature',
+        label: 'Temperature',
+        value: temperatureLabel(facts),
+      },
+      {
+        key: 'humidity',
+        label: 'Humidity',
+        value: humidity === null ? 'Not reported' : `${humidity}%`,
+      },
+      {
+        key: 'altimeter',
+        label: 'Altimeter',
+        value:
+          facts.altimeter_in_hg === null
+            ? 'Not reported'
+            : `${facts.altimeter_in_hg.toFixed(2)} inHg`,
+      },
+      {
+        key: 'echo',
+        label: 'Radar echo',
+        value: echo === null ? 'Off / clear' : `${echo}% area`,
+      },
+    ]
 
     return (
-      <section aria-label="Conditions" mix={conditionsStyle}>
-        <p mix={conditionsHeadStyle}>
-          <span mix={categoryStyle}>{station.category ?? 'no category'}</span>
-          <span mix={ageStyle}>
-            {station.source} · observed {timeLabel(facts.observed_at)} ·{' '}
-            {ageLabel(station.ageSeconds)}
-            {station.stale ? ' · stale' : ''}
-          </span>
+      <div mix={stackStyle}>
+        <p mix={provenanceStyle}>
+          {station.source} · observed {timeLabel(facts.observed_at)} ·{' '}
+          {ageLabel(station.ageSeconds)}
+          {station.stale ? <span mix={stalePillStyle}>stale</span> : null}
         </p>
 
-        {station.parseStatus !== null &&
-        station.parseStatus !== 'ok' &&
-        station.upstreamCategory !== null ? (
-          <p mix={warningStyle}>
-            Our parser disagrees with AWC on this report (upstream category{' '}
-            {station.upstreamCategory}). The difference is kept visible.
+        {station.basis ? (
+          <p
+            data-highlighted={
+              highlightedField === 'flight_category' ? 'true' : 'false'
+            }
+            mix={basisStyle}
+          >
+            {station.basis}
           </p>
         ) : null}
-        <dl mix={factsStyle}>
-          <Fact label="Wind" value={windLabel(facts)} />
-          <Fact label="Visibility" value={visibilityLabel(facts)} />
-          <Fact label="Ceiling" value={ceilingLabel(facts)} />
-          <Fact label="Clouds" value={cloudsLabel(facts)} />
-          <Fact label="Temperature" value={temperatureLabel(facts)} />
-          <Fact
-            label="Altimeter"
-            value={
-              facts.altimeter_in_hg === null
-                ? 'not reported'
-                : `${facts.altimeter_in_hg} inHg`
+
+        {station.parseStatus !== null && station.parseStatus !== 'ok' ? (
+          <p mix={warnBoxStyle}>
+            Parser disagrees with AWC on this report
+            {station.upstreamCategory
+              ? ` (upstream ${station.upstreamCategory})`
+              : ''}
+            .
+          </p>
+        ) : null}
+
+        <FactGrid highlightedKey={highlightedField} items={items} />
+
+        {station.advisories.length > 0 ? (
+          <section
+            aria-label="Active advisories"
+            data-highlighted={
+              highlightedField === 'advisories' ? 'true' : 'false'
             }
-          />
-          <Fact
-            label="Weather"
-            value={
-              facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
-            }
-          />
-        </dl>
-        <code mix={rawStyle}>{facts.raw}</code>
-      </section>
+            mix={sectionBlockStyle}
+          >
+            <h3 mix={sectionHeadingStyle}>
+              Active advisories ({station.advisories.length})
+            </h3>
+            <ul mix={advisoryListStyle}>
+              {station.advisories.map((adv) => (
+                <li key={adv.ref} mix={advisoryRowStyle}>
+                  <span mix={advisoryHazardStyle}>{adv.hazard}</span>
+                  <span mix={advisoryDetailStyle}>
+                    {adv.kind.toUpperCase()}
+                    {adv.due_to ? ` · ${adv.due_to}` : ''} · until{' '}
+                    {timeLabel(adv.valid_to)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {station.raw ? <RawReport raw={station.raw} /> : null}
+
+        <DefinitionsDisclosure definitions={station.definitions} />
+      </div>
     )
   }
 }
 
-/**
- * The conditions at an hour the timeline points at: the report from that
- * hour when it is behind us, the forecast period when it is ahead. Hours
- * the data does not cover say so rather than borrowing the nearest number.
- */
 function TimedConditions(
   handle: Handle<{ hour: number; station: SelectedStation }>,
 ) {
   return () => {
     let { hour, station } = handle.props
-    let conditions = conditionsAt(station, hour, session.timelineBase)
+    let view = conditionsAt(station, hour, session.timelineBase)
 
-    if (conditions.kind === 'no-report') {
-      return <p mix={mutedStyle}>No observation within an hour of that time.</p>
-    }
-
-    if (conditions.kind === 'report') {
-      let point = conditions.point
-      let facts = decodedReport(point.decoded)
-
+    if (view.kind === 'no-report' || view.kind === 'no-forecast') {
       return (
-        <section aria-label="Conditions" mix={conditionsStyle}>
-          <p mix={conditionsHeadStyle}>
-            <span mix={categoryStyle}>{point.category ?? 'no category'}</span>
-            <span mix={ageStyle}>
-              observed {WHEN.format(Date.parse(point.obs_time))}
-            </span>
+        <div mix={stackStyle}>
+          <p mix={mutedStyle}>
+            {view.kind === 'no-report'
+              ? 'No observation on file near this hour.'
+              : 'The TAF does not cover this hour.'}
           </p>
-          <dl mix={factsStyle}>
-            <Fact label="Wind" value={windLabel(facts)} />
-            <Fact label="Visibility" value={visibilityLabel(facts)} />
-            <Fact label="Ceiling" value={ceilingLabel(facts)} />
-            <Fact label="Clouds" value={cloudsLabel(facts)} />
-            <Fact label="Temperature" value={temperatureLabel(facts)} />
-            <Fact
-              label="Altimeter"
-              value={
-                facts.altimeter_in_hg === null
-                  ? 'not reported'
-                  : `${facts.altimeter_in_hg} inHg`
-              }
-            />
-            <Fact
-              label="Weather"
-              value={
-                facts.weather.length === 0 ? 'none' : facts.weather.join(' ')
-              }
-            />
-          </dl>
-          <code mix={rawStyle}>{point.raw}</code>
-        </section>
+          <button
+            mix={[retryButtonStyle, on('click', () => session.setViewHour(0))]}
+            type="button"
+          >
+            Back to live
+          </button>
+        </div>
       )
     }
 
-    if (conditions.kind === 'no-forecast') {
-      return <p mix={mutedStyle}>The forecast does not reach that hour.</p>
+    if (view.kind === 'report') {
+      let report = decodedReport(view.point.decoded)
+      let items: FactItem[] = [
+        { key: 'wind', label: 'Wind', value: windLabel(report) },
+        {
+          key: 'visibility',
+          label: 'Visibility',
+          value: visibilityLabel(report),
+        },
+        { key: 'ceiling', label: 'Ceiling', value: ceilingLabel(report) },
+        { key: 'clouds', label: 'Clouds', value: cloudsLabel(report) },
+        {
+          key: 'temperature',
+          label: 'Temperature',
+          value: temperatureLabel(report),
+        },
+      ]
+      return (
+        <div mix={stackStyle}>
+          <div mix={timedHeadStyle}>
+            <CategoryBadge category={view.point.category} size="sm" />
+            <span mix={provenanceStyle}>
+              Observed {WHEN.format(Date.parse(view.point.obs_time))}
+            </span>
+          </div>
+          <FactGrid items={items} />
+          <RawReport label="Observed METAR" raw={view.point.raw} />
+        </div>
+      )
     }
 
-    let period = conditions.period
+    let period = view.period
+    let items: FactItem[] = [
+      { key: 'wind', label: 'Wind', value: periodWindLabel(period) },
+      {
+        key: 'visibility',
+        label: 'Visibility',
+        value:
+          period.visibility_sm === null ? '—' : `${period.visibility_sm} SM`,
+      },
+      {
+        key: 'ceiling',
+        label: 'Ceiling',
+        value:
+          period.ceiling_ft === null
+            ? 'No ceiling'
+            : `${period.ceiling_ft.toLocaleString()} ft`,
+      },
+      {
+        key: 'weather',
+        label: 'Weather',
+        value: period.weather.join(' ') || 'None',
+      },
+    ]
 
     return (
-      <section aria-label="Conditions" mix={conditionsStyle}>
-        <p mix={conditionsHeadStyle}>
-          <span mix={categoryStyle}>{period.change}</span>
-          <span mix={ageStyle}>
-            forecast {WHEN.format(Date.parse(period.from))} to{' '}
-            {WHEN.format(Date.parse(period.to))}
-            {period.probability === null ? '' : ` · ${period.probability}%`}
-          </span>
+      <div mix={stackStyle}>
+        <p mix={provenanceStyle}>
+          TAF {period.change} · {WHEN.format(Date.parse(period.from))} to{' '}
+          {WHEN.format(Date.parse(period.to))}
         </p>
-        <dl mix={factsStyle}>
-          <Fact label="Wind" value={periodWindLabel(period)} />
-          <Fact label="Visibility" value={smLabel(period.visibility_sm)} />
-          <Fact label="Ceiling" value={feetLabel(period.ceiling_ft)} />
-          <Fact label="Clouds" value={cloudsOrUnknown(period.clouds)} />
-          <Fact
-            label="Weather"
-            value={
-              period.weather.length === 0 ? 'unknown' : period.weather.join(' ')
-            }
-          />
-          <Fact label="Temperature" value="unknown" />
-        </dl>
-      </section>
+        <FactGrid items={items} />
+      </div>
     )
   }
-}
-
-function smLabel(miles: number | null): string {
-  return miles === null ? 'unknown' : `${miles} SM`
-}
-
-function feetLabel(feet: number | null): string {
-  return feet === null ? 'unknown' : `${feet.toLocaleString()} ft`
-}
-
-function cloudsOrUnknown(clouds: BundlePeriod['clouds']): string {
-  if (clouds.length === 0) return 'unknown'
-  return clouds
-    .map((cloud) =>
-      cloud.base_ft === null
-        ? cloud.cover
-        : `${cloud.cover} ${cloud.base_ft.toLocaleString()} ft`,
-    )
-    .join(', ')
-}
-
-function Fact(handle: Handle<{ label: string; value: string }>) {
-  return () => (
-    <div mix={factStyle}>
-      <dt>{handle.props.label}</dt>
-      <dd>{handle.props.value}</dd>
-    </div>
-  )
 }
 
 const panelStyle = css({
@@ -416,23 +547,25 @@ const panelStyle = css({
   zIndex: 4,
   display: 'none',
   flexDirection: 'column',
-  width: 'min(520px, calc(100vw - 32px))',
+  width: 'min(500px, calc(100vw - 32px))',
   borderRadius: '20px',
-  border: '1px solid var(--line)',
+  border: '1px solid var(--glass-border)',
   background: 'var(--paper-2)',
   boxShadow: 'var(--shadow)',
   overflow: 'hidden',
+  transition:
+    'background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
   '&[data-open="true"]': {
     display: 'flex',
     '@media (prefers-reduced-motion: no-preference)': {
-      animation: 'rmx-card-in 200ms ease-out',
+      animation: 'rmx-panel-in 260ms var(--ease-out) both',
     },
   },
   '&[data-closing="true"]': {
     display: 'flex',
     pointerEvents: 'none',
     '@media (prefers-reduced-motion: no-preference)': {
-      animation: 'rmx-card-out 160ms ease-in forwards',
+      animation: 'rmx-panel-out 180ms ease-in forwards',
     },
   },
   '@media (max-width: 900px)': { bottom: '120px' },
@@ -442,184 +575,253 @@ const headerStyle = css({
   display: 'flex',
   alignItems: 'flex-start',
   justifyContent: 'space-between',
-  gap: '12px',
-  padding: '14px 20px',
+  gap: '10px',
+  flexShrink: 0,
+  padding: '14px 16px 12px',
   borderBlockEnd: '1px solid var(--line)',
 })
 
 const identityStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '2px',
+  gap: '3px',
   minWidth: 0,
 })
 
-const icaoStyle = css({ fontWeight: 700 })
+const titleRowStyle = css({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+})
+
+const icaoStyle = css({
+  fontFamily: 'var(--font-mono)',
+  fontSize: '16px',
+  fontWeight: 700,
+  color: 'var(--ink-0)',
+})
 
 const nameStyle = css({
-  fontSize: '11px',
-  color: 'var(--ink-3)',
+  fontSize: '12px',
+  color: 'var(--ink-2)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 })
 
-const closeStyle = css({
-  width: '28px',
-  height: '28px',
-  flexShrink: 0,
-  borderRadius: '999px',
-  border: '1px solid var(--glass-border)',
-  background: 'transparent',
-  color: 'var(--ink-2)',
-  font: 'inherit',
-  fontSize: '16px',
-  lineHeight: 1,
-  cursor: 'pointer',
-  '&:hover': { color: 'var(--ink-0)', background: 'rgba(255, 255, 255, 0.06)' },
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '2px',
-  },
-})
-
-/**
- * The conditions stay put while the thread scrolls under them. The chevron
- * sits on the divider between the two, and folds the block to its headline.
- * A long report scrolls inside the block, with no scrollbar shown: the seam
- * is the cue that there is more.
- */
-const infoStyle = css({
-  position: 'relative',
-  flexShrink: 0,
-  maxHeight: '360px',
-  overflowY: 'auto',
-  overflowX: 'hidden',
-  padding: '14px 20px 20px',
-  borderBlockEnd: '1px solid var(--line)',
-  scrollbarWidth: 'none',
-  transition:
-    'max-height 220ms ease, padding 220ms ease, opacity 220ms ease, ' +
-    'border-bottom-width 220ms ease',
-  '&::-webkit-scrollbar': { display: 'none' },
-  '&[data-collapsed="true"]': {
-    maxHeight: '0px',
-    paddingTop: '0px',
-    paddingBottom: '0px',
-    borderBottomWidth: '0px',
-    opacity: 0,
-  },
-})
-
-/** A zero-height seam between the conditions and the thread, for the chevron. */
-const dividerStyle = css({
-  position: 'relative',
-  height: 0,
-  flexShrink: 0,
-  zIndex: 1,
-})
-
-/** The whole seam is the button; the chevron is the handle on it. */
-const collapseStyle = css({
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  top: '-13px',
-  height: '26px',
+const headerActionsStyle = css({
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center',
-  padding: 0,
-  border: 'none',
-  background: 'transparent',
-  color: 'var(--ink-3)',
-  cursor: 'pointer',
-  '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
-    outlineOffset: '-2px',
-  },
+  gap: '6px',
+  flexShrink: 0,
 })
 
-const chevronStyle = css({
+const fullPageStyle = css({
+  padding: '6px 9px',
+  border: '1px solid var(--line)',
+  borderRadius: '8px',
+  color: 'var(--ink-2)',
+  fontSize: '12px',
+  fontWeight: 500,
+  textDecoration: 'none',
+  whiteSpace: 'nowrap',
+  transition: 'background 160ms var(--ease-out), color 160ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)', color: 'var(--ink-0)' },
+})
+
+const closeStyle = css({
   display: 'grid',
   placeItems: 'center',
-  width: '26px',
-  height: '26px',
+  width: '32px',
+  height: '32px',
+  flexShrink: 0,
+  borderRadius: '999px',
   border: '1px solid var(--line)',
-  borderRadius: '50%',
-  background: 'var(--paper-2)',
-  transition: 'transform 200ms ease, color 120ms ease',
-  '&:hover': { color: 'var(--ink-0)' },
+  background: 'transparent',
+  color: 'var(--ink-2)',
+  cursor: 'pointer',
+  transition:
+    'background 150ms var(--ease-out), color 150ms var(--ease-out), transform 140ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)', color: 'var(--ink-0)' },
+  '&:active': { transform: 'scale(0.92)' },
 })
 
-const threadStyle = css({
+const tabsWrapStyle = css({
+  padding: '10px 16px 0',
+  flexShrink: 0,
+})
+
+const bodyStyle = css({
   flex: '1 1 auto',
   minHeight: 0,
   overflowY: 'auto',
   overflowX: 'hidden',
+  padding: '14px 16px 18px',
+  scrollBehavior: 'smooth',
+})
+
+const tabPaneStyle = css({
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-tab-in 220ms var(--ease-out) both',
+  },
+})
+
+const stackStyle = css({
   display: 'flex',
   flexDirection: 'column',
-  gap: '8px',
-  padding: '20px',
-  scrollBehavior: 'smooth',
+  gap: '12px',
+})
+
+const threadColumnStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
 })
 
 const exchangeStyle = css({
   display: 'flex',
   flexDirection: 'column',
   gap: '10px',
-  paddingBlockStart: '26px',
 })
 
-const conditionsStyle = css({
+const provenanceStyle = css({
+  margin: 0,
+  fontSize: '12px',
+  color: 'var(--ink-2)',
   display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-  paddingBlockEnd: '16px',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: '6px',
 })
 
-const conditionsHeadStyle = css({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '3px',
+const stalePillStyle = css({
+  padding: '1px 6px',
+  borderRadius: '4px',
+  background: 'var(--warn-bg)',
+  border: '1px solid var(--warn-border)',
+  color: 'var(--warn-ink)',
+  fontSize: '10px',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+})
+
+const basisStyle = css({
   margin: 0,
-})
-
-const categoryStyle = css({ fontSize: '12px', color: 'var(--ink-1)' })
-
-const ageStyle = css({ fontSize: '11px', color: 'var(--ink-3)' })
-
-const warningStyle = css({
-  margin: 0,
-  padding: '7px 9px',
-  borderInlineStart: '2px solid var(--accent)',
-  borderRadius: '6px',
-  background: 'rgba(255, 255, 255, 0.04)',
-  fontSize: '11px',
-})
-
-const factsStyle = css({
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '10px 16px',
-  margin: 0,
-})
-
-const factStyle = css({
-  margin: 0,
-  '& dt': { fontSize: '11px', color: 'var(--ink-3)' },
-  '& dd': { margin: 0, fontSize: '12px', color: 'var(--ink-0)' },
-})
-
-const rawStyle = css({
-  display: 'block',
-  padding: '7px 9px',
-  border: '1px solid var(--line)',
+  padding: '7px 10px',
   borderRadius: '8px',
-  background: 'rgba(0, 0, 0, 0.28)',
-  fontSize: '11px',
-  whiteSpace: 'pre-wrap',
-  overflowWrap: 'anywhere',
+  background: 'var(--paper)',
+  fontSize: '12px',
+  color: 'var(--ink-1)',
+  transition: 'background-color 200ms var(--ease-out)',
+  '&[data-highlighted="true"]': {
+    outline: '2px solid var(--accent)',
+    background: 'var(--accent-soft)',
+  },
 })
 
-const mutedStyle = css({ margin: 0, fontSize: '12px', color: 'var(--ink-3)' })
+const warnBoxStyle = css({
+  margin: 0,
+  padding: '8px 10px',
+  border: '1px solid var(--warn-border)',
+  borderRadius: '8px',
+  background: 'var(--warn-bg)',
+  color: 'var(--warn-ink)',
+  fontSize: '12px',
+})
+
+const errorBoxStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: '10px',
+  padding: '12px',
+  border: '1px solid var(--danger-border)',
+  borderRadius: '10px',
+  background: 'var(--danger-bg)',
+})
+
+const errorTextStyle = css({
+  margin: 0,
+  fontSize: '13px',
+  color: 'var(--danger-ink)',
+})
+
+const retryButtonStyle = css({
+  padding: '7px 14px',
+  border: '1px solid var(--line-strong)',
+  borderRadius: '8px',
+  background: 'var(--paper-2)',
+  color: 'var(--ink-0)',
+  font: 'inherit',
+  fontSize: '12px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition:
+    'background 150ms var(--ease-out), transform 140ms var(--ease-out)',
+  '&:hover': { background: 'var(--hover-bg)' },
+  '&:active': { transform: 'scale(0.96)' },
+})
+
+const sectionBlockStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  borderRadius: '10px',
+  transition: 'background-color 200ms var(--ease-out)',
+  '&[data-highlighted="true"]': {
+    padding: '8px',
+    outline: '2px solid var(--accent)',
+    background: 'var(--accent-soft)',
+  },
+})
+
+const sectionHeadingStyle = css({
+  margin: 0,
+  fontSize: '12px',
+  fontWeight: 600,
+  color: 'var(--ink-2)',
+})
+
+const advisoryListStyle = css({
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+})
+
+const advisoryRowStyle = css({
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: '8px',
+  padding: '8px 10px',
+  border: '1px solid var(--line)',
+  borderRadius: '10px',
+  background: 'var(--paper)',
+  fontSize: '12px',
+})
+
+const advisoryHazardStyle = css({
+  fontFamily: 'var(--font-mono)',
+  fontWeight: 700,
+  color: 'var(--warn-ink)',
+})
+
+const advisoryDetailStyle = css({
+  color: 'var(--ink-2)',
+  fontSize: '12px',
+})
+
+const timedHeadStyle = css({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+})
+
+const mutedStyle = css({
+  margin: 0,
+  fontSize: '13px',
+  lineHeight: 1.5,
+  color: 'var(--ink-2)',
+})

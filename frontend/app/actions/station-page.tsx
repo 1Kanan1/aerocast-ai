@@ -10,7 +10,6 @@ import type {
 } from '#app/lib/api-types.ts'
 import type { ApiResult } from '#app/lib/api.ts'
 import { ageLabel, timeLabel, windowLabel } from '#app/lib/format.ts'
-import { CATEGORY_SHADES, categoryInk } from '#app/lib/public/categories.ts'
 import {
   ceilingLabel,
   periodWindLabel,
@@ -27,6 +26,10 @@ import {
   subheadingStyle,
 } from '#app/ui/layout.tsx'
 import { Timeline, timelinePoints } from '#app/ui/timeline.tsx'
+import {
+  CategoryBadge,
+  StaticDefinitionsDisclosure,
+} from '#app/ui/public/primitives.tsx'
 
 interface StationPageProps {
   brief: ApiResult<StationBrief>
@@ -49,7 +52,11 @@ export function StationPage(handle: Handle<StationPageProps>) {
       <Page active="map" title={`${station.icao} · AeroCast AI`}>
         <section>
           <p mix={crumbStyle}>
-            <a href={routes.home.href()}>← All stations</a>
+            <a
+              href={`${routes.home.href()}?station=${encodeURIComponent(station.icao)}`}
+            >
+              ← Back to map
+            </a>
           </p>
           <div mix={titleRowStyle}>
             <h1 mix={headingStyle}>
@@ -163,26 +170,11 @@ export function StationPage(handle: Handle<StationPageProps>) {
             </>
           )}
         </section>
+
+        {bundle?.definitions ? (
+          <StaticDefinitionsDisclosure definitions={bundle.definitions} />
+        ) : null}
       </Page>
-    )
-  }
-}
-
-function CategoryBadge(handle: Handle<{ category: string | null }>) {
-  return () => {
-    let category = handle.props.category
-    let shade = category === null ? undefined : CATEGORY_SHADES[category]
-
-    return (
-      <span
-        mix={badgeStyle}
-        style={{
-          background: shade ?? 'rgba(255, 255, 255, 0.06)',
-          color: shade ? categoryInk(category) : 'var(--ink-2)',
-        }}
-      >
-        {category ?? 'no data'}
-      </span>
     )
   }
 }
@@ -307,13 +299,6 @@ const titleRowStyle = css({
   justifyContent: 'space-between',
   gap: '16px',
   flexWrap: 'wrap',
-})
-
-const badgeStyle = css({
-  padding: '4px 12px',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '999px',
-  fontSize: '12px',
 })
 
 const provenanceStyle = css({
