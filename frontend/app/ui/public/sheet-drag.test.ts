@@ -4,6 +4,7 @@ import { describe, it } from 'remix/test'
 import {
   cameraPadding,
   clampSheetHeight,
+  computePeekHeight,
   resolveSheetDrop,
   SHEET_DISMISS_PX,
   SHEET_HALF_VH,
@@ -82,5 +83,11 @@ describe('mobile sheet drag physics', () => {
       bottom: 96,
       left: 0,
     })
+  })
+
+  it('computes peek height from header and AskBar metrics with fallback', () => {
+    assert.equal(computePeekHeight(92.5, 64), 156.5)
+    assert.equal(computePeekHeight(92, 65), 157)
+    assert.equal(computePeekHeight(20, 20), SHEET_PEEK_PX)
   })
 })

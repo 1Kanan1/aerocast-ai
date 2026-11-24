@@ -3,7 +3,7 @@ export type SheetDropOutcome = SheetSnap | 'dismiss'
 
 export const MOBILE_SHEET_QUERY = '(max-width: 900px)'
 export const SHEET_HALF_VH = 56
-export const SHEET_PEEK_PX = 164
+export const SHEET_PEEK_PX = 156.5
 export const SHEET_DISMISS_PX = 96
 
 const DRAG_THRESHOLD_PX = 6
@@ -94,7 +94,21 @@ export interface SheetDragOptions {
 export interface SheetDragController {
   onPointerDown: (event: PointerEvent, fromHandle: boolean) => void
   consumeSuppressedClick: () => boolean
+  syncPeekHeight: () => void
   resetInlineState: () => void
+}
+
+/**
+ * Computes the exact peek height (header bottom aligned flush with AskBar's
+ * top edge) from live DOM metrics so different browsers, font sizes, and
+ * responsive widths stay aligned without a hardcoded magic pixel count.
+ */
+export function computePeekHeight(
+  headerSpanPx: number,
+  askSpanPx: number,
+): number {
+  let measured = Math.round((headerSpanPx + askSpanPx) * 2) / 2
+  return measured > SHEET_DISMISS_PX ? measured : SHEET_PEEK_PX
 }
 
 /**
@@ -129,6 +143,28 @@ export function createSheetDragController(
     panel.dataset.dragging = 'true'
     panel.dataset.elevated = heightPx > viewport * 0.72 ? 'true' : 'false'
     panel.dataset.edgeTop = heightPx >= viewport - 20 ? 'true' : 'false'
+  }
+
+  function syncPeekHeight(): void {
+    let panel = options.getPanel()
+    if (!panel || typeof window === 'undefined') return
+    let header = panel.querySelector('header')
+    let askBar = document.querySelector<HTMLElement>(
+      'form:has([data-ask-field])',
+    )
+    if (!header || !askBar) {
+      panel.style.setProperty('--sheet-peek-h', `${SHEET_PEEK_PX}px`)
+      return
+    }
+    let panelRect = panel.getBoundingClientRect()
+    let headerRect = header.getBoundingClientRect()
+    let askRect = askBar.getBoundingClientRect()
+    if (headerRect.height <= 0 || askRect.height <= 0) return
+    let height = computePeekHeight(
+      headerRect.bottom - panelRect.top,
+      window.innerHeight - askRect.top,
+    )
+    panel.style.setProperty('--sheet-peek-h', `${height}px`)
   }
 
   function resetInlineState(): void {
@@ -213,6 +249,7 @@ export function createSheetDragController(
 
     // Re-enable CSS transitions before clearing inline height so the sheet
     // glides smoothly from the exact drop point to its snap height.
+    if (outcome === 'peek') syncPeekHeight()
     delete panel.dataset.dragging
     delete panel.dataset.edgeTop
     void panel.offsetHeight
@@ -261,6 +298,7 @@ export function createSheetDragController(
       suppressNextClick = false
       return true
     },
+    syncPeekHeight,
     resetInlineState,
   }
 }

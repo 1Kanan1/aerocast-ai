@@ -75,6 +75,7 @@ export const AreaPanel = clientEntry(
     function cycleSnap(): void {
       if (drag.consumeSuppressedClick()) return
       snap = snap === 'half' ? 'full' : snap === 'full' ? 'peek' : 'half'
+      if (snap === 'peek') drag.syncPeekHeight()
       handle.update()
     }
 
@@ -458,7 +459,9 @@ const panelStyle = css({
         animation: 'rmx-sheet-out 200ms ease-in forwards',
       },
     },
-    '&[data-snap="peek"]': { height: `${SHEET_PEEK_PX}px` },
+    '&[data-snap="peek"]': {
+      height: `var(--sheet-peek-h, ${SHEET_PEEK_PX}px)`,
+    },
     '&[data-snap="peek"]:not([data-dragging="true"]) [data-sheet-content]': {
       opacity: 0,
       pointerEvents: 'none',
