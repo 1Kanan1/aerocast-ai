@@ -16,6 +16,7 @@ import { routes } from '#app/routes.ts'
 import { CloseIcon } from '#app/ui/public/icons.tsx'
 import {
   CategoryBadge,
+  CollapsibleSection,
   DefinitionsDisclosure,
   FactGrid,
   type FactItem,
@@ -441,16 +442,11 @@ function ConditionsSection(
         <FactGrid highlightedKey={highlightedField} items={items} />
 
         {station.advisories.length > 0 ? (
-          <section
-            aria-label="Active advisories"
-            data-highlighted={
-              highlightedField === 'advisories' ? 'true' : 'false'
-            }
-            mix={sectionBlockStyle}
+          <CollapsibleSection
+            forceOpen={highlightedField === 'advisories'}
+            highlighted={highlightedField === 'advisories'}
+            title={`Active advisories (${station.advisories.length})`}
           >
-            <h3 mix={sectionHeadingStyle}>
-              Active advisories ({station.advisories.length})
-            </h3>
             <ul mix={advisoryListStyle}>
               {station.advisories.map((adv) => (
                 <li key={adv.ref} mix={advisoryRowStyle}>
@@ -463,7 +459,7 @@ function ConditionsSection(
                 </li>
               ))}
             </ul>
-          </section>
+          </CollapsibleSection>
         ) : null}
 
         {station.raw ? <RawReport raw={station.raw} /> : null}
@@ -842,30 +838,10 @@ const retryButtonStyle = css({
   '&:active': { transform: 'scale(0.96)' },
 })
 
-const sectionBlockStyle = css({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  borderRadius: '10px',
-  transition: 'background-color 200ms var(--ease-out)',
-  '&[data-highlighted="true"]': {
-    padding: '8px',
-    outline: '2px solid var(--accent)',
-    background: 'var(--accent-soft)',
-  },
-})
-
-const sectionHeadingStyle = css({
-  margin: 0,
-  fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--ink-2)',
-})
-
 const advisoryListStyle = css({
   listStyle: 'none',
   margin: 0,
-  padding: 0,
+  padding: '8px 0 0',
   display: 'flex',
   flexDirection: 'column',
   gap: '6px',
@@ -877,8 +853,8 @@ const advisoryRowStyle = css({
   gap: '8px',
   padding: '8px 10px',
   border: '1px solid var(--line)',
-  borderRadius: '10px',
-  background: 'var(--paper)',
+  borderRadius: '8px',
+  background: 'var(--paper-2)',
   fontSize: '12px',
 })
 

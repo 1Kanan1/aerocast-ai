@@ -1,4 +1,4 @@
-import type { Handle } from 'remix/component'
+import type { Handle, RemixNode } from 'remix/component'
 import { css, on } from 'remix/component'
 
 import type { BundlePeriod, BundleTaf } from '#app/lib/api-types.ts'
@@ -236,20 +236,39 @@ export function TafTableCompact(
 }
 
 /**
- * Animated collapsible Aviation terms glossary for client islands.
- * Uses CSS grid-template-rows 0fr -> 1fr so height glides smoothly.
+ * Animated collapsible disclosure curtain using CSS grid-template-rows
+ * 0fr -> 1fr so content glides open and shut smoothly.
  */
-export function DefinitionsDisclosure(
-  handle: Handle<{ definitions: Record<string, string> }>,
+export function CollapsibleSection(
+  handle: Handle<{
+    children?: RemixNode
+    defaultOpen?: boolean
+    forceOpen?: boolean
+    highlighted?: boolean
+    title: string
+  }>,
 ) {
-  let open = false
+  let open = handle.props.defaultOpen ?? false
+  let lastForce = false
 
   return () => {
-    let entries = Object.entries(handle.props.definitions)
-    if (entries.length === 0) return null
+    let {
+      children,
+      forceOpen = false,
+      highlighted = false,
+      title,
+    } = handle.props
+    if (forceOpen && !lastForce) {
+      open = true
+    }
+    lastForce = forceOpen
 
     return (
-      <div data-open={open ? 'true' : 'false'} mix={definitionsWrapStyle}>
+      <div
+        data-highlighted={highlighted ? 'true' : 'false'}
+        data-open={open ? 'true' : 'false'}
+        mix={definitionsWrapStyle}
+      >
         <button
           aria-expanded={open ? 'true' : 'false'}
           mix={[
@@ -261,7 +280,7 @@ export function DefinitionsDisclosure(
           ]}
           type="button"
         >
-          <span>Aviation terms ({entries.length})</span>
+          <span>{title}</span>
           <span
             aria-hidden="true"
             mix={definitionsChevronStyle}
@@ -276,17 +295,35 @@ export function DefinitionsDisclosure(
           mix={definitionsCollapseStyle}
         >
           <div mix={definitionsInnerStyle}>
-            <dl mix={definitionsListStyle}>
-              {entries.map(([term, description]) => (
-                <div key={term} mix={definitionRowStyle}>
-                  <dt mix={definitionTermStyle}>{term.replace(/_/g, ' ')}</dt>
-                  <dd mix={definitionDescStyle}>{description}</dd>
-                </div>
-              ))}
-            </dl>
+            <div mix={disclosureBodyStyle}>{children}</div>
           </div>
         </div>
       </div>
+    )
+  }
+}
+
+/**
+ * Animated collapsible Aviation terms glossary for client islands.
+ */
+export function DefinitionsDisclosure(
+  handle: Handle<{ definitions: Record<string, string> }>,
+) {
+  return () => {
+    let entries = Object.entries(handle.props.definitions)
+    if (entries.length === 0) return null
+
+    return (
+      <CollapsibleSection title={`Aviation terms (${entries.length})`}>
+        <dl mix={definitionsListStyle}>
+          {entries.map(([term, description]) => (
+            <div key={term} mix={definitionRowStyle}>
+              <dt mix={definitionTermStyle}>{term.replace(/_/g, ' ')}</dt>
+              <dd mix={definitionDescStyle}>{description}</dd>
+            </div>
+          ))}
+        </dl>
+      </CollapsibleSection>
     )
   }
 }
@@ -304,14 +341,16 @@ export function StaticDefinitionsDisclosure(
         <summary mix={staticSummaryStyle}>
           Aviation terms ({entries.length})
         </summary>
-        <dl mix={definitionsListStyle}>
-          {entries.map(([term, description]) => (
-            <div key={term} mix={definitionRowStyle}>
-              <dt mix={definitionTermStyle}>{term.replace(/_/g, ' ')}</dt>
-              <dd mix={definitionDescStyle}>{description}</dd>
-            </div>
-          ))}
-        </dl>
+        <div mix={disclosureBodyStyle}>
+          <dl mix={definitionsListStyle}>
+            {entries.map(([term, description]) => (
+              <div key={term} mix={definitionRowStyle}>
+                <dt mix={definitionTermStyle}>{term.replace(/_/g, ' ')}</dt>
+                <dd mix={definitionDescStyle}>{description}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </details>
     )
   }
@@ -556,8 +595,20 @@ const definitionsWrapStyle = css({
   borderRadius: '10px',
   background: 'var(--paper)',
   overflow: 'hidden',
-  transition: 'border-color 180ms var(--ease-out)',
+  transition:
+    'border-color 180ms var(--ease-out), background-color 200ms var(--ease-out)',
   '&[data-open="true"]': { borderColor: 'var(--line-strong)' },
+  '&[data-highlighted="true"]': {
+    borderColor: 'var(--accent)',
+    '@media (prefers-reduced-motion: no-preference)': {
+      animation: 'rmx-highlight-pulse 700ms var(--ease-out)',
+    },
+  },
+})
+
+const disclosureBodyStyle = css({
+  padding: '0 12px 12px',
+  borderBlockStart: '1px solid var(--line)',
 })
 
 const definitionsTriggerStyle = css({
@@ -613,11 +664,10 @@ const staticSummaryStyle = css({
 
 const definitionsListStyle = css({
   margin: 0,
-  padding: '0 12px 12px',
+  padding: 0,
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
-  borderBlockStart: '1px solid var(--line)',
 })
 
 const definitionRowStyle = css({
