@@ -243,16 +243,31 @@ export interface MapAdvisory {
   kind: string
   hazard: string
   source_id: string
+  severity?: string | null
+  base_ft?: number | null
+  top_ft?: number | null
+  due_to?: string | null
+  valid_from?: string | null
+  valid_to?: string | null
   geometry: Record<string, unknown>
 }
 
 export interface MapLayers {
   advisories: MapAdvisory[]
+  stations?: MapStation[]
 }
 
 export interface MapLayersResponse {
   data: MapLayers
   meta: Meta
+}
+
+export interface MapStation {
+  icao: string
+  name: string
+  lat: number
+  lon: number
+  category?: string | null
 }
 
 export interface Meta {

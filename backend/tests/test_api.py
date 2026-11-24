@@ -337,6 +337,17 @@ async def test_map_layers_keeps_what_the_viewport_contains(
     assert [item["source_id"] for item in body["data"]["advisories"]] == [
         "ZULU:3W"
     ]
+    assert body["data"]["advisories"][0]["due_to"] == "CEILING AND VISIBILITY"
+    assert body["data"]["advisories"][0]["valid_to"] is not None
+    assert body["data"]["stations"] == [
+        {
+            "icao": "KSFO",
+            "name": "San Francisco Intl",
+            "lat": 37.6196,
+            "lon": -122.3656,
+            "category": "MVFR",
+        }
+    ]
 
 
 async def test_map_layers_without_a_bbox_covers_the_world(
@@ -350,6 +361,10 @@ async def test_map_layers_without_a_bbox_covers_the_world(
     assert [item["source_id"] for item in body["data"]["advisories"]] == [
         "ZULU:3W",
         "ZULU:4W",
+    ]
+    assert [item["icao"] for item in body["data"]["stations"]] == [
+        "KSFO",
+        "KJFK",
     ]
 
 

@@ -94,17 +94,32 @@ class StationDetail(BaseModel):
     advisories: list[NearbyAdvisory]
 
 
+class MapStation(BaseModel):
+    icao: str
+    name: str
+    lat: float
+    lon: float
+    category: str | None = None
+
+
 class MapAdvisory(BaseModel):
     kind: str
     hazard: str
     source_id: str
+    severity: str | None = None
+    base_ft: int | None = None
+    top_ft: int | None = None
+    due_to: str | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
     geometry: dict[str, Any]
 
 
 class MapLayers(BaseModel):
-    """Only what the map draws: advisory polygons."""
+    """Viewport stations and advisory polygons drawn on the map."""
 
     advisories: list[MapAdvisory]
+    stations: list[MapStation] = Field(default_factory=list)
 
 
 class Pirep(BaseModel):

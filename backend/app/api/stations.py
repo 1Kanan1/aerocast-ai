@@ -274,17 +274,46 @@ async def brief_station(
     )
 
 
+#: Maximum stations returned for a single map viewport.
+MAP_STATION_LIMIT = 400
+
+
 @router.get("/map/layers", response_model=models.MapLayersResponse)
 async def map_layers(
     bbox: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    """Advisory polygons for the viewport, and nothing else."""
+    """Viewport stations with flight category and active advisory polygons."""
     bounds = _bounds(bbox)
+    min_lon, min_lat, max_lon, max_lat = bounds
 
-    advisories = await fetch_all(
-        "select kind, hazard, source_id, geom from advisories "
-        "where valid_to > now()"
+    advisories, stations = await asyncio.gather(
+        fetch_all(
+            "select kind, hazard, source_id, severity, base_ft, top_ft, "
+            "due_to, valid_from, valid_to, geom from advisories "
+            "where valid_to > now()"
+        ),
+        fetch_all(
+            "select icao, name, lat, lon from stations "
+            "where lat between :min_lat and :max_lat "
+            "and lon between :min_lon and :max_lon "
+            "order by (coalesce(site_type, '') ilike '%TAF%') desc, "
+            "(coalesce(site_type, '') ilike '%METAR%') desc, icao "
+            "limit :limit",
+            {
+                "min_lat": min_lat,
+                "max_lat": max_lat,
+                "min_lon": min_lon,
+                "max_lon": max_lon,
+                "limit": MAP_STATION_LIMIT,
+            },
+        ),
     )
+
+    categories: dict[str, str | None] = {}
+    if stations:
+        categories = await _latest_categories(
+            [row["icao"] for row in stations]
+        )
 
     return wrap(
         {
@@ -293,14 +322,41 @@ async def map_layers(
                     "kind": row["kind"],
                     "hazard": row["hazard"],
                     "source_id": row["source_id"],
+                    "severity": row.get("severity"),
+                    "base_ft": row.get("base_ft"),
+                    "top_ft": row.get("top_ft"),
+                    "due_to": row.get("due_to"),
+                    "valid_from": row.get("valid_from"),
+                    "valid_to": row.get("valid_to"),
                     "geometry": row["geom"],
                 }
                 for row in advisories
                 if _intersects(row["geom"], bounds)
             ],
+            "stations": [
+                {
+                    "icao": row["icao"],
+                    "name": row["name"],
+                    "lat": row["lat"],
+                    "lon": row["lon"],
+                    "category": categories.get(row["icao"]),
+                }
+                for row in stations
+            ],
         },
         source="aviationweather.gov",
     )
+
+
+async def _latest_categories(icaos: list[str]) -> dict[str, str | None]:
+    rows = await fetch_all(
+        "select distinct on (station_icao) station_icao, category "
+        "from metar_observations "
+        "where station_icao = any(:icaos) "
+        "order by station_icao, obs_time desc",
+        {"icaos": [code.upper() for code in icaos]},
+    )
+    return {row["station_icao"]: row.get("category") for row in rows}
 
 
 async def _latest(table: str, order: str, icao: str) -> Any:
