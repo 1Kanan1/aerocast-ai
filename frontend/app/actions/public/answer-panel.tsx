@@ -233,6 +233,7 @@ export const AnswerPanel = clientEntry(
               {station !== null ? (
                 <a
                   href={routes.station.href({ icao: station.icao })}
+                  key="full-page"
                   mix={fullPageStyle}
                 >
                   Full page →
@@ -240,6 +241,7 @@ export const AnswerPanel = clientEntry(
               ) : null}
               <button
                 aria-label="Close answers"
+                key="close"
                 mix={[closeStyle, on('click', () => session.clear())]}
                 type="button"
               >

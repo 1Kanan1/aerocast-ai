@@ -758,7 +758,12 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.notify()
   }
 
-  clear(): void {
+  /**
+   * Reset transient map state when navigating away from the map route. Keeps
+   * saved station threads and never mutates browser history so soft navigations
+   * back to `/` hydrate cleanly against server HTML.
+   */
+  detach(): void {
     this.#pending?.abort()
     this.#ask?.abort()
     this.#ask = null
@@ -776,6 +781,11 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.suggested = []
     this.viewHour = 0
     this.highlightedRef = null
+    this.anchor = null
+  }
+
+  clear(): void {
+    this.detach()
     this.setAnchor(null)
     this.syncUrl()
     this.notify()
@@ -783,6 +793,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
 
   private syncUrl(): void {
     if (typeof window === 'undefined' || !window.history) return
+    if (window.location.pathname !== routes.home.href()) return
     let nextSearch = buildSearchForState(
       this.selected?.icao ?? null,
       this.area,
@@ -790,7 +801,32 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     )
     if (window.location.search === nextSearch) return
     let target = `${window.location.pathname}${nextSearch}${window.location.hash}`
-    window.history.replaceState(null, '', target)
+
+    // history.replaceState clears Navigation API entry state, which strips
+    // Remix's `$rmx` marker and breaks browser Back/Forward traverses. Capture
+    // and restore it with the updated `src`.
+    let nav = (
+      window as Window & {
+        navigation?: {
+          currentEntry?: { getState?: () => unknown } | null
+          updateCurrentEntry?: (options: { state: unknown }) => void
+        }
+      }
+    ).navigation
+    let prevNavState = nav?.currentEntry?.getState?.()
+
+    window.history.replaceState(window.history.state, '', target)
+
+    if (
+      nav?.updateCurrentEntry &&
+      prevNavState !== null &&
+      typeof prevNavState === 'object' &&
+      '$rmx' in prevNavState
+    ) {
+      nav.updateCurrentEntry({
+        state: { ...prevNavState, src: window.location.href },
+      })
+    }
   }
 
   private notify(): void {

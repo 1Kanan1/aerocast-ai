@@ -458,4 +458,141 @@ describe('station session', () => {
     )
     assert.equal(buildSearchForState(null, null, 0), '')
   })
+
+  it('preserves Remix navigation entry state when updating the map URL', async (t) => {
+    mockFetch(t, stationApi)
+    let originalWindow = globalThis.window
+    let replacedUrl: string | null = null
+    let navState: unknown = {
+      target: undefined,
+      src: 'http://localhost:44100/',
+      resetScroll: 'after-transition',
+      resetFocus: 'after-transition',
+      $rmx: true,
+    }
+    let currentLocation = new URL('http://localhost:44100/')
+    let fakeWindow = {
+      get location() {
+        return currentLocation
+      },
+      history: {
+        state: { keep: true },
+        replaceState(_state: unknown, _title: string, url?: string | URL) {
+          replacedUrl = String(url ?? '')
+          currentLocation = new URL(replacedUrl, 'http://localhost:44100')
+          // Mirror real browsers: history.replaceState clears Navigation API state.
+          navState = undefined
+        },
+      },
+      navigation: {
+        currentEntry: {
+          getState: () => navState,
+        },
+        updateCurrentEntry({ state }: { state: unknown }) {
+          navState = state
+        },
+      },
+    }
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: fakeWindow,
+    })
+    t.after(() => {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: originalWindow,
+      })
+    })
+
+    let session = new StationSession()
+    await session.select('KSFO')
+
+    assert.equal(replacedUrl, '/?station=KSFO')
+    assert.deepEqual(navState, {
+      target: undefined,
+      src: 'http://localhost:44100/?station=KSFO',
+      resetScroll: 'after-transition',
+      resetFocus: 'after-transition',
+      $rmx: true,
+    })
+  })
+
+  it('does not rewrite the URL when not on the map route', async (t) => {
+    mockFetch(t, stationApi)
+    let originalWindow = globalThis.window
+    let replaceCalls = 0
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        location: new URL('http://localhost:44100/stations/KSFO'),
+        history: {
+          state: null,
+          replaceState() {
+            replaceCalls += 1
+          },
+        },
+      },
+    })
+    t.after(() => {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: originalWindow,
+      })
+    })
+
+    let session = new StationSession()
+    await session.select('KSFO')
+
+    assert.equal(replaceCalls, 0)
+  })
+
+  it('detaches transient selection on route unmount without touching history or threads', async (t) => {
+    mockFetch(t, (path) =>
+      path.includes('/ask')
+        ? Response.json({
+            summary: 'KSFO is VFR.',
+            claims: [],
+            caveats: [],
+            refusal: null,
+            notice: null,
+          })
+        : stationApi(path),
+    )
+    let originalWindow = globalThis.window
+    let replaceCalls = 0
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        location: new URL('http://localhost:44100/'),
+        history: {
+          state: null,
+          replaceState() {
+            replaceCalls += 1
+          },
+        },
+      },
+    })
+    t.after(() => {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: originalWindow,
+      })
+    })
+
+    let session = new StationSession()
+    await session.select('KSFO')
+    await session.ask('How is visibility?')
+    replaceCalls = 0
+
+    session.detach()
+
+    assert.equal(session.selected === null, true)
+    assert.equal(session.area === null, true)
+    assert.equal(session.clarification === null, true)
+    assert.equal(replaceCalls, 0)
+
+    // Returning to KSFO restores the preserved conversation thread.
+    await session.select('KSFO')
+    assert.equal(session.selected?.thread.length, 1)
+  })
 })

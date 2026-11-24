@@ -154,6 +154,9 @@ export const MapIsland = clientEntry(
     let fallback: HTMLElement | undefined
 
     handle.queueTask(async (signal) => {
+      handle.signal.addEventListener('abort', () => session.detach(), {
+        once: true,
+      })
       if (!container) return
 
       let maplibre: typeof import('maplibre-gl')
