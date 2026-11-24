@@ -234,3 +234,60 @@ export function CheckIcon(_handle: Handle) {
     </svg>
   )
 }
+
+export function SunIcon(_handle: Handle) {
+  return () => (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.6"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+    </svg>
+  )
+}
+
+export function MoonIcon(_handle: Handle) {
+  return () => (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.6"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />
+    </svg>
+  )
+}
+
+export function LayersIcon(_handle: Handle) {
+  return () => (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.6"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <path d="m12 3 9 4.5-9 4.5-9-4.5Z" />
+      <path d="m3 12 9 4.5 9-4.5" />
+      <path d="m3 16.5 9 4.5 9-4.5" />
+    </svg>
+  )
+}

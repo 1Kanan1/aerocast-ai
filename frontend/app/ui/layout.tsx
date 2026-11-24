@@ -2,6 +2,7 @@ import type { Handle, RemixNode } from 'remix/component'
 import { css } from 'remix/component'
 
 import { Document } from '#app/actions/document.tsx'
+import { ThemeToggle } from '#app/actions/public/theme-toggle.tsx'
 import { routes } from '#app/routes.ts'
 
 export interface PageProps {
@@ -17,35 +18,38 @@ export function Page(handle: Handle<PageProps>) {
 
     return (
       <Document title={title}>
-        <main mix={[tokensStyle, pageStyle]}>
+        <div mix={[tokensStyle, pageStyle]}>
           <div mix={columnStyle}>
             <header mix={mastheadStyle}>
               <a href={routes.home.href()} mix={wordmarkStyle}>
                 AEROCAST
               </a>
-              <nav mix={navStyle}>
-                <a
-                  aria-current={active === 'map' ? 'page' : undefined}
-                  href={routes.home.href()}
-                >
-                  Map
-                </a>
-                <a
-                  aria-current={active === 'advisories' ? 'page' : undefined}
-                  href={routes.advisories.href()}
-                >
-                  Advisories
-                </a>
-                <a
-                  aria-current={active === 'about' ? 'page' : undefined}
-                  href={routes.about.href()}
-                >
-                  About
-                </a>
-              </nav>
+              <div mix={navRowStyle}>
+                <nav mix={navStyle}>
+                  <a
+                    aria-current={active === 'map' ? 'page' : undefined}
+                    href={routes.home.href()}
+                  >
+                    Map
+                  </a>
+                  <a
+                    aria-current={active === 'advisories' ? 'page' : undefined}
+                    href={routes.advisories.href()}
+                  >
+                    Advisories
+                  </a>
+                  <a
+                    aria-current={active === 'about' ? 'page' : undefined}
+                    href={routes.about.href()}
+                  >
+                    About
+                  </a>
+                </nav>
+                <ThemeToggle />
+              </div>
             </header>
 
-            {children}
+            <main mix={mainStackStyle}>{children}</main>
 
             <footer mix={footerStyle}>
               <p>
@@ -57,27 +61,13 @@ export function Page(handle: Handle<PageProps>) {
               </p>
             </footer>
           </div>
-        </main>
+        </div>
       </Document>
     )
   }
 }
 
-export const tokensStyle = css({
-  colorScheme: 'dark',
-  '--ink-0': '#f4f4f2',
-  '--ink-1': '#d7d7d3',
-  '--ink-2': '#a6a6a1',
-  '--ink-3': '#83837e',
-  '--line': 'rgba(255, 255, 255, 0.10)',
-  '--paper': '#09090a',
-  '--paper-2': '#101012',
-  '--accent': '#f4f4f2',
-  '--glass': 'rgba(22, 22, 25, 0.62)',
-  '--glass-strong': 'rgba(24, 24, 28, 0.86)',
-  '--glass-border': 'rgba(255, 255, 255, 0.09)',
-  '--shadow': '0 24px 70px rgba(0, 0, 0, 0.55)',
-})
+export const tokensStyle = css({})
 
 export const glassStyle = css({
   background: 'var(--glass)',
@@ -85,22 +75,25 @@ export const glassStyle = css({
   boxShadow: 'var(--shadow)',
   backdropFilter: 'blur(20px) saturate(1.2)',
   WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
+  transition:
+    'background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
 })
 
 export const pageStyle = css({
   '& *, & *::before, & *::after': { boxSizing: 'border-box' },
   minHeight: '100vh',
   margin: 0,
-  padding: 'clamp(28px, 6vw, 72px) 24px',
+  padding: 'clamp(24px, 5vw, 64px) 20px',
   background: 'var(--paper)',
   color: 'var(--ink-0)',
-  fontFamily:
-    "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+  fontFamily: 'var(--font-sans)',
   fontSize: '14px',
   lineHeight: 1.6,
   WebkitFontSmoothing: 'antialiased',
   display: 'flex',
   justifyContent: 'center',
+  transition:
+    'background-color 220ms var(--ease-out), color 220ms var(--ease-out)',
 })
 
 export const columnStyle = css({
@@ -108,12 +101,18 @@ export const columnStyle = css({
   maxWidth: '960px',
   display: 'flex',
   flexDirection: 'column',
-  gap: '32px',
+  gap: '28px',
+})
+
+const mainStackStyle = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '24px',
 })
 
 const mastheadStyle = css({
   display: 'flex',
-  alignItems: 'baseline',
+  alignItems: 'center',
   justifyContent: 'space-between',
   flexWrap: 'wrap',
   gap: '12px 24px',
@@ -121,14 +120,20 @@ const mastheadStyle = css({
   borderBlockEnd: '1px solid var(--line)',
 })
 
+const navRowStyle = css({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '14px',
+})
+
 export const wordmarkStyle = css({
   fontSize: '13px',
   fontWeight: 700,
-  letterSpacing: '0.08em',
+  letterSpacing: '0.1em',
   color: 'var(--ink-0)',
   textDecoration: 'none',
   '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '4px',
   },
 })
@@ -136,11 +141,16 @@ export const wordmarkStyle = css({
 export const navStyle = css({
   display: 'flex',
   gap: '18px',
-  '& a': { color: 'var(--ink-3)', textDecoration: 'none' },
-  '& a:hover': { color: 'var(--ink-1)' },
+  '& a': {
+    color: 'var(--ink-2)',
+    textDecoration: 'none',
+    fontWeight: 500,
+    transition: 'color 160ms var(--ease-out)',
+  },
+  '& a:hover': { color: 'var(--ink-0)' },
   '& a:focus-visible': {
     color: 'var(--ink-0)',
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '4px',
   },
   '& a[aria-current="page"]': {
@@ -161,17 +171,17 @@ const footerStyle = css({
 
 export const headingStyle = css({
   margin: '0 0 4px',
-  fontSize: 'clamp(24px, 3.6vw, 32px)',
-  fontWeight: 400,
-  lineHeight: 1.15,
-  letterSpacing: '-0.01em',
+  fontSize: 'clamp(22px, 3.4vw, 30px)',
+  fontWeight: 600,
+  lineHeight: 1.2,
+  letterSpacing: '-0.02em',
 })
 
 export const subheadingStyle = css({
   margin: '0 0 12px',
   fontSize: '16px',
-  fontWeight: 400,
-  color: 'var(--ink-1)',
+  fontWeight: 600,
+  color: 'var(--ink-0)',
 })
 
 export const cardStyle = css({
@@ -179,6 +189,11 @@ export const cardStyle = css({
   borderRadius: '16px',
   padding: '20px 24px',
   background: 'var(--paper-2)',
+  transition:
+    'background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+  '@media (max-width: 640px)': {
+    padding: '16px',
+  },
 })
 
-export const mutedStyle = css({ color: 'var(--ink-3)' })
+export const mutedStyle = css({ color: 'var(--ink-2)' })

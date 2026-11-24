@@ -217,11 +217,12 @@ const barStyle = css({
   boxShadow: 'var(--shadow)',
   backdropFilter: 'blur(24px) saturate(1.2)',
   WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
-  transition: 'border-color 140ms ease',
-  '&:focus-within': { borderColor: 'rgba(255, 255, 255, 0.24)' },
+  transition:
+    'border-color 160ms var(--ease-out), background-color 220ms var(--ease-out), box-shadow 220ms var(--ease-out)',
+  '&:focus-within': { borderColor: 'var(--accent)' },
   // The textarea draws no outline of its own, so the ring goes on the bar.
   '&:has(textarea:focus-visible)': {
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '2px',
   },
   '& textarea': {
@@ -251,14 +252,16 @@ const sendStyle = css({
   flexShrink: 0,
   border: 0,
   borderRadius: '999px',
-  background: 'var(--ink-0)',
-  color: 'var(--paper)',
+  background: 'var(--accent)',
+  color: 'var(--accent-ink)',
   cursor: 'pointer',
-  transition: 'opacity 120ms ease, transform 120ms ease',
-  '&:hover': { transform: 'translateY(-1px)' },
-  '&:disabled': { opacity: 0.3, cursor: 'not-allowed', transform: 'none' },
+  transition:
+    'opacity 140ms var(--ease-out), transform 160ms var(--ease-spring)',
+  '&:hover': { transform: 'translateY(-1px) scale(1.03)' },
+  '&:active': { transform: 'scale(0.94)' },
+  '&:disabled': { opacity: 0.32, cursor: 'not-allowed', transform: 'none' },
   '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '2px',
   },
 })

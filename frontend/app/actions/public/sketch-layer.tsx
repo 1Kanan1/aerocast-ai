@@ -21,6 +21,7 @@ import {
 import { HOUR_MS, readingAt } from '#app/lib/public/timeline.ts'
 import type { Anchor } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
+import { theme } from '#app/ui/public/theme.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 import {
   type WeatherGrid,
@@ -64,7 +65,10 @@ const RAIN_TRAVEL = 20
  * density and length, and the colour channel belongs to the arrows: a field
  * with two coloured mark types is two fields.
  */
-const RAIN_COLOR = '#dbeaf3'
+const RAIN_COLOR_DARK = '#dbeaf3'
+const RAIN_COLOR_LIGHT = '#0369a1'
+const WIND_NEUTRAL_DARK = '#cfcfc9'
+const WIND_NEUTRAL_LIGHT = '#334155'
 /**
  * How far the carried field may drift from the scale it was built at before
  * it is rebuilt. Ten percent is under the point where the echo reads as
@@ -476,7 +480,11 @@ export const SketchLayer = clientEntry(
       let fieldRadius = AREA_NM * pxPerNm
       let step = windStep(fieldRadius, source.stations.length)
       let reach = step + WIND_STROKE
+      let mode = theme.resolved
+      let rainColor = mode === 'dark' ? RAIN_COLOR_DARK : RAIN_COLOR_LIGHT
+      let windNeutral = mode === 'dark' ? WIND_NEUTRAL_DARK : WIND_NEUTRAL_LIGHT
       let key = [
+        mode,
         source.lat.toFixed(4),
         source.lon.toFixed(4),
         source.radiusNm,
@@ -545,6 +553,7 @@ export const SketchLayer = clientEntry(
                 centre,
                 field.radar,
                 rainFields,
+                rainColor,
               ),
             )
           }
@@ -558,7 +567,7 @@ export const SketchLayer = clientEntry(
                 reach,
                 field.grid,
                 station.wind,
-                tempOn ? ink : '#cfcfc9',
+                tempOn ? ink : windNeutral,
                 seedOf(station.icao),
                 tempOn,
               ),
@@ -720,6 +729,7 @@ export const SketchLayer = clientEntry(
         resumeWind()
       })
       session.addEventListener('change', schedule, { signal: handle.signal })
+      theme.addEventListener('change', schedule, { signal: handle.signal })
       weatherLayers.addEventListener('change', schedule, {
         signal: handle.signal,
       })
@@ -819,6 +829,7 @@ function rainFor(
   centre: number,
   radar: RadarWindow,
   fields: number,
+  rainColor: string,
 ): RainStreak[] {
   let ux = RAIN_FALL.ux
   let uy = RAIN_FALL.uy
@@ -855,7 +866,7 @@ function rainFor(
         travel / (RAIN_SPEED[level] * (0.92 + 0.16 * drop.phase)),
       ),
       phase: drop.phase,
-      color: RAIN_COLOR,
+      color: rainColor,
       alpha: RAIN_ALPHA[level],
       edge: 0.8 * fade,
     })

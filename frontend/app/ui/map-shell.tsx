@@ -12,6 +12,7 @@ import { MapIsland } from '#app/actions/public/map-island.tsx'
 import { SketchLayer } from '#app/actions/public/sketch-layer.tsx'
 import { AreaPanel } from '#app/actions/public/area-panel.tsx'
 import { StationPopup } from '#app/actions/public/station-popup.tsx'
+import { ThemeToggle } from '#app/actions/public/theme-toggle.tsx'
 import { TimelineControl } from '#app/actions/public/timeline-control.tsx'
 import { WeatherKey } from '#app/actions/public/weather-key.tsx'
 import { AlertIcon, InfoIcon } from './public/icons.tsx'
@@ -62,6 +63,7 @@ export function MapShell(handle: Handle<MapShellProps>) {
             >
               <InfoIcon />
             </a>
+            <ThemeToggle />
           </header>
 
           <WeatherKey />
@@ -78,10 +80,9 @@ const shellStyle = css({
   overflow: 'hidden',
   background: 'var(--paper)',
   color: 'var(--ink-0)',
-  fontFamily:
-    "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+  fontFamily: 'var(--font-sans)',
   fontSize: '14px',
-  lineHeight: 1.6,
+  lineHeight: 1.55,
   WebkitFontSmoothing: 'antialiased',
 })
 
@@ -122,12 +123,17 @@ const iconStyle = css({
   color: 'var(--ink-2)',
   cursor: 'pointer',
   textDecoration: 'none',
+  transition:
+    'background 160ms var(--ease-out), color 160ms var(--ease-out), transform 140ms var(--ease-out)',
   '&:hover': {
-    background: 'rgba(255, 255, 255, 0.07)',
+    background: 'var(--hover-bg)',
     color: 'var(--ink-0)',
   },
+  '&:active': {
+    transform: 'scale(0.94)',
+  },
   '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '2px',
   },
 })

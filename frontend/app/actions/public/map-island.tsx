@@ -13,7 +13,7 @@ import type {
   AreaStation,
 } from '#app/lib/api-types.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
-import { toDarkMonochrome } from '#app/lib/monochrome.ts'
+import { toDarkMonochrome, toMonochrome } from '#app/lib/monochrome.ts'
 import { pixelsPerNm } from '#app/lib/public/field-stations.ts'
 import {
   RADAR_ATTRIBUTION,
@@ -23,6 +23,7 @@ import {
 } from '#app/lib/radar.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
+import { theme } from '#app/ui/public/theme.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
@@ -109,12 +110,20 @@ export const MapIsland = clientEntry(
         return
       }
 
-      let style = await loadStyle(signal)
+      let rawStyle = await loadRawStyle(signal)
       if (signal.aborted || !container) return
+
+      let currentTheme = theme.resolved
+      let buildStyle = (): StyleSpecification =>
+        rawStyle
+          ? currentTheme === 'dark'
+            ? toDarkMonochrome(rawStyle)
+            : toMonochrome(rawStyle)
+          : emptyStyle(currentTheme)
 
       let map = new maplibre.Map({
         container,
-        style: style ?? emptyStyle(),
+        style: buildStyle(),
         bounds: US_MAINLAND,
         fitBoundsOptions: { padding: US_PADDING },
         minZoom: 2.5,
@@ -215,15 +224,33 @@ export const MapIsland = clientEntry(
         }
       }
 
-      map.on('load', () => {
+      let mountOverlays = (): void => {
         if (signal.aborted) return
-
         addAdvisoryLayers(map, handle.props.initial)
         showAdvisories(map, weatherLayers.advisories)
         addMarkers(map, maplibre)
         applySession()
+      }
+
+      map.on('load', () => {
+        if (signal.aborted) return
+        mountOverlays()
         fallback?.remove()
       })
+
+      theme.addEventListener(
+        'change',
+        () => {
+          if (theme.resolved === currentTheme) return
+          currentTheme = theme.resolved
+          map.setStyle(buildStyle())
+          map.once('style.load', () => {
+            mountOverlays()
+            if (weatherLayers.advisories) void refreshAdvisories(map)
+          })
+        },
+        { signal: handle.signal },
+      )
 
       // The hazard polygons carry their own switch. Off means no requests as
       // the map moves; switching on fetches the current view at once, and a
@@ -292,19 +319,19 @@ export const MapIsland = clientEntry(
   },
 )
 
-async function loadStyle(
+async function loadRawStyle(
   signal: AbortSignal,
 ): Promise<StyleSpecification | null> {
   try {
     let response = await fetch(STYLE_URL, { signal })
     if (!response.ok) return null
-    return toDarkMonochrome((await response.json()) as StyleSpecification)
+    return (await response.json()) as StyleSpecification
   } catch {
     return null
   }
 }
 
-function emptyStyle(): StyleSpecification {
+function emptyStyle(mode: 'light' | 'dark'): StyleSpecification {
   return {
     version: 8,
     sources: {},
@@ -312,7 +339,9 @@ function emptyStyle(): StyleSpecification {
       {
         id: 'paper',
         type: 'background',
-        paint: { 'background-color': PAPER },
+        paint: {
+          'background-color': mode === 'dark' ? PAPER : '#f4f6f9',
+        },
       },
     ],
   }
@@ -475,7 +504,9 @@ function showAdvisories(map: MapLibreMap, visible: boolean): void {
 }
 
 function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {
-  map.addImage('advisory-hatch', hatchPattern(), { pixelRatio: 1 })
+  if (!map.hasImage('advisory-hatch')) {
+    map.addImage('advisory-hatch', hatchPattern(), { pixelRatio: 1 })
+  }
   map.addSource('advisories', {
     type: 'geojson',
     data: advisoriesOf(data),
@@ -716,25 +747,25 @@ const mapStyle = css({
   },
   '& .maplibregl-ctrl-group button': {
     background: 'transparent !important',
-    filter: 'invert(1)',
+    filter: 'var(--ctrl-filter)',
   },
   '& .maplibregl-ctrl-group button + button': {
     borderBlockStart: '1px solid var(--glass-border)',
   },
   '& .maplibregl-ctrl-attrib.maplibregl-compact': {
-    background: 'rgba(20, 20, 24, 0.72) !important',
+    background: 'var(--glass) !important',
     color: 'var(--ink-3) !important',
     borderRadius: '10px',
     backdropFilter: 'blur(10px)',
     WebkitBackdropFilter: 'blur(10px)',
   },
   '& .maplibregl-ctrl-attrib.maplibregl-compact-show': {
-    background: 'rgba(20, 20, 24, 0.88) !important',
+    background: 'var(--glass-strong) !important',
   },
   '& .maplibregl-ctrl-attrib a': { color: 'var(--ink-2) !important' },
   '& .maplibregl-ctrl-attrib-button': {
     backgroundColor: 'transparent !important',
-    filter: 'invert(1)',
+    filter: 'var(--ctrl-filter)',
   },
 })
 

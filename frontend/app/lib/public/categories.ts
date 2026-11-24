@@ -1,12 +1,31 @@
-/** Flight-category ramp on the dark basemap: the worse the weather, the brighter. */
+/** Standard FAA flight-category tokens (always paired with text labels). */
 export const CATEGORY_SHADES: Record<string, string> = {
-  VFR: '#4b4b4d',
-  MVFR: '#8b8b8d',
-  IFR: '#c9c9cb',
-  LIFR: '#f4f4f2',
+  VFR: 'var(--vfr-bg)',
+  MVFR: 'var(--mvfr-bg)',
+  IFR: 'var(--ifr-bg)',
+  LIFR: 'var(--lifr-bg)',
 }
 
-/** Readable text on a chip painted with the category shade. */
+/** High-contrast foreground token on the matching flight-category badge. */
 export function categoryInk(category: string | null): string {
-  return category === 'IFR' || category === 'LIFR' ? '#0b0b0c' : '#f4f4f2'
+  switch (category) {
+    case 'VFR':
+      return 'var(--vfr-ink)'
+    case 'MVFR':
+      return 'var(--mvfr-ink)'
+    case 'IFR':
+      return 'var(--ifr-ink)'
+    case 'LIFR':
+      return 'var(--lifr-ink)'
+    default:
+      return 'var(--ink-2)'
+  }
+}
+
+/** Saturated FAA marker dot color for map circles (hex for WebGL paint). */
+export const CATEGORY_DOTS: Record<string, string> = {
+  VFR: '#22c55e',
+  MVFR: '#3b82f6',
+  IFR: '#ef4444',
+  LIFR: '#d946ef',
 }
