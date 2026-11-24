@@ -205,6 +205,7 @@ const dockStyle = css({
     left: 0,
     right: 0,
     bottom: '12px',
+    zIndex: 8,
     paddingInline: '12px',
     '&[data-panel="true"]': { right: 0, left: 0 },
     '&[data-panel="true"] p': { display: 'none' },

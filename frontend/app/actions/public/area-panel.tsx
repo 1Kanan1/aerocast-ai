@@ -11,10 +11,14 @@ import type { Blend } from '#app/lib/public/blend.ts'
 import { blendStations } from '#app/lib/public/blend.ts'
 import { reportLabel } from '#app/lib/public/labels.ts'
 import { CloseIcon } from '#app/ui/public/icons.tsx'
-import { prefersReducedMotion } from '#app/ui/public/motion.ts'
 import { CategoryBadge, SegmentedTabs } from '#app/ui/public/primitives.tsx'
 import type { AreaPoint, ThreadEntry } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
+import {
+  createSheetDragController,
+  SHEET_PEEK_PX,
+  type SheetSnap,
+} from '#app/ui/public/sheet-drag.ts'
 import {
   AssistantTurn,
   ThreadAnnouncer,
@@ -22,7 +26,6 @@ import {
 } from '#app/ui/public/thread-parts.tsx'
 
 type AreaSection = 'overview' | 'ask'
-type SheetSnap = 'peek' | 'half' | 'full'
 
 const PANEL_EXIT_MS = 180
 
@@ -33,6 +36,7 @@ const PANEL_EXIT_MS = 180
 export const AreaPanel = clientEntry(
   import.meta.url,
   function AreaPanel(handle: Handle) {
+    let panelEl: HTMLElement | undefined
     let activeSection: AreaSection = 'overview'
     let snap: SheetSnap = 'half'
     let scroller: HTMLElement | undefined
@@ -44,6 +48,16 @@ export const AreaPanel = clientEntry(
     let exitError: string | null = null
     let exitLoading = false
     let lastAreaTurns = 0
+
+    let drag = createSheetDragController({
+      getPanel: () => panelEl,
+      onSnap: (next) => {
+        snap = next
+        handle.update()
+      },
+      onDismiss: () => session.closeArea(),
+      signal: handle.signal,
+    })
 
     function scrollToEnd(): void {
       if (session.areaThread.length === 0 || activeSection !== 'ask') return
@@ -58,6 +72,7 @@ export const AreaPanel = clientEntry(
     }
 
     function cycleSnap(): void {
+      if (drag.consumeSuppressedClick()) return
       snap = snap === 'half' ? 'full' : snap === 'full' ? 'peek' : 'half'
       handle.update()
     }
@@ -68,15 +83,17 @@ export const AreaPanel = clientEntry(
         let open = session.area !== null
 
         if (open) {
+          let wasClosed = exitPoint === null
           clearTimeout(closingTimer)
           closing = false
           let turns = session.areaThread.length
           if (turns > lastAreaTurns) {
             activeSection = 'ask'
             if (snap === 'peek') snap = 'half'
-          } else if (turns === 0 && lastAreaTurns > 0) {
+          } else if (wasClosed || (turns === 0 && lastAreaTurns > 0)) {
             activeSection = 'overview'
             snap = 'half'
+            drag.resetInlineState()
           }
           lastAreaTurns = turns
           exitPoint = session.area
@@ -103,6 +120,7 @@ export const AreaPanel = clientEntry(
           exitThread = []
           lastAreaTurns = 0
           activeSection = 'overview'
+          drag.resetInlineState()
           handle.update()
         }, PANEL_EXIT_MS)
       },
@@ -144,15 +162,9 @@ export const AreaPanel = clientEntry(
         <aside
           aria-label="Weather here"
           data-closing={closing ? 'true' : 'false'}
+          data-elevated={snap === 'full' ? 'true' : 'false'}
           data-snap={snap}
-          mix={panelStyle}
-          style={{
-            animation:
-              closing && !prefersReducedMotion()
-                ? 'rmx-panel-out 180ms ease-in forwards'
-                : undefined,
-            pointerEvents: closing ? 'none' : undefined,
-          }}
+          mix={[panelStyle, ref((node) => (panelEl = node))]}
         >
           <button
             aria-label={
@@ -162,13 +174,22 @@ export const AreaPanel = clientEntry(
                   ? 'Expand area sheet'
                   : 'Maximize area sheet'
             }
-            mix={[sheetHandleStyle, on('click', cycleSnap)]}
+            mix={[
+              sheetHandleStyle,
+              on('pointerdown', (event) => drag.onPointerDown(event, true)),
+              on('click', cycleSnap),
+            ]}
             type="button"
           >
             <span aria-hidden="true" mix={sheetGripStyle} />
           </button>
 
-          <header mix={headerStyle}>
+          <header
+            mix={[
+              headerStyle,
+              on('pointerdown', (event) => drag.onPointerDown(event, false)),
+            ]}
+          >
             <div mix={identityStyle}>
               <span mix={pointStyle}>{pointLabel(point.lat, point.lon)}</span>
               <span mix={countStyle}>
@@ -405,6 +426,12 @@ const panelStyle = css({
   '@media (prefers-reduced-motion: no-preference)': {
     animation: 'rmx-panel-in 260ms var(--ease-out) both',
   },
+  '&[data-closing="true"]': {
+    pointerEvents: 'none',
+    '@media (prefers-reduced-motion: no-preference)': {
+      animation: 'rmx-panel-out 180ms ease-in forwards',
+    },
+  },
   '@media (max-width: 900px)': {
     top: 'auto',
     left: 0,
@@ -415,7 +442,10 @@ const panelStyle = css({
     borderInline: 0,
     borderBlockEnd: 0,
     transition:
-      'height 300ms var(--ease-out), background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+      'height 320ms var(--ease-out), border-radius 240ms var(--ease-out), background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+    '&[data-dragging="true"]': { transition: 'none' },
+    '&[data-elevated="true"]': { zIndex: 7 },
+    '&[data-edge-top="true"]': { borderRadius: 0 },
     '@media (prefers-reduced-motion: no-preference)': {
       animation: 'rmx-sheet-in 280ms var(--ease-out) both',
     },
@@ -424,9 +454,14 @@ const panelStyle = css({
         animation: 'rmx-sheet-out 200ms ease-in forwards',
       },
     },
-    '&[data-snap="peek"]': { height: '192px' },
+    '&[data-snap="peek"]': { height: `${SHEET_PEEK_PX}px` },
     '&[data-snap="half"]': { height: '56dvh' },
-    '&[data-snap="full"]': { height: 'calc(100dvh - 82px)' },
+    '&[data-snap="full"]': {
+      height: '100dvh',
+      borderRadius: 0,
+      zIndex: 7,
+      paddingBlockStart: 'env(safe-area-inset-top, 0px)',
+    },
   },
 })
 
@@ -437,11 +472,14 @@ const sheetHandleStyle = css({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    height: '24px',
+    height: '28px',
     flexShrink: 0,
     border: 0,
     background: 'transparent',
-    cursor: 'pointer',
+    cursor: 'grab',
+    touchAction: 'none',
+    userSelect: 'none',
+    '&:active': { cursor: 'grabbing' },
   },
 })
 
@@ -466,6 +504,12 @@ const headerStyle = css({
   flexShrink: 0,
   padding: '14px 16px 12px',
   borderBlockEnd: '1px solid var(--line)',
+  '@media (max-width: 900px)': {
+    paddingBlockStart: '4px',
+    cursor: 'grab',
+    touchAction: 'none',
+    userSelect: 'none',
+  },
 })
 
 const identityStyle = css({
@@ -499,6 +543,8 @@ const closeStyle = css({
     'background 150ms var(--ease-out), color 150ms var(--ease-out), transform 140ms var(--ease-out)',
   '&:hover': { background: 'var(--hover-bg)', color: 'var(--ink-0)' },
   '&:active': { transform: 'scale(0.92)' },
+  // On mobile viewports the bottom sheet dismisses by dragging downward.
+  '@media (max-width: 900px)': { display: 'none' },
 })
 
 const tabsWrapStyle = css({
@@ -513,7 +559,7 @@ const bodyStyle = css({
   overflowX: 'hidden',
   padding: '14px 16px 18px',
   scrollBehavior: 'smooth',
-  '@media (max-width: 900px)': { paddingBlockEnd: '88px' },
+  '@media (max-width: 900px)': { paddingBlockEnd: '96px' },
 })
 
 const tabPaneStyle = css({

@@ -3,6 +3,7 @@ import { clientEntry, css, on } from 'remix/component'
 
 import { CATEGORY_DOTS } from '#app/lib/public/categories.ts'
 import { LayersIcon } from '#app/ui/public/icons.tsx'
+import { session } from '#app/ui/public/session.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 const RAIN_SCALE =
@@ -30,6 +31,9 @@ export const WeatherKey = clientEntry(
     })
 
     handle.queueTask(() => {
+      session.addEventListener('change', () => handle.update(), {
+        signal: handle.signal,
+      })
       document.addEventListener(
         'keydown',
         (event) => {
@@ -42,7 +46,10 @@ export const WeatherKey = clientEntry(
     })
 
     return () => (
-      <div mix={wrapStyle}>
+      <div
+        data-timeline={session.selected !== null ? 'true' : 'false'}
+        mix={wrapStyle}
+      >
         <button
           aria-expanded={mobileOpen ? 'true' : 'false'}
           aria-label="Toggle map layers"
@@ -195,6 +202,12 @@ const wrapStyle = css({
     flexDirection: 'column',
     alignItems: 'flex-end',
     gap: '8px',
+    transition: 'top 240ms var(--ease-out)',
+    '&[data-timeline="true"]': { top: '88px' },
+  },
+  '@media (max-width: 560px)': {
+    top: '72px',
+    '&[data-timeline="true"]': { top: '88px' },
   },
 })
 

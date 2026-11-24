@@ -27,6 +27,11 @@ import {
 import type { Clarification, SelectedStation } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
+  createSheetDragController,
+  SHEET_PEEK_PX,
+  type SheetSnap,
+} from '#app/ui/public/sheet-drag.ts'
+import {
   AssistantTurn,
   citationTarget,
   ClarificationView,
@@ -38,7 +43,6 @@ import {
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 type Section = 'conditions' | 'forecast' | 'ask'
-type SheetSnap = 'peek' | 'half' | 'full'
 
 const PANEL_EXIT_MS = 180
 const WHEN = new Intl.DateTimeFormat(undefined, {
@@ -58,6 +62,7 @@ const SUGGESTIONS: readonly Suggestion[] = [
 export const AnswerPanel = clientEntry(
   import.meta.url,
   function AnswerPanel(handle: Handle) {
+    let panelEl: HTMLElement | undefined
     let scroller: HTMLElement | undefined
     let activeSection: Section = 'conditions'
     let snap: SheetSnap = 'half'
@@ -67,6 +72,16 @@ export const AnswerPanel = clientEntry(
     let lastClarification: Clarification | null = session.clarification
     let lastIcao: string | null = session.selected?.icao ?? null
     let lastTurns = session.selected?.thread.length ?? 0
+
+    let drag = createSheetDragController({
+      getPanel: () => panelEl,
+      onSnap: (next) => {
+        snap = next
+        handle.update()
+      },
+      onDismiss: () => session.clear(),
+      signal: handle.signal,
+    })
 
     function scrollToEnd(): void {
       let station = session.selected
@@ -91,6 +106,7 @@ export const AnswerPanel = clientEntry(
     }
 
     function cycleSnap(): void {
+      if (drag.consumeSuppressedClick()) return
       snap = snap === 'half' ? 'full' : snap === 'full' ? 'peek' : 'half'
       handle.update()
     }
@@ -110,6 +126,7 @@ export const AnswerPanel = clientEntry(
             lastClarification = null
             lastIcao = null
             lastTurns = 0
+            drag.resetInlineState()
             handle.update()
           }, PANEL_EXIT_MS)
           return
@@ -125,6 +142,7 @@ export const AnswerPanel = clientEntry(
             lastTurns = nextTurns
             activeSection = nextTurns > 0 ? 'ask' : 'conditions'
             snap = 'half'
+            drag.resetInlineState()
           } else if (nextTurns > lastTurns) {
             lastTurns = nextTurns
             activeSection = 'ask'
@@ -135,6 +153,7 @@ export const AnswerPanel = clientEntry(
         } else if (session.clarification !== null) {
           activeSection = 'ask'
           snap = 'half'
+          drag.resetInlineState()
         }
 
         lastStation = nextStation
@@ -170,9 +189,10 @@ export const AnswerPanel = clientEntry(
         <aside
           aria-label="Answer"
           data-closing={closing ? 'true' : 'false'}
+          data-elevated={snap === 'full' ? 'true' : 'false'}
           data-open={open ? 'true' : 'false'}
           data-snap={snap}
-          mix={panelStyle}
+          mix={[panelStyle, ref((node) => (panelEl = node))]}
         >
           <button
             aria-label={
@@ -182,13 +202,22 @@ export const AnswerPanel = clientEntry(
                   ? 'Expand station sheet'
                   : 'Maximize station sheet'
             }
-            mix={[sheetHandleStyle, on('click', cycleSnap)]}
+            mix={[
+              sheetHandleStyle,
+              on('pointerdown', (event) => drag.onPointerDown(event, true)),
+              on('click', cycleSnap),
+            ]}
             type="button"
           >
             <span aria-hidden="true" mix={sheetGripStyle} />
           </button>
 
-          <header mix={headerStyle}>
+          <header
+            mix={[
+              headerStyle,
+              on('pointerdown', (event) => drag.onPointerDown(event, false)),
+            ]}
+          >
             <div mix={identityStyle}>
               <div mix={titleRowStyle}>
                 <span mix={icaoStyle}>{station?.icao ?? 'AeroCast'}</span>
@@ -601,7 +630,10 @@ const panelStyle = css({
     borderInline: 0,
     borderBlockEnd: 0,
     transition:
-      'height 300ms var(--ease-out), background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+      'height 320ms var(--ease-out), border-radius 240ms var(--ease-out), background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+    '&[data-dragging="true"]': { transition: 'none' },
+    '&[data-elevated="true"]': { zIndex: 7 },
+    '&[data-edge-top="true"]': { borderRadius: 0 },
     '&[data-open="true"]': {
       '@media (prefers-reduced-motion: no-preference)': {
         animation: 'rmx-sheet-in 280ms var(--ease-out) both',
@@ -612,9 +644,14 @@ const panelStyle = css({
         animation: 'rmx-sheet-out 200ms ease-in forwards',
       },
     },
-    '&[data-snap="peek"]': { height: '192px' },
+    '&[data-snap="peek"]': { height: `${SHEET_PEEK_PX}px` },
     '&[data-snap="half"]': { height: '56dvh' },
-    '&[data-snap="full"]': { height: 'calc(100dvh - 82px)' },
+    '&[data-snap="full"]': {
+      height: '100dvh',
+      borderRadius: 0,
+      zIndex: 7,
+      paddingBlockStart: 'env(safe-area-inset-top, 0px)',
+    },
   },
 })
 
@@ -625,11 +662,14 @@ const sheetHandleStyle = css({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    height: '24px',
+    height: '28px',
     flexShrink: 0,
     border: 0,
     background: 'transparent',
-    cursor: 'pointer',
+    cursor: 'grab',
+    touchAction: 'none',
+    userSelect: 'none',
+    '&:active': { cursor: 'grabbing' },
   },
 })
 
@@ -654,6 +694,12 @@ const headerStyle = css({
   flexShrink: 0,
   padding: '14px 16px 12px',
   borderBlockEnd: '1px solid var(--line)',
+  '@media (max-width: 900px)': {
+    paddingBlockStart: '4px',
+    cursor: 'grab',
+    touchAction: 'none',
+    userSelect: 'none',
+  },
 })
 
 const identityStyle = css({
@@ -719,6 +765,8 @@ const closeStyle = css({
     'background 150ms var(--ease-out), color 150ms var(--ease-out), transform 140ms var(--ease-out)',
   '&:hover': { background: 'var(--hover-bg)', color: 'var(--ink-0)' },
   '&:active': { transform: 'scale(0.92)' },
+  // On mobile viewports the bottom sheet dismisses by dragging downward.
+  '@media (max-width: 900px)': { display: 'none' },
 })
 
 const tabsWrapStyle = css({
@@ -733,7 +781,7 @@ const bodyStyle = css({
   overflowX: 'hidden',
   padding: '14px 16px 18px',
   scrollBehavior: 'smooth',
-  '@media (max-width: 900px)': { paddingBlockEnd: '88px' },
+  '@media (max-width: 900px)': { paddingBlockEnd: '96px' },
 })
 
 const tabPaneStyle = css({
