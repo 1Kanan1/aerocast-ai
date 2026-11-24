@@ -196,17 +196,13 @@ const wrapStyle = css({
   '@media (max-width: 900px)': {
     left: 'auto',
     bottom: 'auto',
-    top: '16px',
+    top: '58px',
     right: '12px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'flex-end',
     gap: '8px',
     transition: 'top 240ms var(--ease-out)',
-    '&[data-timeline="true"]': { top: '88px' },
-  },
-  '@media (max-width: 560px)': {
-    top: '72px',
     '&[data-timeline="true"]': { top: '88px' },
   },
 })
@@ -217,7 +213,7 @@ const mobileTriggerStyle = css({
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    height: '40px',
+    height: '36px',
     padding: '0 12px',
     border: '1px solid var(--glass-border)',
     borderRadius: '999px',

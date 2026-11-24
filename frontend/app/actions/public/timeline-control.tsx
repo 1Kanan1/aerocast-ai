@@ -43,18 +43,10 @@ for (let hour = -TIMELINE_HOURS; hour <= TIMELINE_HOURS; hour += LABEL_STEP) {
 export const TimelineControl = clientEntry(
   import.meta.url,
   function TimelineControl(handle: Handle) {
-    let keepNavbar = (): void => {
-      let navbar = document.querySelector<HTMLElement>('[data-navbar]')
-      if (navbar !== null) {
-        navbar.style.display = session.selected === null ? '' : 'none'
-      }
-      handle.update()
-    }
-
-    session.addEventListener('change', keepNavbar, { signal: handle.signal })
-
     handle.queueTask(() => {
-      keepNavbar()
+      session.addEventListener('change', () => handle.update(), {
+        signal: handle.signal,
+      })
     })
 
     return () => {
@@ -218,7 +210,7 @@ const barStyle = css({
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
-  width: 'min(700px, calc(100vw - 32px))',
+  width: 'min(680px, calc(100vw - 340px))',
   padding: '8px 12px',
   border: '1px solid var(--glass-border)',
   borderRadius: '20px',

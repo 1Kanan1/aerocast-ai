@@ -41,6 +41,8 @@ describe('map page', () => {
 
     assert.equal(response.status, 200)
     assert.match(html, /AEROCAST/)
+    assert.match(html, /aria-label="Map tools"/)
+    assert.doesNotMatch(html, /data-navbar/)
     assert.match(html, /MapIsland/)
     assert.match(html, /AskBar/)
     assert.match(html, /AnswerPanel/)
@@ -52,6 +54,8 @@ describe('map page', () => {
       /:root:has\(meta\[name="color-scheme"\]\[content="light"\]\)/,
     )
     assert.doesNotMatch(html, /:root:has\(&gt;/)
+    assert.doesNotMatch(html, /\[object Object\]/)
+    assert.match(html, /:is\(main:has\(\[aria-label="Timeline"\]\)\) &/)
   })
 
   it('leaves search to the ask bar instead of the navbar', async (t) => {

@@ -672,6 +672,10 @@ const sheetHandleStyle = css({
     touchAction: 'none',
     userSelect: 'none',
     '&:active': { cursor: 'grabbing' },
+    '&:hover span': {
+      background: 'var(--ink-2)',
+      width: '48px',
+    },
   },
 })
 
@@ -682,10 +686,6 @@ const sheetGripStyle = css({
   background: 'var(--line-strong)',
   transition:
     'background-color 150ms var(--ease-out), width 180ms var(--ease-out)',
-  'button:hover &': {
-    background: 'var(--ink-2)',
-    width: '48px',
-  },
 })
 
 const headerStyle = css({

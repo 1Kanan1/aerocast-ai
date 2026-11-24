@@ -42,15 +42,15 @@ export function MapShell(handle: Handle<MapShellProps>) {
 
           <AskBar />
 
-          <header data-navbar mix={[glassStyle, navbarStyle]}>
-            <a href={routes.home.href()} mix={wordmarkStyle}>
-              AEROCAST
-            </a>
-            <span mix={dividerStyle} />
+          <a href={routes.home.href()} mix={[wordmarkStyle, brandStyle]}>
+            AEROCAST
+          </a>
+
+          <nav aria-label="Map tools" mix={toolsStyle}>
             <a
               aria-label="Advisories"
               href={routes.advisories.href()}
-              mix={iconStyle}
+              mix={[glassStyle, toolButtonStyle]}
               title="Advisories"
             >
               <AlertIcon />
@@ -58,13 +58,13 @@ export function MapShell(handle: Handle<MapShellProps>) {
             <a
               aria-label="About"
               href={routes.about.href()}
-              mix={iconStyle}
+              mix={[glassStyle, toolButtonStyle]}
               title="About"
             >
               <InfoIcon />
             </a>
-            <ThemeToggle />
-          </header>
+            <ThemeToggle surface="glass" />
+          </nav>
 
           <WeatherKey />
         </main>
@@ -91,49 +91,73 @@ const mapAreaStyle = css({
   inset: 0,
 })
 
-const navbarStyle = css({
+const brandStyle = css({
   position: 'absolute',
   top: '16px',
-  left: '50%',
-  transform: 'translateX(-50%)',
+  left: '16px',
   zIndex: 4,
+  display: 'inline-flex',
+  alignItems: 'center',
+  height: '40px',
+  paddingInline: '4px',
+  transition: 'opacity 180ms var(--ease-out)',
+  '@media (max-width: 900px)': {
+    top: '14px',
+    left: '12px',
+    height: '36px',
+    ':is(main:has([aria-label="Timeline"])) &': {
+      opacity: 0,
+      pointerEvents: 'none',
+    },
+  },
+})
+
+const toolsStyle = css({
+  position: 'absolute',
+  top: '16px',
+  right: '16px',
+  zIndex: 5,
   display: 'flex',
   alignItems: 'center',
-  gap: '2px',
-  padding: '6px 8px 6px 16px',
-  borderRadius: '999px',
-  maxWidth: 'calc(100vw - 24px)',
+  gap: '8px',
+  transition: 'top 240ms var(--ease-out)',
+  '@media (max-width: 900px)': {
+    top: '14px',
+    right: '12px',
+    gap: '6px',
+    ':is(main:has([aria-label="Timeline"])) &': {
+      top: '88px',
+      left: '12px',
+      right: 'auto',
+    },
+  },
 })
 
-const dividerStyle = css({
-  width: '1px',
-  height: '18px',
-  marginInline: '8px',
-  background: 'var(--line)',
-})
-
-const iconStyle = css({
+const toolButtonStyle = css({
   display: 'grid',
   placeItems: 'center',
-  width: '36px',
-  height: '36px',
+  width: '40px',
+  height: '40px',
   borderRadius: '999px',
-  border: '1px solid transparent',
-  background: 'transparent',
   color: 'var(--ink-2)',
   cursor: 'pointer',
   textDecoration: 'none',
   transition:
-    'background 160ms var(--ease-out), color 160ms var(--ease-out), transform 140ms var(--ease-out)',
+    'background 160ms var(--ease-out), border-color 160ms var(--ease-out), color 160ms var(--ease-out), transform 140ms var(--ease-out)',
   '&:hover': {
-    background: 'var(--hover-bg)',
+    background: 'var(--glass-strong)',
+    borderColor: 'var(--line-strong)',
     color: 'var(--ink-0)',
   },
   '&:active': {
-    transform: 'scale(0.94)',
+    transform: 'scale(0.92)',
   },
   '&:focus-visible': {
-    outline: '2px solid var(--accent)',
+    outline: '2px solid var(--focus-ring)',
     outlineOffset: '2px',
+  },
+  '@media (max-width: 900px)': {
+    width: '36px',
+    height: '36px',
   },
 })
