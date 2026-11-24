@@ -141,4 +141,19 @@ describe('blend', () => {
     // 270 and 090 at the same weight cancel out, so there is no direction.
     assert.equal(blend.wind?.speed_kt, 0)
   })
+
+  it('rounds blended ceilings to the nearest 100 ft', () => {
+    let blend = blendStations([
+      {
+        distance_nm: 0,
+        metar: metar({ ceiling: { ref: 'metar.KAAA.ceiling', ft: 23000 } }),
+      },
+      {
+        distance_nm: 2,
+        metar: metar({ ceiling: { ref: 'metar.KBBB.ceiling', ft: 23400 } }),
+      },
+    ])
+
+    assert.equal(blend?.ceiling_ft?.value, 23100)
+  })
 })

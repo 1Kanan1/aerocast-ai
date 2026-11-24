@@ -77,6 +77,7 @@ export interface SelectedStation {
   ageSeconds: number | null
   basis: string | null
   category: string | null
+  definitions: Record<string, string>
   error: string | null
   facts: BundleMetar | null
   history: HistoryPoint[]
@@ -92,6 +93,69 @@ export interface SelectedStation {
   taf: BundleTaf | null
   thread: ThreadEntry[]
   upstreamCategory: string | null
+}
+
+export interface UrlSelection {
+  station?: string
+  hour?: number
+  area?: AreaPoint
+}
+
+/** Parses `?station=KDEN&hour=-2` or `?area=39.7500,-104.9000` from a URL query. */
+export function parseStateFromSearch(search: string): UrlSelection {
+  let params = new URLSearchParams(search)
+  let rawStation = params.get('station')?.trim().toUpperCase()
+  if (rawStation && /^[A-Z0-9]{3,4}$/.test(rawStation)) {
+    let rawHour = params.get('hour')
+    let parsedHour = rawHour === null ? 0 : Number(rawHour)
+    let hour = Number.isFinite(parsedHour)
+      ? Math.max(
+          -TIMELINE_HOURS,
+          Math.min(TIMELINE_HOURS, Math.round(parsedHour)),
+        )
+      : 0
+    return { station: rawStation, hour }
+  }
+
+  let rawArea = params.get('area')?.trim()
+  if (rawArea) {
+    let parts = rawArea.split(',')
+    if (parts.length === 2) {
+      let lat = Number(parts[0])
+      let lon = Number(parts[1])
+      if (
+        Number.isFinite(lat) &&
+        Number.isFinite(lon) &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lon >= -180 &&
+        lon <= 180
+      ) {
+        return { area: { lat, lon, focus: true } }
+      }
+    }
+  }
+
+  return {}
+}
+
+/**
+ * Builds the query string representing the active station/hour or area.
+ * Keeps a literal comma in `area=lat,lon` instead of percent-encoding `%2C`.
+ */
+export function buildSearchForState(
+  stationIcao: string | null,
+  area: AreaPoint | null,
+  viewHour: number,
+): string {
+  if (stationIcao !== null) {
+    let query = `?station=${encodeURIComponent(stationIcao)}`
+    return viewHour === 0 ? query : `${query}&hour=${viewHour}`
+  }
+  if (area !== null) {
+    return `?area=${area.lat.toFixed(4)},${area.lon.toFixed(4)}`
+  }
+  return ''
 }
 
 /**
@@ -115,6 +179,9 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   areaThread: ThreadEntry[] = []
   /** Hours from now the panel reads: 0 is live, -3 is three hours ago. */
   viewHour = 0
+  /** Active citation ref highlighted in the panel. */
+  highlightedRef: string | null = null
+  #threads = new Map<string, ThreadEntry[]>()
   #pending: AbortController | null = null
   #ask: AbortController | null = null
   #areaPending: AbortController | null = null
@@ -175,6 +242,37 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.notify()
   }
 
+  /** Highlight a cited bundle ref in the panel. */
+  highlightRef(refPath: string | null): void {
+    if (this.highlightedRef === refPath) return
+    this.highlightedRef = refPath
+    this.notify()
+  }
+
+  /** Restore a station or area selection from the current browser URL. */
+  async syncFromUrl(): Promise<void> {
+    if (typeof window === 'undefined') return
+    let state = parseStateFromSearch(window.location.search)
+    if (state.station) {
+      await this.select(state.station)
+      if (state.hour) this.setViewHour(state.hour)
+    } else if (state.area) {
+      await this.openArea(state.area)
+    }
+  }
+
+  /** Retry fetching the currently selected station after an error. */
+  async retryStation(): Promise<void> {
+    if (this.selected === null) return
+    await this.select(this.selected.icao, this.suggested)
+  }
+
+  /** Retry fetching the currently open area after an error. */
+  async retryArea(): Promise<void> {
+    if (this.area === null) return
+    await this.openArea(this.area)
+  }
+
   /**
    * Read a clicked point as a place: the stations around it, taken
    * together. A station selection gives way to the area.
@@ -187,6 +285,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.#ask?.abort()
     this.#ask = null
     this.selected = null
+    this.highlightedRef = null
     this.clarification = null
     this.suggested = []
     this.setAnchor(null)
@@ -197,6 +296,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.areaLoading = true
     this.areaThread = []
     this.viewHour = 0
+    this.syncUrl()
     this.notify()
 
     let controller = new AbortController()
@@ -236,6 +336,8 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.areaError = null
     this.areaLoading = false
     this.areaThread = []
+    this.highlightedRef = null
+    this.syncUrl()
     this.notify()
   }
 
@@ -325,6 +427,7 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     )
     if (this.viewHour === next) return
     this.viewHour = next
+    this.syncUrl()
     this.notify()
   }
 
@@ -345,10 +448,15 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     icao: string,
     suggested: ResolveSuggestion[] = [],
   ): Promise<void> {
-    let previous = this.selected
-    let thread = previous?.icao === icao ? previous.thread : []
+    let code = icao.toUpperCase()
+    let thread = this.#threads.get(code)
+    if (thread === undefined) {
+      thread = []
+      this.#threads.set(code, thread)
+    }
 
     this.clarification = null
+    this.highlightedRef = null
     this.suggested = suggested
     this.viewHour = 0
     this.#pending?.abort()
@@ -372,14 +480,15 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
       ageSeconds: null,
       basis: null,
       category: null,
+      definitions: {},
       error: null,
       facts: null,
       history: [],
-      icao,
+      icao: code,
       lat: null,
       loading: true,
       lon: null,
-      name: icao,
+      name: code,
       parseStatus: null,
       raw: null,
       source: 'aviationweather.gov',
@@ -388,20 +497,21 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
       thread,
       upstreamCategory: null,
     }
+    this.syncUrl()
     this.notify()
 
     try {
       let signal = controller.signal
       let [detailResponse, briefResponse, historyResponse] = await Promise.all([
-        fetch(routes.detail.href({ icao }), {
+        fetch(routes.detail.href({ icao: code }), {
           headers: { accept: 'application/json' },
           signal,
         }),
-        fetch(routes.brief.href({ icao }), {
+        fetch(routes.brief.href({ icao: code }), {
           headers: { accept: 'application/json' },
           signal,
         }),
-        fetch(routes.history.href({ icao }), {
+        fetch(routes.history.href({ icao: code }), {
           headers: { accept: 'application/json' },
           signal,
         }),
@@ -425,11 +535,12 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
 
       this.selected = {
         ...this.selected,
-        name: station?.name ?? icao,
+        name: station?.name ?? code,
         lat: detail.data.station.lat,
         lon: detail.data.station.lon,
         category: metar?.flight_category.value ?? null,
         basis: metar?.flight_category.basis ?? null,
+        definitions: brief.data.definitions ?? {},
         facts: metar,
         raw: metar?.raw ?? null,
         ageSeconds: age,
@@ -664,8 +775,22 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
     this.areaThread = []
     this.suggested = []
     this.viewHour = 0
+    this.highlightedRef = null
     this.setAnchor(null)
+    this.syncUrl()
     this.notify()
+  }
+
+  private syncUrl(): void {
+    if (typeof window === 'undefined' || !window.history) return
+    let nextSearch = buildSearchForState(
+      this.selected?.icao ?? null,
+      this.area,
+      this.viewHour,
+    )
+    if (window.location.search === nextSearch) return
+    let target = `${window.location.pathname}${nextSearch}${window.location.hash}`
+    window.history.replaceState(null, '', target)
   }
 
   private notify(): void {

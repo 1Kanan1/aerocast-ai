@@ -2,7 +2,11 @@ import * as assert from 'remix/assert'
 import type { TestContext } from 'remix/test'
 import { describe, it } from 'remix/test'
 
-import { StationSession } from './session.ts'
+import {
+  buildSearchForState,
+  parseStateFromSearch,
+  StationSession,
+} from './session.ts'
 import type { Anchor } from './session.ts'
 
 const METAR = {
@@ -25,6 +29,9 @@ const BRIEF = {
         advisories: [{ hazard: 'IFR' }, { hazard: 'TURB' }],
       },
     ],
+    definitions: {
+      VFR: 'Ceiling above 3,000 ft and visibility above 5 statute miles.',
+    },
   },
 }
 
@@ -391,5 +398,64 @@ describe('station session', () => {
     session.clear()
 
     assert.equal(session.anchor, null)
+  })
+
+  it('preserves a station thread when switching away and back', async (t) => {
+    mockFetch(t, (path) =>
+      path.includes('/ask')
+        ? Response.json({
+            summary: 'KSFO is VFR.',
+            claims: [],
+            caveats: [],
+            refusal: null,
+            notice: null,
+          })
+        : stationApi(path),
+    )
+    let session = new StationSession()
+    await session.select('KSFO')
+    await session.ask('How is visibility?')
+
+    await session.select('KJFK')
+    assert.equal(session.selected?.thread.length, 0)
+
+    await session.select('KSFO')
+    assert.equal(session.selected?.thread.length, 1)
+    assert.equal(session.selected?.thread[0]?.question, 'How is visibility?')
+    assert.ok(session.selected?.definitions.VFR)
+  })
+
+  it('retries a failed station fetch', async (t) => {
+    let calls = 0
+    mockFetch(t, (path) => {
+      calls += 1
+      if (calls <= 3) return new Response('down', { status: 502 })
+      return stationApi(path)
+    })
+    let session = new StationSession()
+    await session.select('KSFO')
+    assert.ok(session.selected?.error !== null)
+
+    await session.retryStation()
+    assert.equal(session.selected?.error, null)
+    assert.equal(session.selected?.category, 'VFR')
+  })
+
+  it('serializes station and area queries with literal commas', () => {
+    assert.deepEqual(parseStateFromSearch('?station=kden&hour=-3'), {
+      station: 'KDEN',
+      hour: -3,
+    })
+    assert.deepEqual(parseStateFromSearch('?area=39.7500,-104.9000'), {
+      area: { lat: 39.75, lon: -104.9, focus: true },
+    })
+    assert.deepEqual(parseStateFromSearch('?station=bad-value'), {})
+    assert.equal(buildSearchForState('KDEN', null, 0), '?station=KDEN')
+    assert.equal(buildSearchForState('KDEN', null, -2), '?station=KDEN&hour=-2')
+    assert.equal(
+      buildSearchForState(null, { lat: 39.75, lon: -104.9 }, 0),
+      '?area=39.7500,-104.9000',
+    )
+    assert.equal(buildSearchForState(null, null, 0), '')
   })
 })

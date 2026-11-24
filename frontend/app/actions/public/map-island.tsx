@@ -236,6 +236,7 @@ export const MapIsland = clientEntry(
         if (signal.aborted) return
         mountOverlays()
         fallback?.remove()
+        void session.syncFromUrl()
       })
 
       theme.addEventListener(

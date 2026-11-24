@@ -67,7 +67,7 @@ export function blendStations(stations: BlendStation[]): Blend | null {
     ceilingValue === null
       ? null
       : {
-          value: Math.round(ceilingValue),
+          value: Math.round(ceilingValue / 100) * 100,
           reports: ceilingReports,
         }
 
