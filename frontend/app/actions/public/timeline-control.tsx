@@ -168,6 +168,13 @@ export const TimelineControl = clientEntry(
             <div aria-hidden="true" mix={labelsStyle}>
               {LABELS.map((tick) => (
                 <span
+                  data-mid={
+                    tick !== -TIMELINE_HOURS &&
+                    tick !== 0 &&
+                    tick !== TIMELINE_HOURS
+                      ? 'true'
+                      : 'false'
+                  }
                   key={tick}
                   mix={labelStyle}
                   style={{
@@ -220,7 +227,16 @@ const barStyle = css({
   WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
   transform: 'translateX(-50%)',
   boxShadow: 'var(--shadow)',
-  '@media (max-width: 900px)': { width: 'calc(100vw - 24px)' },
+  transition:
+    'background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+  '@media (prefers-reduced-motion: no-preference)': {
+    animation: 'rmx-pop-in 240ms var(--ease-out) both',
+  },
+  '@media (max-width: 900px)': {
+    width: 'calc(100vw - 24px)',
+    padding: '8px 10px',
+    gap: '8px',
+  },
 })
 
 const stepStyle = css({
@@ -403,4 +419,7 @@ const labelStyle = css({
   color: 'var(--ink-3)',
   whiteSpace: 'nowrap',
   fontVariantNumeric: 'tabular-nums',
+  '@media (max-width: 560px)': {
+    '&[data-mid="true"]': { display: 'none' },
+  },
 })

@@ -188,19 +188,25 @@ const dockStyle = css({
   left: 0,
   right: 0,
   bottom: '20px',
-  zIndex: 5,
+  zIndex: 6,
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   gap: '8px',
   paddingInline: '16px',
   pointerEvents: 'none',
-  transition: 'right 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+  transition:
+    'right 280ms var(--ease-out), left 280ms var(--ease-out), bottom 240ms var(--ease-out)',
   // The map's zoom control owns the bottom-left corner.
   '@media (max-width: 1240px)': { left: '64px' },
-  '&[data-panel="true"]': { right: '552px', left: '64px' },
+  '&[data-panel="true"]': { right: '532px', left: '64px' },
   '@media (max-width: 900px)': {
-    '&[data-panel="true"]': { right: 0 },
+    left: 0,
+    right: 0,
+    bottom: '12px',
+    paddingInline: '12px',
+    '&[data-panel="true"]': { right: 0, left: 0 },
+    '&[data-panel="true"] p': { display: 'none' },
   },
 })
 

@@ -159,10 +159,16 @@ const statusRowStyle = css({
   display: 'grid',
   gridTemplateColumns: 'auto 8.5rem 1fr auto',
   alignItems: 'center',
-  gap: '12px',
-  paddingBlock: '8px',
+  gap: '6px 12px',
+  paddingBlock: '9px',
   borderBlockStart: '1px solid var(--line)',
-  '@media (max-width: 34rem)': { gridTemplateColumns: 'auto 1fr auto' },
+  '@media (max-width: 38rem)': {
+    gridTemplateColumns: 'auto 1fr auto',
+    '& > :nth-child(3)': {
+      gridColumn: '2 / -1',
+      fontSize: '12px',
+    },
+  },
 })
 
 const dotStyle = css({

@@ -248,40 +248,44 @@ function TafTable(
           TAF from {source} · issued {timeLabel(taf.issued_at)} · valid{' '}
           {windowLabel(taf.valid_from, taf.valid_to)}
         </p>
-        <table mix={tableStyle}>
-          <thead>
-            <tr>
-              <th>Period</th>
-              <th>Window</th>
-              <th>Wind</th>
-              <th>Visibility</th>
-              <th>Ceiling</th>
-              <th>Weather</th>
-            </tr>
-          </thead>
-          <tbody>
-            {taf.periods.map((period) => (
-              <tr key={period.ref}>
-                <td>{period.change}</td>
-                <td>{windowLabel(period.from, period.to)}</td>
-                <td>{periodWindLabel(period)}</td>
-                <td>
-                  {period.visibility_sm === null
-                    ? '—'
-                    : `${period.visibility_sm} SM`}
-                </td>
-                <td>
-                  {period.ceiling_ft === null
-                    ? 'none'
-                    : `${period.ceiling_ft.toLocaleString()} ft`}
-                </td>
-                <td>
-                  {period.weather.length === 0 ? '—' : period.weather.join(' ')}
-                </td>
+        <div mix={tableScrollStyle}>
+          <table mix={tableStyle}>
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th>Window</th>
+                <th>Wind</th>
+                <th>Visibility</th>
+                <th>Ceiling</th>
+                <th>Weather</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {taf.periods.map((period) => (
+                <tr key={period.ref}>
+                  <td>{period.change}</td>
+                  <td>{windowLabel(period.from, period.to)}</td>
+                  <td>{periodWindLabel(period)}</td>
+                  <td>
+                    {period.visibility_sm === null
+                      ? '—'
+                      : `${period.visibility_sm} SM`}
+                  </td>
+                  <td>
+                    {period.ceiling_ft === null
+                      ? 'none'
+                      : `${period.ceiling_ft.toLocaleString()} ft`}
+                  </td>
+                  <td>
+                    {period.weather.length === 0
+                      ? '—'
+                      : period.weather.join(' ')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </>
     )
   }
@@ -358,12 +362,17 @@ const basisStyle = css({
   color: 'var(--ink-2)',
 })
 
+const tableScrollStyle = css({
+  overflowX: 'auto',
+})
+
 const tableStyle = css({
   width: '100%',
+  minWidth: '520px',
   borderCollapse: 'collapse',
   fontSize: '12px',
   '& th, & td': {
-    padding: '6px 8px',
+    padding: '7px 8px',
     textAlign: 'start',
     borderBlockEnd: '1px solid var(--line)',
     verticalAlign: 'top',
@@ -371,7 +380,7 @@ const tableStyle = css({
   '& th': {
     fontSize: '11px',
     color: 'var(--ink-3)',
-    fontWeight: 400,
+    fontWeight: 600,
   },
 })
 
@@ -381,10 +390,13 @@ const advisoryListStyle = css({
   padding: 0,
   '& li': {
     display: 'grid',
-    gridTemplateColumns: '5.5rem 1fr auto',
-    gap: '10px',
+    gridTemplateColumns: '5.5rem 1fr auto auto',
+    gap: '8px 12px',
     padding: '8px 0',
     borderBlockEnd: '1px solid var(--line)',
+    '@media (max-width: 640px)': {
+      gridTemplateColumns: '1fr auto',
+    },
   },
 })
 

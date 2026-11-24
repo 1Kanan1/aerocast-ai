@@ -37,6 +37,7 @@ import {
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 type Section = 'conditions' | 'forecast' | 'ask'
+type SheetSnap = 'peek' | 'half' | 'full'
 
 const PANEL_EXIT_MS = 180
 const WHEN = new Intl.DateTimeFormat(undefined, {
@@ -58,6 +59,7 @@ export const AnswerPanel = clientEntry(
   function AnswerPanel(handle: Handle) {
     let scroller: HTMLElement | undefined
     let activeSection: Section = 'conditions'
+    let snap: SheetSnap = 'half'
     let closing = false
     let closingTimer: ReturnType<typeof setTimeout> | undefined
     let lastStation: SelectedStation | null = session.selected
@@ -83,6 +85,12 @@ export const AnswerPanel = clientEntry(
       let target = citationTarget(refPath)
       session.highlightRef(refPath)
       activeSection = target.section
+      if (snap === 'peek') snap = 'half'
+      handle.update()
+    }
+
+    function cycleSnap(): void {
+      snap = snap === 'half' ? 'full' : snap === 'full' ? 'peek' : 'half'
       handle.update()
     }
 
@@ -115,14 +123,17 @@ export const AnswerPanel = clientEntry(
             lastIcao = nextStation.icao
             lastTurns = nextTurns
             activeSection = nextTurns > 0 ? 'ask' : 'conditions'
+            snap = 'half'
           } else if (nextTurns > lastTurns) {
             lastTurns = nextTurns
             activeSection = 'ask'
+            if (snap === 'peek') snap = 'half'
           } else {
             lastTurns = nextTurns
           }
         } else if (session.clarification !== null) {
           activeSection = 'ask'
+          snap = 'half'
         }
 
         lastStation = nextStation
@@ -159,8 +170,23 @@ export const AnswerPanel = clientEntry(
           aria-label="Answer"
           data-closing={closing ? 'true' : 'false'}
           data-open={open ? 'true' : 'false'}
+          data-snap={snap}
           mix={panelStyle}
         >
+          <button
+            aria-label={
+              snap === 'full'
+                ? 'Collapse station sheet'
+                : snap === 'peek'
+                  ? 'Expand station sheet'
+                  : 'Maximize station sheet'
+            }
+            mix={[sheetHandleStyle, on('click', cycleSnap)]}
+            type="button"
+          >
+            <span aria-hidden="true" mix={sheetGripStyle} />
+          </button>
+
           <header mix={headerStyle}>
             <div mix={identityStyle}>
               <div mix={titleRowStyle}>
@@ -198,6 +224,7 @@ export const AnswerPanel = clientEntry(
                 active={activeSection}
                 onSelect={(next) => {
                   activeSection = next
+                  if (snap === 'peek') snap = 'half'
                   handle.update()
                 }}
                 tabs={[
@@ -568,7 +595,59 @@ const panelStyle = css({
       animation: 'rmx-panel-out 180ms ease-in forwards',
     },
   },
-  '@media (max-width: 900px)': { bottom: '120px' },
+  '@media (max-width: 900px)': {
+    top: 'auto',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    borderRadius: '20px 20px 0 0',
+    borderInline: 0,
+    borderBlockEnd: 0,
+    transition:
+      'height 300ms var(--ease-out), background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+    '&[data-open="true"]': {
+      '@media (prefers-reduced-motion: no-preference)': {
+        animation: 'rmx-sheet-in 280ms var(--ease-out) both',
+      },
+    },
+    '&[data-closing="true"]': {
+      '@media (prefers-reduced-motion: no-preference)': {
+        animation: 'rmx-sheet-out 200ms ease-in forwards',
+      },
+    },
+    '&[data-snap="peek"]': { height: '192px' },
+    '&[data-snap="half"]': { height: '56dvh' },
+    '&[data-snap="full"]': { height: 'calc(100dvh - 82px)' },
+  },
+})
+
+const sheetHandleStyle = css({
+  display: 'none',
+  '@media (max-width: 900px)': {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '24px',
+    flexShrink: 0,
+    border: 0,
+    background: 'transparent',
+    cursor: 'pointer',
+  },
+})
+
+const sheetGripStyle = css({
+  width: '38px',
+  height: '4px',
+  borderRadius: '999px',
+  background: 'var(--line-strong)',
+  transition:
+    'background-color 150ms var(--ease-out), width 180ms var(--ease-out)',
+  'button:hover &': {
+    background: 'var(--ink-2)',
+    width: '48px',
+  },
 })
 
 const headerStyle = css({
@@ -658,6 +737,7 @@ const bodyStyle = css({
   overflowX: 'hidden',
   padding: '14px 16px 18px',
   scrollBehavior: 'smooth',
+  '@media (max-width: 900px)': { paddingBlockEnd: '88px' },
 })
 
 const tabPaneStyle = css({

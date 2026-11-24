@@ -215,9 +215,13 @@ const hostStyle = css({
   backdropFilter: 'blur(26px) saturate(1.25)',
   WebkitBackdropFilter: 'blur(26px) saturate(1.25)',
   overflow: 'hidden',
+  transition:
+    'background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
   '@media (prefers-reduced-motion: no-preference)': {
-    animation: 'rmx-card-in 180ms ease-out',
+    animation: 'rmx-card-in 220ms var(--ease-out)',
   },
+  // On tablet/mobile the bottom sheet carries the station summary & link.
+  '@media (max-width: 900px)': { display: 'none !important' },
 })
 
 const headerStyle = css({
@@ -298,9 +302,9 @@ const suggestedButtonStyle = css({
   font: 'inherit',
   textAlign: 'left',
   cursor: 'pointer',
-  '&:hover': { background: 'rgba(255, 255, 255, 0.05)' },
+  '&:hover': { background: 'var(--hover-bg)' },
   '&:focus-visible': {
-    outline: '2px solid var(--ink-2)',
+    outline: '2px solid var(--accent)',
     outlineOffset: '-2px',
   },
 })

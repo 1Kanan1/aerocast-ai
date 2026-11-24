@@ -22,6 +22,7 @@ import {
 } from '#app/ui/public/thread-parts.tsx'
 
 type AreaSection = 'overview' | 'ask'
+type SheetSnap = 'peek' | 'half' | 'full'
 
 const PANEL_EXIT_MS = 180
 
@@ -33,6 +34,7 @@ export const AreaPanel = clientEntry(
   import.meta.url,
   function AreaPanel(handle: Handle) {
     let activeSection: AreaSection = 'overview'
+    let snap: SheetSnap = 'half'
     let scroller: HTMLElement | undefined
     let closing = false
     let closingTimer: ReturnType<typeof setTimeout> | undefined
@@ -55,6 +57,11 @@ export const AreaPanel = clientEntry(
       void session.askArea(text)
     }
 
+    function cycleSnap(): void {
+      snap = snap === 'half' ? 'full' : snap === 'full' ? 'peek' : 'half'
+      handle.update()
+    }
+
     session.addEventListener(
       'change',
       async () => {
@@ -66,8 +73,10 @@ export const AreaPanel = clientEntry(
           let turns = session.areaThread.length
           if (turns > lastAreaTurns) {
             activeSection = 'ask'
+            if (snap === 'peek') snap = 'half'
           } else if (turns === 0 && lastAreaTurns > 0) {
             activeSection = 'overview'
+            snap = 'half'
           }
           lastAreaTurns = turns
           exitPoint = session.area
@@ -134,6 +143,8 @@ export const AreaPanel = clientEntry(
       return (
         <aside
           aria-label="Weather here"
+          data-closing={closing ? 'true' : 'false'}
+          data-snap={snap}
           mix={panelStyle}
           style={{
             animation:
@@ -143,6 +154,20 @@ export const AreaPanel = clientEntry(
             pointerEvents: closing ? 'none' : undefined,
           }}
         >
+          <button
+            aria-label={
+              snap === 'full'
+                ? 'Collapse area sheet'
+                : snap === 'peek'
+                  ? 'Expand area sheet'
+                  : 'Maximize area sheet'
+            }
+            mix={[sheetHandleStyle, on('click', cycleSnap)]}
+            type="button"
+          >
+            <span aria-hidden="true" mix={sheetGripStyle} />
+          </button>
+
           <header mix={headerStyle}>
             <div mix={identityStyle}>
               <span mix={pointStyle}>{pointLabel(point.lat, point.lon)}</span>
@@ -166,6 +191,7 @@ export const AreaPanel = clientEntry(
               active={activeSection}
               onSelect={(next) => {
                 activeSection = next
+                if (snap === 'peek') snap = 'half'
                 handle.update()
               }}
               tabs={[
@@ -379,7 +405,57 @@ const panelStyle = css({
   '@media (prefers-reduced-motion: no-preference)': {
     animation: 'rmx-panel-in 260ms var(--ease-out) both',
   },
-  '@media (max-width: 900px)': { bottom: '120px' },
+  '@media (max-width: 900px)': {
+    top: 'auto',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    borderRadius: '20px 20px 0 0',
+    borderInline: 0,
+    borderBlockEnd: 0,
+    transition:
+      'height 300ms var(--ease-out), background-color 220ms var(--ease-out), border-color 220ms var(--ease-out)',
+    '@media (prefers-reduced-motion: no-preference)': {
+      animation: 'rmx-sheet-in 280ms var(--ease-out) both',
+    },
+    '&[data-closing="true"]': {
+      '@media (prefers-reduced-motion: no-preference)': {
+        animation: 'rmx-sheet-out 200ms ease-in forwards',
+      },
+    },
+    '&[data-snap="peek"]': { height: '192px' },
+    '&[data-snap="half"]': { height: '56dvh' },
+    '&[data-snap="full"]': { height: 'calc(100dvh - 82px)' },
+  },
+})
+
+const sheetHandleStyle = css({
+  display: 'none',
+  '@media (max-width: 900px)': {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '24px',
+    flexShrink: 0,
+    border: 0,
+    background: 'transparent',
+    cursor: 'pointer',
+  },
+})
+
+const sheetGripStyle = css({
+  width: '38px',
+  height: '4px',
+  borderRadius: '999px',
+  background: 'var(--line-strong)',
+  transition:
+    'background-color 150ms var(--ease-out), width 180ms var(--ease-out)',
+  'button:hover &': {
+    background: 'var(--ink-2)',
+    width: '48px',
+  },
 })
 
 const headerStyle = css({
@@ -437,6 +513,7 @@ const bodyStyle = css({
   overflowX: 'hidden',
   padding: '14px 16px 18px',
   scrollBehavior: 'smooth',
+  '@media (max-width: 900px)': { paddingBlockEnd: '88px' },
 })
 
 const tabPaneStyle = css({
