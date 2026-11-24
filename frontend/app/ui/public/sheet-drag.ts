@@ -2,11 +2,39 @@ export type SheetSnap = 'peek' | 'half' | 'full'
 export type SheetDropOutcome = SheetSnap | 'dismiss'
 
 export const MOBILE_SHEET_QUERY = '(max-width: 900px)'
-export const SHEET_PEEK_PX = 184
-export const SHEET_DISMISS_PX = 112
+export const SHEET_HALF_VH = 56
+export const SHEET_PEEK_PX = 164
+export const SHEET_DISMISS_PX = 96
 
 const DRAG_THRESHOLD_PX = 6
 const FLICK_VELOCITY_PX_PER_MS = 0.45
+
+export interface CameraPadding {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+/**
+ * Computes MapLibre camera padding so a focused station or area dot centers
+ * inside the open map area rather than behind the desktop drawer or mobile
+ * bottom sheet. Always returns all four edges to clear any prior padding.
+ */
+export function cameraPadding(
+  viewportWidth: number,
+  viewportHeight: number,
+): CameraPadding {
+  if (viewportWidth > 900) {
+    return { top: 84, right: 520, bottom: 96, left: 0 }
+  }
+  return {
+    top: 128,
+    right: 0,
+    bottom: Math.round(viewportHeight * (SHEET_HALF_VH / 100)),
+    left: 0,
+  }
+}
 
 /** Clamps a live mobile sheet height to the visible viewport. */
 export function clampSheetHeight(
@@ -18,30 +46,33 @@ export function clampSheetHeight(
 }
 
 /**
- * Resolves a released mobile bottom sheet into a snap target or dismiss action.
- * Positive velocity means downward motion (shrinking); negative means upward.
+ * Resolves a released mobile bottom sheet into one of four stages:
+ * full (100dvh), half (56dvh), peek (slightly open header + AskBar), or
+ * dismiss (closed). Positive velocity is downward; negative is upward.
  */
 export function resolveSheetDrop(
   heightPx: number,
   viewportHeight: number,
   velocityPxPerMs: number,
+  startSnap: SheetSnap = 'half',
 ): SheetDropOutcome {
   if (heightPx <= SHEET_DISMISS_PX) return 'dismiss'
 
   let ratio = viewportHeight > 0 ? heightPx / viewportHeight : 0.5
 
   if (velocityPxPerMs > FLICK_VELOCITY_PX_PER_MS) {
-    if (ratio < 0.42) return 'dismiss'
-    if (ratio < 0.78) return 'peek'
-    return 'half'
+    if (startSnap === 'full' && ratio > 0.44) return 'half'
+    if (startSnap === 'peek' || heightPx <= SHEET_PEEK_PX) return 'dismiss'
+    return 'peek'
   }
 
   if (velocityPxPerMs < -FLICK_VELOCITY_PX_PER_MS) {
-    return ratio >= 0.42 ? 'full' : 'half'
+    if (startSnap === 'peek' && ratio < 0.68) return 'half'
+    return 'full'
   }
 
-  if (ratio >= 0.78) return 'full'
-  if (ratio <= 0.34) return 'peek'
+  if (ratio >= 0.76) return 'full'
+  if (ratio < 0.44) return 'peek'
   return 'half'
 }
 
@@ -77,6 +108,7 @@ export function createSheetDragController(
   let dragAbort: AbortController | null = null
   let startY = 0
   let startHeight = 0
+  let startSnap: SheetSnap = 'half'
   let lastY = 0
   let lastTime = 0
   let velocity = 0
@@ -164,7 +196,12 @@ export function createSheetDragController(
       return
     }
 
-    let outcome = resolveSheetDrop(finalHeight, window.innerHeight, velocity)
+    let outcome = resolveSheetDrop(
+      finalHeight,
+      window.innerHeight,
+      velocity,
+      startSnap,
+    )
     if (outcome === 'dismiss') {
       // Keep the released height while the exit animation slides the sheet out.
       delete panel.dataset.dragging
@@ -198,6 +235,11 @@ export function createSheetDragController(
     pointerId = event.pointerId
     startY = event.clientY
     startHeight = panel.getBoundingClientRect().height
+    let rawSnap = panel.dataset.snap
+    startSnap =
+      rawSnap === 'peek' || rawSnap === 'full' || rawSnap === 'half'
+        ? rawSnap
+        : 'half'
     lastY = event.clientY
     lastTime = event.timeStamp
     velocity = 0

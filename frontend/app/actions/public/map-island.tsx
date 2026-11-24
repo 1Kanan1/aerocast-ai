@@ -25,6 +25,7 @@ import {
 } from '#app/lib/radar.ts'
 import { routes } from '#app/routes.ts'
 import { type Anchor, session } from '#app/ui/public/session.ts'
+import { cameraPadding } from '#app/ui/public/sheet-drag.ts'
 import { theme } from '#app/ui/public/theme.ts'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
@@ -241,8 +242,7 @@ export const MapIsland = clientEntry(
             map.flyTo({
               center: next,
               zoom: Math.max(map.getZoom(), 8),
-              padding:
-                window.innerWidth > 900 ? { right: 520, top: 0 } : undefined,
+              padding: cameraPadding(window.innerWidth, window.innerHeight),
               duration: 900,
             })
           }
@@ -264,8 +264,7 @@ export const MapIsland = clientEntry(
           map.flyTo({
             center: point,
             zoom: Math.max(map.getZoom(), 8),
-            padding:
-              window.innerWidth > 900 ? { right: 520, top: 0 } : undefined,
+            padding: cameraPadding(window.innerWidth, window.innerHeight),
             duration: 900,
           })
         }

@@ -28,6 +28,7 @@ import type { Clarification, SelectedStation } from '#app/ui/public/session.ts'
 import { session } from '#app/ui/public/session.ts'
 import {
   createSheetDragController,
+  SHEET_HALF_VH,
   SHEET_PEEK_PX,
   type SheetSnap,
 } from '#app/ui/public/sheet-drag.ts'
@@ -251,7 +252,7 @@ export const AnswerPanel = clientEntry(
           </header>
 
           {station !== null ? (
-            <div mix={tabsWrapStyle}>
+            <div data-sheet-content mix={tabsWrapStyle}>
               <SegmentedTabs<Section>
                 active={activeSection}
                 onSelect={(next) => {
@@ -276,7 +277,10 @@ export const AnswerPanel = clientEntry(
             </div>
           ) : null}
 
-          <div mix={[bodyStyle, ref((node) => (scroller = node))]}>
+          <div
+            data-sheet-content
+            mix={[bodyStyle, ref((node) => (scroller = node))]}
+          >
             {station === null ? null : (
               <ThreadAnnouncer thread={station.thread} />
             )}
@@ -647,7 +651,11 @@ const panelStyle = css({
       },
     },
     '&[data-snap="peek"]': { height: `${SHEET_PEEK_PX}px` },
-    '&[data-snap="half"]': { height: '56dvh' },
+    '&[data-snap="peek"]:not([data-dragging="true"]) [data-sheet-content]': {
+      opacity: 0,
+      pointerEvents: 'none',
+    },
+    '&[data-snap="half"]': { height: `${SHEET_HALF_VH}dvh` },
     '&[data-snap="full"]': {
       height: '100dvh',
       borderRadius: 0,
@@ -774,6 +782,7 @@ const closeStyle = css({
 const tabsWrapStyle = css({
   padding: '10px 16px 0',
   flexShrink: 0,
+  transition: 'opacity 160ms var(--ease-out)',
 })
 
 const bodyStyle = css({
@@ -783,6 +792,7 @@ const bodyStyle = css({
   overflowX: 'hidden',
   padding: '14px 16px 18px',
   scrollBehavior: 'smooth',
+  transition: 'opacity 160ms var(--ease-out)',
   '@media (max-width: 900px)': { paddingBlockEnd: '96px' },
 })
 
