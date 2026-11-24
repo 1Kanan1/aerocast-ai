@@ -47,6 +47,11 @@ describe('map page', () => {
     assert.match(html, /Ask about the weather/)
     assert.match(html, /StationPopup/)
     assert.match(html, /Not for flight planning/)
+    assert.match(
+      html,
+      /:root:has\(meta\[name="color-scheme"\]\[content="light"\]\)/,
+    )
+    assert.doesNotMatch(html, /:root:has\(&gt;/)
   })
 
   it('leaves search to the ask bar instead of the navbar', async (t) => {

@@ -1,90 +1,92 @@
 /**
- * Global :root design tokens for dark and light themes, FAA flight categories,
- * and shared motion primitives.
+ * Global :root design tokens for restrained dark and light themes,
+ * desaturated FAA flight categories, and shared motion curves.
  */
 
 const DARK_VARS = `
-  --paper: #0b0c0e;
-  --paper-2: #121418;
-  --paper-3: #1b1e24;
-  --ink-0: #f3f4f6;
-  --ink-1: #d4d7dd;
-  --ink-2: #9ea4b0;
-  --ink-3: #848b99;
-  --line: rgba(255, 255, 255, 0.12);
-  --line-strong: rgba(255, 255, 255, 0.24);
-  --glass: rgba(18, 20, 25, 0.78);
-  --glass-strong: rgba(18, 20, 25, 0.92);
-  --glass-border: rgba(255, 255, 255, 0.13);
-  --hover-bg: rgba(255, 255, 255, 0.07);
+  --paper: #09090b;
+  --paper-2: #111214;
+  --paper-3: #1a1b1f;
+  --ink-0: #f2f2f0;
+  --ink-1: #d4d4d0;
+  --ink-2: #9b9b96;
+  --ink-3: #767672;
+  --line: rgba(255, 255, 255, 0.11);
+  --line-strong: rgba(255, 255, 255, 0.22);
+  --glass: rgba(17, 18, 20, 0.78);
+  --glass-strong: rgba(17, 18, 20, 0.93);
+  --glass-border: rgba(255, 255, 255, 0.11);
+  --hover-bg: rgba(255, 255, 255, 0.06);
   --shadow: 0 20px 56px rgba(0, 0, 0, 0.52);
-  --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, 0.13);
-  --accent-ink: #06131c;
-  --vfr-bg: #133524;
-  --vfr-ink: #6ee7b7;
-  --vfr-dot: #22c55e;
-  --mvfr-bg: #142a4a;
-  --mvfr-ink: #93c5fd;
-  --mvfr-dot: #3b82f6;
-  --ifr-bg: #45181b;
-  --ifr-ink: #fca5a5;
-  --ifr-dot: #ef4444;
-  --lifr-bg: #3f163c;
-  --lifr-ink: #f5a3f5;
-  --lifr-dot: #d946ef;
-  --warn-bg: rgba(217, 119, 6, 0.16);
-  --warn-border: rgba(245, 158, 11, 0.45);
-  --warn-ink: #fcd34d;
-  --danger-bg: rgba(220, 38, 38, 0.16);
-  --danger-border: rgba(248, 113, 113, 0.45);
-  --danger-ink: #fca5a5;
+  --accent: #e8e8e4;
+  --accent-soft: rgba(255, 255, 255, 0.06);
+  --accent-ink: #09090b;
+  --focus-ring: rgba(242, 242, 240, 0.42);
+  --vfr-bg: rgba(74, 150, 106, 0.16);
+  --vfr-ink: #88bf9e;
+  --vfr-dot: #5a9e76;
+  --mvfr-bg: rgba(88, 128, 184, 0.16);
+  --mvfr-ink: #90b0d8;
+  --mvfr-dot: #5f87be;
+  --ifr-bg: rgba(186, 88, 88, 0.16);
+  --ifr-ink: #d69292;
+  --ifr-dot: #bf6363;
+  --lifr-bg: rgba(156, 96, 156, 0.16);
+  --lifr-ink: #c79bc7;
+  --lifr-dot: #a66ca6;
+  --warn-bg: rgba(186, 138, 62, 0.12);
+  --warn-border: rgba(186, 138, 62, 0.30);
+  --warn-ink: #c9a66b;
+  --danger-bg: rgba(186, 82, 82, 0.12);
+  --danger-border: rgba(186, 82, 82, 0.32);
+  --danger-ink: #d49090;
   --ctrl-filter: invert(1);
-  --scrollbar-track: #121418;
-  --scrollbar-thumb: #4b5262;
-  --selection-bg: rgba(56, 189, 248, 0.28);
+  --scrollbar-track: #111214;
+  --scrollbar-thumb: #3c3e45;
+  --selection-bg: rgba(242, 242, 240, 0.18);
 `
 
 const LIGHT_VARS = `
-  --paper: #f4f6f9;
-  --paper-2: #ffffff;
-  --paper-3: #e8ecf2;
-  --ink-0: #111318;
-  --ink-1: #262a33;
-  --ink-2: #484f5e;
-  --ink-3: #575f70;
-  --line: rgba(17, 19, 24, 0.13);
-  --line-strong: rgba(17, 19, 24, 0.25);
-  --glass: rgba(255, 255, 255, 0.84);
-  --glass-strong: rgba(255, 255, 255, 0.95);
-  --glass-border: rgba(17, 19, 24, 0.14);
-  --hover-bg: rgba(17, 19, 24, 0.06);
-  --shadow: 0 14px 40px rgba(17, 19, 24, 0.14);
-  --accent: #0369a1;
-  --accent-soft: rgba(3, 105, 161, 0.10);
-  --accent-ink: #ffffff;
-  --vfr-bg: #dcfce7;
-  --vfr-ink: #14532d;
-  --vfr-dot: #16a34a;
-  --mvfr-bg: #dbeafe;
-  --mvfr-ink: #1e3a8a;
-  --mvfr-dot: #2563eb;
-  --ifr-bg: #fee2e2;
-  --ifr-ink: #7f1d1d;
-  --ifr-dot: #dc2626;
-  --lifr-bg: #fae8ff;
-  --lifr-ink: #701a75;
-  --lifr-dot: #c026d3;
-  --warn-bg: #fef3c7;
-  --warn-border: #d97706;
-  --warn-ink: #78350f;
-  --danger-bg: #fee2e2;
-  --danger-border: #dc2626;
-  --danger-ink: #7f1d1d;
+  --paper: #f3f3f1;
+  --paper-2: #fafaf9;
+  --paper-3: #e7e7e4;
+  --ink-0: #141416;
+  --ink-1: #2c2c30;
+  --ink-2: #55555c;
+  --ink-3: #71717a;
+  --line: rgba(20, 20, 22, 0.12);
+  --line-strong: rgba(20, 20, 22, 0.24);
+  --glass: rgba(250, 250, 249, 0.84);
+  --glass-strong: rgba(250, 250, 249, 0.95);
+  --glass-border: rgba(20, 20, 22, 0.13);
+  --hover-bg: rgba(20, 20, 22, 0.05);
+  --shadow: 0 14px 40px rgba(20, 20, 22, 0.12);
+  --accent: #18181b;
+  --accent-soft: rgba(20, 20, 22, 0.05);
+  --accent-ink: #fafaf9;
+  --focus-ring: rgba(20, 20, 22, 0.32);
+  --vfr-bg: rgba(45, 118, 76, 0.12);
+  --vfr-ink: #1f5737;
+  --vfr-dot: #367d53;
+  --mvfr-bg: rgba(52, 94, 154, 0.12);
+  --mvfr-ink: #224475;
+  --mvfr-dot: #3f6aa8;
+  --ifr-bg: rgba(162, 58, 58, 0.12);
+  --ifr-ink: #7c2828;
+  --ifr-dot: #ad4747;
+  --lifr-bg: rgba(128, 62, 128, 0.12);
+  --lifr-ink: #5e265e;
+  --lifr-dot: #8c4b8c;
+  --warn-bg: rgba(168, 118, 38, 0.10);
+  --warn-border: rgba(168, 118, 38, 0.32);
+  --warn-ink: #7d5616;
+  --danger-bg: rgba(166, 56, 56, 0.10);
+  --danger-border: rgba(166, 56, 56, 0.32);
+  --danger-ink: #7d2525;
   --ctrl-filter: none;
-  --scrollbar-track: #e8ecf2;
-  --scrollbar-thumb: #94a3b8;
-  --selection-bg: rgba(3, 105, 161, 0.2);
+  --scrollbar-track: #e7e7e4;
+  --scrollbar-thumb: #a1a1aa;
+  --selection-bg: rgba(20, 20, 22, 0.14);
 `
 
 export const ROOT_CSS = `
@@ -103,11 +105,11 @@ export const ROOT_CSS = `
     ${DARK_VARS}
   }
 }
-:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+:root:has(meta[name="color-scheme"][content="dark"]) {
   color-scheme: dark;
   ${DARK_VARS}
 }
-:root:has(> head > meta[name="color-scheme"][content="light"]) {
+:root:has(meta[name="color-scheme"][content="light"]) {
   color-scheme: light;
   ${LIGHT_VARS}
 }
@@ -127,9 +129,13 @@ html, body {
 ::selection {
   background: var(--selection-bg);
 }
-:focus-visible {
-  outline: 2px solid var(--accent);
+:focus-visible:not([data-focus-ring="parent"]) {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+[data-focus-ring="parent"]:focus,
+[data-focus-ring="parent"]:focus-visible {
+  outline: none;
 }
 @keyframes rmx-panel-in {
   from { opacity: 0; transform: translateX(18px) scale(0.985); }
@@ -156,9 +162,9 @@ html, body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes rmx-highlight-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45); }
-  60% { box-shadow: 0 0 0 6px rgba(56, 189, 248, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+  0% { box-shadow: 0 0 0 0 var(--focus-ring); }
+  65% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 @keyframes rmx-icon-in {
   from { opacity: 0; transform: rotate(-35deg) scale(0.75); }

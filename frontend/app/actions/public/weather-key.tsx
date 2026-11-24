@@ -7,10 +7,10 @@ import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
 const RAIN_SCALE =
   'linear-gradient(90deg,' +
-  ' rgba(56, 189, 248, 0.28) 0 25%,' +
-  ' rgba(56, 189, 248, 0.52) 25% 50%,' +
-  ' rgba(14, 165, 233, 0.75) 50% 75%,' +
-  ' rgba(2, 132, 199, 0.92) 75% 100%)'
+  ' rgba(148, 184, 206, 0.30) 0 25%,' +
+  ' rgba(148, 184, 206, 0.52) 25% 50%,' +
+  ' rgba(124, 168, 196, 0.72) 50% 75%,' +
+  ' rgba(102, 152, 184, 0.90) 75% 100%)'
 const TEMP_SCALE =
   'linear-gradient(90deg, #5f8fb8, #6f9f9a, #a8b071, #d09a4e, #c4643f)'
 const HAZARD_SWATCH =

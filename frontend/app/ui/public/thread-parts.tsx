@@ -250,6 +250,7 @@ export function UserTurn(
         >
           <textarea
             aria-label="Edit question"
+            data-focus-ring="parent"
             maxLength={400}
             name="question"
             mix={[
@@ -693,7 +694,7 @@ const userEditStyle = css({
   borderRadius: '14px',
   background: 'var(--paper)',
   '&:has(textarea:focus-visible)': {
-    outline: '2px solid var(--accent)',
+    outline: '2px solid var(--focus-ring)',
     outlineOffset: '2px',
   },
   '& textarea': {

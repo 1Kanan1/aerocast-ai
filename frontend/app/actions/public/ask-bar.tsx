@@ -102,6 +102,7 @@ export const AskBar = clientEntry(
             <textarea
               aria-label="Ask about the weather"
               data-ask-field="true"
+              data-focus-ring="parent"
               maxLength={400}
               mix={[
                 on('input', (event) => {
@@ -225,10 +226,10 @@ const barStyle = css({
   WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
   transition:
     'border-color 160ms var(--ease-out), background-color 220ms var(--ease-out), box-shadow 220ms var(--ease-out)',
-  '&:focus-within': { borderColor: 'var(--accent)' },
-  // The textarea draws no outline of its own, so the ring goes on the bar.
+  '&:focus-within': { borderColor: 'var(--line-strong)' },
+  // The textarea draws no outline of its own, so one calm ring goes on the pill.
   '&:has(textarea:focus-visible)': {
-    outline: '2px solid var(--accent)',
+    outline: '2px solid var(--focus-ring)',
     outlineOffset: '2px',
   },
   '& textarea': {

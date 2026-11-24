@@ -33,8 +33,8 @@ const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
 const MOVE_DEBOUNCE_MS = 250
 const DARK_PAPER = '#0b0c0e'
 const LIGHT_PAPER = '#f4f6f9'
-const HAZARD_INK = '#e0603f'
-const SELECTION_INK = '#38bdf8'
+const HAZARD_INK = '#c96f55'
+const SELECTION_INK = '#7ec7d6'
 const EARTH_RADIUS_NM = 3440.065
 
 const tips = new WeakMap<MapLibreMap, import('maplibre-gl').Popup>()

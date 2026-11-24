@@ -1,4 +1,4 @@
-/** Standard FAA flight-category tokens (always paired with text labels). */
+/** Desaturated FAA flight-category tokens (always paired with text labels). */
 export const CATEGORY_SHADES: Record<string, string> = {
   VFR: 'var(--vfr-bg)',
   MVFR: 'var(--mvfr-bg)',
@@ -22,10 +22,10 @@ export function categoryInk(category: string | null): string {
   }
 }
 
-/** Saturated FAA marker dot color for map circles (hex for WebGL paint). */
+/** Muted FAA marker dot colors for map circles (hex for WebGL paint). */
 export const CATEGORY_DOTS: Record<string, string> = {
-  VFR: '#22c55e',
-  MVFR: '#3b82f6',
-  IFR: '#ef4444',
-  LIFR: '#d946ef',
+  VFR: '#5a9e76',
+  MVFR: '#5f87be',
+  IFR: '#bf6363',
+  LIFR: '#a66ca6',
 }
