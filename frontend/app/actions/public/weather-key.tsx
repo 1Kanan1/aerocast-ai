@@ -193,14 +193,15 @@ const wrapStyle = css({
   left: '16px',
   bottom: '132px',
   zIndex: 5,
+  pointerEvents: 'none',
   '@media (max-width: 900px)': {
-    left: 'auto',
+    left: '12px',
+    right: 'auto',
     bottom: 'auto',
     top: '58px',
-    right: '12px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     gap: '8px',
     transition: 'top 240ms var(--ease-out)',
     '&[data-timeline="true"]': { top: '88px' },
@@ -210,6 +211,7 @@ const wrapStyle = css({
 const mobileTriggerStyle = css({
   display: 'none',
   '@media (max-width: 900px)': {
+    pointerEvents: 'auto',
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
@@ -237,6 +239,7 @@ const mobileTriggerStyle = css({
 })
 
 const keyStyle = css({
+  pointerEvents: 'auto',
   display: 'flex',
   flexDirection: 'column',
   gap: '6px',
@@ -256,7 +259,7 @@ const keyStyle = css({
     background: 'var(--glass-strong)',
     padding: '10px 12px',
     gap: '8px',
-    transformOrigin: 'top right',
+    transformOrigin: 'top left',
     opacity: 0,
     transform: 'translateY(-6px) scale(0.96)',
     pointerEvents: 'none',

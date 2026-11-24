@@ -120,6 +120,7 @@ const toolsStyle = css({
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
+  pointerEvents: 'none',
   transition: 'top 240ms var(--ease-out)',
   '@media (max-width: 900px)': {
     top: '14px',
@@ -127,13 +128,12 @@ const toolsStyle = css({
     gap: '6px',
     ':is(main:has([aria-label="Timeline"])) &': {
       top: '88px',
-      left: '12px',
-      right: 'auto',
     },
   },
 })
 
 const toolButtonStyle = css({
+  pointerEvents: 'auto',
   display: 'grid',
   placeItems: 'center',
   width: '40px',

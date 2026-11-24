@@ -47,6 +47,7 @@ export const ThemeToggle = clientEntry(
 )
 
 const buttonStyle = css({
+  pointerEvents: 'auto',
   display: 'grid',
   placeItems: 'center',
   width: '36px',

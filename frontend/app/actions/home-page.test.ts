@@ -56,6 +56,18 @@ describe('map page', () => {
     assert.doesNotMatch(html, /:root:has\(&gt;/)
     assert.doesNotMatch(html, /\[object Object\]/)
     assert.match(html, /:is\(main:has\(\[aria-label="Timeline"\]\)\) &/)
+
+    // The WeatherKey wrapper stays pointer-transparent so the collapsed mobile
+    // layers box never blocks map drags.
+    let keyWrapClass = html.match(
+      /data-timeline="false" class="(rmxc-[a-z0-9]+)"/,
+    )?.[1]
+    assert.ok(keyWrapClass)
+    let keyWrapStyle = html.match(
+      new RegExp(`data-rmx-style="${keyWrapClass}"[^>]*>([^<]+)</style>`),
+    )?.[1]
+    assert.ok(keyWrapStyle)
+    assert.match(keyWrapStyle, /pointer-events:\s*none/)
   })
 
   it('leaves search to the ask bar instead of the navbar', async (t) => {
