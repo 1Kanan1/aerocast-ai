@@ -8,17 +8,19 @@ import type { Handle } from 'remix/component'
 import { clientEntry, css, ref } from 'remix/component'
 
 import type {
+  AreaStation,
   MapLayers,
   ResolveSuggestion,
-  AreaStation,
 } from '#app/lib/api-types.ts'
+import { timeLabel } from '#app/lib/format.ts'
 import { type IslandLayers, islandLayers } from '#app/lib/map-data.ts'
 import { toDarkMonochrome, toMonochrome } from '#app/lib/monochrome.ts'
+import { CATEGORY_DOTS } from '#app/lib/public/categories.ts'
 import { pixelsPerNm } from '#app/lib/public/field-stations.ts'
 import {
-  RADAR_ATTRIBUTION,
   AREA_NM,
   prefetchRadarWindow,
+  RADAR_ATTRIBUTION,
   stationsToWarm,
 } from '#app/lib/radar.ts'
 import { routes } from '#app/routes.ts'
@@ -29,28 +31,40 @@ import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 const LIBRARY_URL = '/vendor/maplibre/maplibre-gl.mjs'
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
 const MOVE_DEBOUNCE_MS = 250
-const PAPER = '#09090a'
-/** The one hue on the map belongs to the hazard polygons, not the chrome. */
+const DARK_PAPER = '#0b0c0e'
+const LIGHT_PAPER = '#f4f6f9'
 const HAZARD_INK = '#e0603f'
-/** The selected station's dot: a cool hue, so it is neither paper nor shadow. */
-const SELECTION_INK = '#7ec7d6'
-/** Mean Earth radius in nautical miles, for the area circle. */
+const SELECTION_INK = '#38bdf8'
 const EARTH_RADIUS_NM = 3440.065
-/** Each map's area tooltip, so a changed area can close the last one. */
-const tips = new WeakMap<MapLibreMap, import('maplibre-gl').Popup>()
 
-/** The hover card for a station dot: who it is, and how far away. */
+const tips = new WeakMap<MapLibreMap, import('maplibre-gl').Popup>()
+const advisoryPopups = new WeakMap<MapLibreMap, import('maplibre-gl').Popup>()
+
+/** The hover card for a station dot: code, optional category, name, distance. */
 function stationTip(
   icao: string,
   name: string,
   distanceNm: number | null,
+  category: string | null = null,
 ): HTMLElement {
   let node = document.createElement('div')
   node.className = 'station-tip'
 
+  let head = document.createElement('div')
+  head.className = 'station-tip-head'
+
   let code = document.createElement('strong')
   code.textContent = icao
-  node.append(code)
+  head.append(code)
+
+  if (category) {
+    let badge = document.createElement('span')
+    badge.className = 'station-tip-cat'
+    badge.textContent = category
+    badge.style.color = CATEGORY_DOTS[category] ?? 'var(--ink-2)'
+    head.append(badge)
+  }
+  node.append(head)
 
   let label = document.createElement('div')
   label.textContent = name
@@ -59,30 +73,69 @@ function stationTip(
   if (distanceNm !== null) {
     let distance = document.createElement('div')
     distance.className = 'station-tip-muted'
-    distance.textContent = `${distanceNm} nm from the click`
+    distance.textContent = `${distanceNm} nm from click`
     node.append(distance)
   }
 
   return node
 }
-/**
- * The opening view: the contiguous states with room around them. Alaska,
- * Hawaii and the territories are a pan away, inside the limit below.
- */
+
+function advisoryTip(props: {
+  hazard?: string
+  kind?: string
+  source_id?: string
+  severity?: string | null
+  base_ft?: number | null
+  top_ft?: number | null
+  due_to?: string | null
+  valid_to?: string | null
+}): HTMLElement {
+  let node = document.createElement('div')
+  node.className = 'advisory-tip'
+
+  let title = document.createElement('strong')
+  title.textContent =
+    `${props.hazard ?? 'Advisory'} · ${(props.kind ?? '').toUpperCase()} ${props.source_id ?? ''}`.trim()
+  node.append(title)
+
+  if (props.due_to) {
+    let due = document.createElement('div')
+    due.textContent = props.due_to
+    node.append(due)
+  }
+
+  let details: string[] = []
+  if (props.severity) details.push(props.severity)
+  if (props.base_ft != null && props.top_ft != null) {
+    details.push(
+      `${props.base_ft.toLocaleString()}–${props.top_ft.toLocaleString()} ft`,
+    )
+  } else if (props.top_ft != null) {
+    details.push(`to ${props.top_ft.toLocaleString()} ft`)
+  }
+  if (props.valid_to) {
+    details.push(`until ${timeLabel(props.valid_to)}`)
+  }
+  if (details.length > 0) {
+    let meta = document.createElement('div')
+    meta.className = 'station-tip-muted'
+    meta.textContent = details.join(' · ')
+    node.append(meta)
+  }
+
+  return node
+}
+
 const US_MAINLAND: [[number, number], [number, number]] = [
   [-127, 23],
   [-65, 50],
 ]
-/**
- * How far the camera may travel: the country and its territories, the
- * Aleutians to the Virgin Islands, with room around them so the opening view
- * can sit inside the frame and panning still stops short of Europe.
- */
+
 const US_LIMIT: [[number, number], [number, number]] = [
   [-180, 12],
   [-42, 77],
 ]
-/** Room between the country and the frame on the opening view. */
+
 const US_PADDING = 56
 
 interface MapIslandProps {
@@ -90,8 +143,9 @@ interface MapIslandProps {
 }
 
 /**
- * The only browser island. Everything it draws is server-provided first, and
- * a viewport change refetches through the same-origin proxy.
+ * Full-bleed MapLibre GL canvas with theme-aware monochrome tiles, toggleable
+ * FAA-colored airport dots (off by default), clickable advisory polygons, and
+ * URL selection restore.
  */
 export const MapIsland = clientEntry(
   import.meta.url,
@@ -114,6 +168,7 @@ export const MapIsland = clientEntry(
       if (signal.aborted || !container) return
 
       let currentTheme = theme.resolved
+      let latestLayers: IslandLayers = handle.props.initial
       let buildStyle = (): StyleSpecification =>
         rawStyle
           ? currentTheme === 'dark'
@@ -146,12 +201,8 @@ export const MapIsland = clientEntry(
       let selectedPoint: [number, number] | null = null
       let areaPoint: [number, number] | null = null
 
-      // The server text is for a browser without JavaScript; from here it is
-      // only a loading note until the first style is ready.
       if (fallback) fallback.textContent = 'Loading map…'
 
-      // The ask bar and the search both select; the map only draws what the
-      // session holds. A selection that moves the marker also moves the view.
       let applySession = (): void => {
         let station = session.selected
         showSuggested(map, session.suggested)
@@ -171,8 +222,6 @@ export const MapIsland = clientEntry(
         if (station === null || station.lat === null || station.lon === null) {
           selectedPoint = null
           showSelection(map, null)
-          // The area draws its own weather from the click, so the field
-          // needs an anchor there too.
           let next: [number, number] | null =
             session.area === null ? null : [session.area.lon, session.area.lat]
           let moved =
@@ -185,9 +234,6 @@ export const MapIsland = clientEntry(
             areaPoint === null ? null : anchorAt(map, areaPoint),
           )
 
-          // A clicked point is already where the reader is looking. A
-          // coordinate from the search bar is somewhere, so take the map
-          // there once, at the same zoom a station search uses.
           if (moved && next !== null && session.area?.focus === true) {
             map.flyTo({
               center: next,
@@ -212,8 +258,6 @@ export const MapIsland = clientEntry(
         session.setAnchor(anchorAt(map, point))
 
         if (moved) {
-          // The answer panel covers the right edge, so center the station in
-          // the part of the map the reader can still see.
           map.flyTo({
             center: point,
             zoom: Math.max(map.getZoom(), 8),
@@ -226,15 +270,122 @@ export const MapIsland = clientEntry(
 
       let mountOverlays = (): void => {
         if (signal.aborted) return
-        addAdvisoryLayers(map, handle.props.initial)
-        showAdvisories(map, weatherLayers.advisories)
-        addMarkers(map, maplibre)
+        addAdvisoryLayers(map, latestLayers, weatherLayers.advisories)
+        addStationDots(map, latestLayers, currentTheme, weatherLayers.stations)
+        addMarkers(map)
         applySession()
+      }
+
+      let bindLayerInteractions = (): void => {
+        let tip = new maplibre.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 10,
+        })
+        tips.set(map, tip)
+
+        let advPopup = new maplibre.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          maxWidth: '280px',
+        })
+        advisoryPopups.set(map, advPopup)
+
+        map.on('mouseenter', 'viewport-stations-dots', (event) => {
+          if (!weatherLayers.stations) return
+          let feature = event.features?.[0]
+          if (feature === undefined) return
+          let { icao, name, category } = (feature.properties ?? {}) as {
+            icao?: string
+            name?: string
+            category?: string | null
+          }
+          if (typeof icao !== 'string' || typeof name !== 'string') return
+          let geometry = feature.geometry
+          if (!geometry || !('coordinates' in geometry)) return
+          tip
+            .setLngLat(geometry.coordinates as [number, number])
+            .setDOMContent(stationTip(icao, name, null, category ?? null))
+            .addTo(map)
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'viewport-stations-dots', () => {
+          tip.remove()
+          map.getCanvas().style.cursor = ''
+        })
+        map.on('click', 'viewport-stations-dots', (event) => {
+          if (!weatherLayers.stations) return
+          let icao = event.features?.[0]?.properties?.icao
+          if (typeof icao === 'string') {
+            advPopup.remove()
+            void session.select(icao)
+          }
+        })
+
+        map.on('click', 'suggested-ring', (event) => {
+          let icao = event.features?.[0]?.properties?.icao
+          if (typeof icao === 'string') void session.select(icao)
+        })
+        map.on('mouseenter', 'suggested-ring', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'suggested-ring', () => {
+          map.getCanvas().style.cursor = ''
+        })
+
+        map.on('mouseenter', 'area-stations', (event) => {
+          let feature = event.features?.[0]
+          if (feature === undefined) return
+          let { icao, name, distance_nm } = (feature.properties ?? {}) as {
+            icao?: string
+            name?: string
+            distance_nm?: number
+          }
+          if (typeof icao !== 'string' || typeof name !== 'string') return
+          let geometry = feature.geometry
+          if (!geometry || !('coordinates' in geometry)) return
+          tip
+            .setLngLat(geometry.coordinates as [number, number])
+            .setDOMContent(stationTip(icao, name, distance_nm ?? null))
+            .addTo(map)
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'area-stations', () => {
+          tip.remove()
+          map.getCanvas().style.cursor = ''
+        })
+        map.on('click', 'area-stations', (event) => {
+          let icao = event.features?.[0]?.properties?.icao
+          if (typeof icao === 'string') void session.select(icao)
+        })
+
+        map.on('mouseenter', 'advisories-fill', () => {
+          if (!weatherLayers.advisories) return
+          if (map.getCanvas().style.cursor === '') {
+            map.getCanvas().style.cursor = 'pointer'
+          }
+        })
+        map.on('mouseleave', 'advisories-fill', () => {
+          map.getCanvas().style.cursor = ''
+        })
+      }
+
+      let refreshViewport = async (): Promise<void> => {
+        let next = await fetchViewportLayers(map)
+        if (next === null || signal.aborted) return
+        latestLayers = next
+        let advSource = map.getSource('advisories') as GeoJSONSource | undefined
+        advSource?.setData(advisoriesOf(next))
+        let stnSource = map.getSource('viewport-stations') as
+          | GeoJSONSource
+          | undefined
+        stnSource?.setData(stationsOf(next))
       }
 
       map.on('load', () => {
         if (signal.aborted) return
         mountOverlays()
+        bindLayerInteractions()
         fallback?.remove()
         void session.syncFromUrl()
       })
@@ -247,40 +398,78 @@ export const MapIsland = clientEntry(
           map.setStyle(buildStyle())
           map.once('style.load', () => {
             mountOverlays()
-            if (weatherLayers.advisories) void refreshAdvisories(map)
           })
         },
         { signal: handle.signal },
       )
 
-      // The hazard polygons carry their own switch. Off means no requests as
-      // the map moves; switching on fetches the current view at once, and a
-      // switch for another layer leaves them as they are.
       let hazardsShown = weatherLayers.advisories
+      let stationsShown = weatherLayers.stations
       weatherLayers.addEventListener(
         'change',
         () => {
-          if (weatherLayers.advisories === hazardsShown) return
-          hazardsShown = weatherLayers.advisories
-          showAdvisories(map, hazardsShown)
-          if (hazardsShown) void refreshAdvisories(map)
+          let needRefresh = false
+          if (weatherLayers.advisories !== hazardsShown) {
+            hazardsShown = weatherLayers.advisories
+            showAdvisories(map, hazardsShown)
+            if (!hazardsShown) advisoryPopups.get(map)?.remove()
+            if (hazardsShown) needRefresh = true
+          }
+          if (weatherLayers.stations !== stationsShown) {
+            stationsShown = weatherLayers.stations
+            showStations(map, stationsShown)
+            if (!stationsShown) tips.get(map)?.remove()
+            if (stationsShown) needRefresh = true
+          }
+          if (needRefresh) void refreshViewport()
         },
         { signal: handle.signal },
       )
 
-      // An empty click asks about the place around it; a click on a station
-      // keeps its own handler and never opens the area.
+      // Priority order on click: visible station dots -> visible advisory -> area
       map.on('click', (event) => {
+        let stationLayers = weatherLayers.stations
+          ? [
+              'viewport-stations-dots',
+              'suggested-ring',
+              'selection-dot',
+              'area-stations',
+            ]
+          : ['suggested-ring', 'selection-dot', 'area-stations']
+
         let hit = map.queryRenderedFeatures(event.point, {
-          layers: ['suggested-ring', 'selection-dot', 'area-stations'],
+          layers: stationLayers,
         })
         if (hit.length > 0) return
+
+        if (weatherLayers.advisories) {
+          let advHit = map.queryRenderedFeatures(event.point, {
+            layers: ['advisories-fill'],
+          })
+          if (advHit.length > 0) {
+            let props = (advHit[0].properties ?? {}) as {
+              hazard?: string
+              kind?: string
+              source_id?: string
+              severity?: string | null
+              base_ft?: number | null
+              top_ft?: number | null
+              due_to?: string | null
+              valid_to?: string | null
+            }
+            advisoryPopups
+              .get(map)
+              ?.setLngLat(event.lngLat)
+              .setDOMContent(advisoryTip(props))
+              .addTo(map)
+            return
+          }
+        }
 
         let { lat, lng } = event.lngLat
         void session.openArea({ lat, lon: lng })
       })
 
-      // Keep the weather field over its point, and the card over its dot.
       map.on('move', () => {
         if (selectedPoint !== null) {
           session.moveAnchor(anchorAt(map, selectedPoint))
@@ -296,9 +485,9 @@ export const MapIsland = clientEntry(
       map.on('moveend', () => {
         session.settleAnchor()
         clearTimeout(moveTimer)
-        if (!weatherLayers.advisories) return
+        if (!weatherLayers.advisories && !weatherLayers.stations) return
         moveTimer = setTimeout(() => {
-          void refreshAdvisories(map)
+          void refreshViewport()
         }, MOVE_DEBOUNCE_MS)
       })
 
@@ -312,8 +501,8 @@ export const MapIsland = clientEntry(
       <div mix={frameStyle}>
         <div mix={[mapStyle, ref((node) => (container = node))]} />
         <p mix={[fallbackStyle, ref((node) => (fallback = node))]}>
-          The map needs JavaScript. The station list below covers the same
-          airports.
+          The map needs JavaScript. Visit Advisories or a station page
+          (/stations/KSFO) for text weather reports.
         </p>
       </div>
     )
@@ -341,18 +530,78 @@ function emptyStyle(mode: 'light' | 'dark'): StyleSpecification {
         id: 'paper',
         type: 'background',
         paint: {
-          'background-color': mode === 'dark' ? PAPER : '#f4f6f9',
+          'background-color': mode === 'dark' ? DARK_PAPER : LIGHT_PAPER,
         },
       },
     ],
   }
 }
 
-/** The selected station and any fresh alternative, and nothing else. */
-function addMarkers(
+function addStationDots(
   map: MapLibreMap,
-  maplibre: typeof import('maplibre-gl'),
+  data: IslandLayers,
+  mode: 'light' | 'dark',
+  visible: boolean,
 ): void {
+  map.addSource('viewport-stations', {
+    type: 'geojson',
+    data: stationsOf(data),
+  })
+  map.addLayer({
+    id: 'viewport-stations-dots',
+    type: 'circle',
+    source: 'viewport-stations',
+    paint: {
+      'circle-radius': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        3,
+        3.5,
+        6,
+        5,
+        9,
+        6.5,
+      ],
+      'circle-radius-transition': { duration: 240, delay: 0 },
+      'circle-color': [
+        'match',
+        ['get', 'category'],
+        'VFR',
+        CATEGORY_DOTS.VFR,
+        'MVFR',
+        CATEGORY_DOTS.MVFR,
+        'IFR',
+        CATEGORY_DOTS.IFR,
+        'LIFR',
+        CATEGORY_DOTS.LIFR,
+        '#94a3b8',
+      ],
+      'circle-stroke-color': mode === 'dark' ? DARK_PAPER : '#ffffff',
+      'circle-stroke-width': 1.5,
+      'circle-opacity': visible ? 0.92 : 0,
+      'circle-opacity-transition': { duration: 280, delay: 0 },
+      'circle-stroke-opacity': visible ? 0.95 : 0,
+      'circle-stroke-opacity-transition': { duration: 280, delay: 0 },
+    },
+  })
+}
+
+function showStations(map: MapLibreMap, visible: boolean): void {
+  if (map.getLayer('viewport-stations-dots') === undefined) return
+  map.setPaintProperty(
+    'viewport-stations-dots',
+    'circle-opacity',
+    visible ? 0.92 : 0,
+  )
+  map.setPaintProperty(
+    'viewport-stations-dots',
+    'circle-stroke-opacity',
+    visible ? 0.95 : 0,
+  )
+}
+
+function addMarkers(map: MapLibreMap): void {
   map.addSource('area-window', {
     type: 'geojson',
     data: emptyCollection(),
@@ -361,7 +610,7 @@ function addMarkers(
     id: 'area-fill',
     type: 'fill',
     source: 'area-window',
-    paint: { 'fill-color': SELECTION_INK, 'fill-opacity': 0.05 },
+    paint: { 'fill-color': SELECTION_INK, 'fill-opacity': 0.06 },
   })
   map.addLayer({
     id: 'area-ring',
@@ -369,8 +618,8 @@ function addMarkers(
     source: 'area-window',
     paint: {
       'line-color': SELECTION_INK,
-      'line-width': 1,
-      'line-opacity': 0.6,
+      'line-width': 1.2,
+      'line-opacity': 0.7,
       'line-dasharray': [3, 3],
     },
   })
@@ -383,21 +632,19 @@ function addMarkers(
     paint: {
       'circle-radius': 4,
       'circle-color': '#f2f2ee',
-      'circle-stroke-color': PAPER,
+      'circle-stroke-color': DARK_PAPER,
       'circle-stroke-width': 1.5,
     },
   })
 
   map.addSource('area-stations', { type: 'geojson', data: emptyCollection() })
-  // A soft dark halo lifts the dot off both the pale rain colors and the
-  // dark basemap, where a stroke alone disappears.
   map.addLayer({
     id: 'area-stations-halo',
     type: 'circle',
     source: 'area-stations',
     paint: {
       'circle-radius': 11,
-      'circle-color': PAPER,
+      'circle-color': DARK_PAPER,
       'circle-opacity': 0.45,
       'circle-blur': 1,
     },
@@ -409,7 +656,7 @@ function addMarkers(
     paint: {
       'circle-radius': 6,
       'circle-color': '#eef3f4',
-      'circle-stroke-color': PAPER,
+      'circle-stroke-color': DARK_PAPER,
       'circle-stroke-width': 2,
     },
   })
@@ -440,71 +687,32 @@ function addMarkers(
     type: 'circle',
     source: 'selection',
     paint: {
-      'circle-radius': 7,
+      'circle-radius': 8,
       'circle-color': SELECTION_INK,
+      'circle-stroke-color': '#ffffff',
+      'circle-stroke-width': 2,
     },
-  })
-
-  map.on('click', 'suggested-ring', (event) => {
-    let icao = event.features?.[0]?.properties?.icao
-    if (typeof icao === 'string') void session.select(icao)
-  })
-  map.on('mouseenter', 'suggested-ring', () => {
-    map.getCanvas().style.cursor = 'pointer'
-  })
-  map.on('mouseleave', 'suggested-ring', () => {
-    map.getCanvas().style.cursor = ''
-  })
-
-  // A station inside the area point: hover names it, click reads it.
-  let tip = new maplibre.Popup({
-    closeButton: false,
-    closeOnClick: false,
-    offset: 10,
-  })
-  tips.set(map, tip)
-
-  map.on('mouseenter', 'area-stations', (event) => {
-    let feature = event.features?.[0]
-    if (feature === undefined) return
-
-    let { icao, name, distance_nm } = (feature.properties ?? {}) as {
-      icao?: string
-      name?: string
-      distance_nm?: number
-    }
-    if (typeof icao !== 'string' || typeof name !== 'string') return
-
-    let geometry = feature.geometry
-    if (!geometry || !('coordinates' in geometry)) return
-    let coordinates = geometry.coordinates as [number, number]
-
-    tip
-      .setLngLat(coordinates)
-      .setDOMContent(stationTip(icao, name, distance_nm ?? null))
-      .addTo(map)
-    map.getCanvas().style.cursor = 'pointer'
-  })
-  map.on('mouseleave', 'area-stations', () => {
-    tip.remove()
-    map.getCanvas().style.cursor = ''
-  })
-  map.on('click', 'area-stations', (event) => {
-    let icao = event.features?.[0]?.properties?.icao
-    if (typeof icao === 'string') void session.select(icao)
   })
 }
 
-/** Hazard polygons are a layer like any other: the key can switch them off. */
 function showAdvisories(map: MapLibreMap, visible: boolean): void {
-  let visibility: 'visible' | 'none' = visible ? 'visible' : 'none'
-  for (let id of ['advisories-fill', 'advisories-outline']) {
-    if (map.getLayer(id) === undefined) continue
-    map.setLayoutProperty(id, 'visibility', visibility)
+  if (map.getLayer('advisories-fill') !== undefined) {
+    map.setPaintProperty('advisories-fill', 'fill-opacity', visible ? 0.75 : 0)
+  }
+  if (map.getLayer('advisories-outline') !== undefined) {
+    map.setPaintProperty(
+      'advisories-outline',
+      'line-opacity',
+      visible ? 0.9 : 0,
+    )
   }
 }
 
-function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {
+function addAdvisoryLayers(
+  map: MapLibreMap,
+  data: IslandLayers,
+  visible: boolean,
+): void {
   if (!map.hasImage('advisory-hatch')) {
     map.addImage('advisory-hatch', hatchPattern(), { pixelRatio: 1 })
   }
@@ -516,17 +724,28 @@ function addAdvisoryLayers(map: MapLibreMap, data: IslandLayers): void {
     id: 'advisories-fill',
     type: 'fill',
     source: 'advisories',
-    paint: { 'fill-pattern': 'advisory-hatch', 'fill-opacity': 0.75 },
+    paint: {
+      'fill-pattern': 'advisory-hatch',
+      'fill-opacity': visible ? 0.75 : 0,
+      'fill-opacity-transition': { duration: 260, delay: 0 },
+    },
   })
   map.addLayer({
     id: 'advisories-outline',
     type: 'line',
     source: 'advisories',
-    paint: { 'line-color': HAZARD_INK, 'line-width': 1 },
+    paint: {
+      'line-color': HAZARD_INK,
+      'line-width': 1,
+      'line-opacity': visible ? 0.9 : 0,
+      'line-opacity-transition': { duration: 260, delay: 0 },
+    },
   })
 }
 
-async function refreshAdvisories(map: MapLibreMap): Promise<void> {
+async function fetchViewportLayers(
+  map: MapLibreMap,
+): Promise<IslandLayers | null> {
   let bounds = map.getBounds()
   let bbox = [
     bounds.getWest(),
@@ -541,15 +760,12 @@ async function refreshAdvisories(map: MapLibreMap): Promise<void> {
     let response = await fetch(`${routes.layers.href()}?bbox=${bbox}`, {
       headers: { accept: 'application/json' },
     })
-    if (!response.ok) return
-
+    if (!response.ok) return null
     let payload = (await response.json()) as { data?: MapLayers }
-    if (!payload.data) return
-
-    let advisories = map.getSource('advisories') as GeoJSONSource | undefined
-    advisories?.setData(advisoriesOf(islandLayers(payload.data)))
+    if (!payload.data) return null
+    return islandLayers(payload.data)
   } catch {
-    // A failed viewport fetch leaves the last drawn layer in place.
+    return null
   }
 }
 
@@ -568,7 +784,6 @@ function showSelection(map: MapLibreMap, point: [number, number] | null): void {
   source?.setData(featureCollection(point === null ? [] : [point]))
 }
 
-/** The window around a click: the ring, the clicked point and its stations. */
 function showArea(
   map: MapLibreMap,
   area: {
@@ -620,7 +835,6 @@ function areaWindow(
   lon: number,
   radiusNm: number,
 ): FeatureCollection {
-  // A circle on the sphere: walk the radius round the click and connect it.
   let steps = 72
   let angular = radiusNm / EARTH_RADIUS_NM
   let latRad = (lat * Math.PI) / 180
@@ -667,10 +881,6 @@ function showSuggested(map: MapLibreMap, stations: ResolveSuggestion[]): void {
   })
 }
 
-/**
- * The rings are stations that can be picked, so their radar starts loading
- * while the choice is still being made.
- */
 function warmSuggested(stations: ResolveSuggestion[]): void {
   if (!weatherLayers.rain) return
   for (let station of stationsToWarm(
@@ -696,6 +906,24 @@ function featureCollection(points: [number, number][]): FeatureCollection {
   }
 }
 
+function stationsOf(data: IslandLayers): FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: data.stations.map((station) => ({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [station.lon, station.lat],
+      },
+      properties: {
+        icao: station.icao,
+        name: station.name,
+        category: station.category ?? '',
+      },
+    })),
+  }
+}
+
 function advisoriesOf(data: IslandLayers): FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -706,12 +934,16 @@ function advisoriesOf(data: IslandLayers): FeatureCollection {
         hazard: advisory.hazard,
         kind: advisory.kind,
         source_id: advisory.source_id,
+        severity: advisory.severity,
+        base_ft: advisory.base_ft,
+        top_ft: advisory.top_ft,
+        due_to: advisory.due_to,
+        valid_to: advisory.valid_to,
       },
     })),
   }
 }
 
-/** Diagonal hatch, drawn once so advisory fills are never a color alone. */
 function hatchPattern(): ImageData {
   let size = 8
   let canvas = document.createElement('canvas')
@@ -735,14 +967,12 @@ const mapStyle = css({
   height: '100%',
   width: '100%',
   background: 'var(--paper)',
-  // MapLibre ships unlayered CSS and these rules are layered, so every
-  // override of its own chrome has to be important to win the cascade.
   '& .maplibregl-ctrl-group': {
-    background: 'rgba(20, 20, 24, 0.68) !important',
+    background: 'var(--glass) !important',
     border: '1px solid var(--glass-border) !important',
     borderRadius: '14px !important',
     overflow: 'hidden',
-    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4) !important',
+    boxShadow: 'var(--shadow) !important',
     backdropFilter: 'blur(14px)',
     WebkitBackdropFilter: 'blur(14px)',
   },

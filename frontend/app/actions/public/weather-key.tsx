@@ -1,6 +1,7 @@
 import type { Handle } from 'remix/component'
 import { clientEntry, css, on } from 'remix/component'
 
+import { CATEGORY_DOTS } from '#app/lib/public/categories.ts'
 import { LayersIcon } from '#app/ui/public/icons.tsx'
 import { weatherLayers } from '#app/ui/public/weather-layers.ts'
 
@@ -141,6 +142,39 @@ export const WeatherKey = clientEntry(
             />
             <span mix={hintStyle}>airmet · sigmet</span>
           </label>
+
+          <label mix={rowStyle}>
+            <input
+              aria-label="Stations layer"
+              checked={weatherLayers.stations}
+              mix={[
+                switchStyle,
+                on('change', () => weatherLayers.toggle('stations')),
+              ]}
+              role="switch"
+              type="checkbox"
+            />
+            <span mix={labelStyle}>Stations</span>
+            <span aria-hidden="true" mix={dotsSwatchStyle}>
+              <span
+                mix={swatchDotStyle}
+                style={{ background: CATEGORY_DOTS.VFR }}
+              />
+              <span
+                mix={swatchDotStyle}
+                style={{ background: CATEGORY_DOTS.MVFR }}
+              />
+              <span
+                mix={swatchDotStyle}
+                style={{ background: CATEGORY_DOTS.IFR }}
+              />
+              <span
+                mix={swatchDotStyle}
+                style={{ background: CATEGORY_DOTS.LIFR }}
+              />
+            </span>
+            <span mix={hintStyle}>vfr · ifr</span>
+          </label>
         </div>
       </div>
     )
@@ -250,6 +284,20 @@ const barStyle = css({
 })
 
 const hintStyle = css({ color: 'var(--ink-3)', fontSize: '10px' })
+
+const dotsSwatchStyle = css({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  width: '72px',
+  paddingInline: '6px',
+})
+
+const swatchDotStyle = css({
+  width: '7px',
+  height: '7px',
+  borderRadius: '50%',
+})
 
 const switchStyle = css({
   appearance: 'none',
