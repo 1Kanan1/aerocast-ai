@@ -188,7 +188,7 @@ const dockStyle = css({
   position: 'absolute',
   left: 0,
   right: 0,
-  bottom: '20px',
+  bottom: '44px',
   zIndex: 6,
   display: 'flex',
   flexDirection: 'column',
