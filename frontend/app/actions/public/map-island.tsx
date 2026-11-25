@@ -1000,6 +1000,12 @@ const mapStyle = css({
     backgroundColor: 'transparent !important',
     filter: 'var(--ctrl-filter)',
   },
+  // Touch viewports use pinch-to-zoom; map/overlay credits live on /about.
+  '@media (max-width: 900px)': {
+    '& .maplibregl-ctrl-bottom-left, & .maplibregl-ctrl-bottom-right': {
+      display: 'none',
+    },
+  },
 })
 
 const fallbackStyle = css({

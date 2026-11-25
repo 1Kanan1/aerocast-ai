@@ -45,6 +45,20 @@ export function AboutPage(handle: Handle<{ health: ApiResult<Health> }>) {
             stores what it sees, and serves the last known good copy with its
             age attached when upstream is late or down.
           </p>
+          <p mix={paragraphStyle}>
+            Map tiles come from{' '}
+            <a href="https://openfreemap.org/">OpenFreeMap</a> and{' '}
+            <a href="https://openmaptiles.org/">OpenMapTiles</a> using{' '}
+            <a href="https://www.openstreetmap.org/copyright">
+              © OpenStreetMap contributors
+            </a>{' '}
+            (ODbL). Visual map overlays use NEXRAD radar from{' '}
+            <a href="https://mesonet.agron.iastate.edu/ogc/">
+              Iowa Environmental Mesonet
+            </a>{' '}
+            and RRFS wind, temperature, and humidity fields from{' '}
+            <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0).
+          </p>
         </section>
 
         <section aria-labelledby="checks-heading" mix={cardStyle}>
@@ -151,7 +165,15 @@ function StatusRow(
 
 const ledeStyle = css({ margin: 0, maxWidth: '62ch', color: 'var(--ink-2)' })
 
-const paragraphStyle = css({ margin: '0 0 10px', maxWidth: '68ch' })
+const paragraphStyle = css({
+  margin: '0 0 10px',
+  maxWidth: '68ch',
+  '& a': {
+    color: 'var(--ink-1)',
+    textUnderlineOffset: '3px',
+  },
+  '& a:hover': { color: 'var(--ink-0)' },
+})
 
 const listStyle = css({ margin: 0, paddingInlineStart: '18px' })
 
