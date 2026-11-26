@@ -203,6 +203,11 @@ async def station_bundle(
     return bundle, observation
 
 
+#: Maximum observations / TAF issuances read per station for brief history.
+BRIEF_METAR_HISTORY_LIMIT = 96
+BRIEF_TAF_HISTORY_LIMIT = 16
+
+
 async def brief_stations(
     stations: list[dict[str, Any]],
 ) -> list[BriefStation]:
@@ -212,44 +217,82 @@ async def brief_stations(
 
     icaos = [station["icao"] for station in stations]
     metars, tafs, active = await asyncio.gather(
-        _latest_by_station("metar_observations", "obs_time", icaos),
-        _latest_by_station("taf_forecasts", "issue_time", icaos),
+        _recent_by_station(
+            "metar_observations",
+            "obs_time",
+            icaos,
+            BRIEF_METAR_HISTORY_LIMIT,
+        ),
+        _recent_by_station(
+            "taf_forecasts",
+            "issue_time",
+            icaos,
+            BRIEF_TAF_HISTORY_LIMIT,
+        ),
         _active_advisories(),
     )
 
-    return [
-        BriefStation(
-            icao=station["icao"],
-            name=station["name"],
-            lat=station["lat"],
-            lon=station["lon"],
-            observation=_observation(metars.get(station["icao"])),
-            taf=_taf(tafs.get(station["icao"])),
-            advisories=tuple(
-                BriefAdvisory(
-                    kind=row["kind"],
-                    hazard=row["hazard"],
-                    valid_to=row["valid_to"],
-                    distance_nm=row["distance_nm"],
-                    due_to=row["due_to"],
-                )
-                for row in _nearby_from(active, station["lat"], station["lon"])
-            ),
+    result: list[BriefStation] = []
+    for station in stations:
+        icao = station["icao"]
+        metar_rows = metars.get(icao, [])
+        taf_rows = tafs.get(icao, [])
+        parsed_metars = _observations(metar_rows)
+        parsed_tafs = _tafs(taf_rows)
+        result.append(
+            BriefStation(
+                icao=icao,
+                name=station["name"],
+                lat=station["lat"],
+                lon=station["lon"],
+                distance_nm=station.get("distance_nm"),
+                observation=parsed_metars[0] if parsed_metars else None,
+                taf=parsed_tafs[0] if parsed_tafs else None,
+                advisories=tuple(
+                    BriefAdvisory(
+                        kind=row["kind"],
+                        hazard=row["hazard"],
+                        valid_to=row["valid_to"],
+                        distance_nm=row["distance_nm"],
+                        due_to=row["due_to"],
+                    )
+                    for row in _nearby_from(
+                        active, station["lat"], station["lon"]
+                    )
+                ),
+                history=tuple(parsed_metars),
+                taf_history=tuple(parsed_tafs),
+            )
         )
-        for station in stations
-    ]
+    return result
 
 
 async def brief_station(
     station: dict[str, Any],
 ) -> tuple[BriefStation, dict[str, Any] | None]:
-    """One station's report, forecast and nearby advisories, for a bundle."""
+    """One station's report, forecast, history and advisories for a bundle."""
     icao = station["icao"]
-    observation, forecast, nearby = await asyncio.gather(
-        _latest("metar_observations", "obs_time", icao),
-        _latest("taf_forecasts", "issue_time", icao),
+    metar_rows, taf_rows, nearby = await asyncio.gather(
+        _recent(
+            "metar_observations",
+            "obs_time",
+            icao,
+            BRIEF_METAR_HISTORY_LIMIT,
+        ),
+        _recent(
+            "taf_forecasts",
+            "issue_time",
+            icao,
+            BRIEF_TAF_HISTORY_LIMIT,
+        ),
         _nearby(station["lat"], station["lon"]),
     )
+
+    metar_rows.sort(key=lambda row: row["obs_time"], reverse=True)
+    taf_rows.sort(key=lambda row: row["issue_time"], reverse=True)
+    observation_row = metar_rows[0] if metar_rows else None
+    parsed_metars = _observations(metar_rows)
+    parsed_tafs = _tafs(taf_rows)
 
     return (
         BriefStation(
@@ -257,8 +300,9 @@ async def brief_station(
             name=station["name"],
             lat=station["lat"],
             lon=station["lon"],
-            observation=_observation(observation),
-            taf=_taf(forecast),
+            distance_nm=station.get("distance_nm"),
+            observation=parsed_metars[0] if parsed_metars else None,
+            taf=parsed_tafs[0] if parsed_tafs else None,
             advisories=tuple(
                 BriefAdvisory(
                     kind=row["kind"],
@@ -269,8 +313,10 @@ async def brief_station(
                 )
                 for row in nearby
             ),
+            history=tuple(parsed_metars),
+            taf_history=tuple(parsed_tafs),
         ),
-        observation,
+        observation_row,
     )
 
 
@@ -368,17 +414,60 @@ async def _latest(table: str, order: str, icao: str) -> Any:
     )
 
 
-async def _latest_by_station(
-    table: str, order: str, icaos: list[str]
-) -> dict[str, dict[str, Any]]:
-    """Latest row per station in one query. Table/column are literals."""
+async def _recent(
+    table: str, order: str, icao: str, limit: int
+) -> list[dict[str, Any]]:
+    """Recent rows for one station. Table and column are module literals."""
     rows = await fetch_all(
-        f"select distinct on (station_icao) * from {table} "
-        "where station_icao = any(:icaos) "
-        f"order by station_icao, {order} desc",
-        {"icaos": [code.upper() for code in icaos]},
+        f"select * from {table} where station_icao = :icao "
+        f"order by {order} desc limit :limit",
+        {"icao": icao.upper(), "limit": limit},
     )
-    return {row["station_icao"]: row for row in rows}
+    return list(rows)
+
+
+async def _recent_by_station(
+    table: str, order: str, icaos: list[str], per_station: int
+) -> dict[str, list[dict[str, Any]]]:
+    """Recent rows per station in one query. Table/column are literals."""
+    rows = await fetch_all(
+        "select * from ("
+        f"select *, row_number() over ("
+        f"partition by station_icao order by {order} desc"
+        ") as _rn "
+        f"from {table} where station_icao = any(:icaos)"
+        ") ranked "
+        "where _rn <= :per_station "
+        f"order by station_icao, {order} desc",
+        {
+            "icaos": [code.upper() for code in icaos],
+            "per_station": per_station,
+        },
+    )
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(row["station_icao"], []).append(row)
+    for items in grouped.values():
+        items.sort(key=lambda row: row[order], reverse=True)
+    return grouped
+
+
+def _observations(rows: list[dict[str, Any]]) -> list[Observation]:
+    parsed: list[Observation] = []
+    for row in rows:
+        obs = _observation(row)
+        if obs is not None:
+            parsed.append(obs)
+    return parsed
+
+
+def _tafs(rows: list[dict[str, Any]]) -> list[Taf]:
+    parsed: list[Taf] = []
+    for row in rows:
+        forecast = _taf(row)
+        if forecast is not None:
+            parsed.append(forecast)
+    return parsed
 
 
 def _observation(row: dict[str, Any] | None) -> Observation | None:

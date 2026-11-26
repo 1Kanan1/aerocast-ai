@@ -70,6 +70,7 @@ export interface Bundle {
   generated_at: string
   definition_version: string
   stations: BundleStation[]
+  area_summary?: BundleAreaSummary | null
   definitions: Record<string, string>
   brief_hash: string
 }
@@ -81,6 +82,48 @@ export interface BundleAdvisory {
   valid_to: string
   distance_nm: number | null
   due_to: string | null
+}
+
+export interface BundleAreaCeiling {
+  weighted_avg: number
+  min: number
+  max: number
+  reporting_count: number
+}
+
+export interface BundleAreaRange {
+  weighted_avg: number
+  min: number
+  max: number
+}
+
+export interface BundleAreaSummary {
+  ref: string
+  station_count: number
+  reporting_count: number
+  category_counts: Record<string, number>
+  temperature_c: BundleAreaTemperature | null
+  dewpoint_c: BundleAreaRange | null
+  humidity_pct: BundleAreaRange | null
+  visibility_sm: BundleAreaRange | null
+  ceiling_ft: BundleAreaCeiling | null
+  wind: BundleAreaWind | null
+}
+
+export interface BundleAreaTemperature {
+  weighted_avg: number
+  min: number
+  max: number
+  min_station: string
+  max_station: string
+}
+
+export interface BundleAreaWind {
+  direction_deg: number | null
+  speed_kt: number | null
+  gust_kt: number | null
+  max_speed_kt: number
+  max_gust_kt: number | null
 }
 
 export interface BundleCategory {
@@ -100,6 +143,33 @@ export interface BundleCloud {
   cloud_type: string | null
 }
 
+export interface BundleHistory {
+  ref: string
+  observation_count: number
+  window_start: string
+  window_end: string
+  category_counts: Record<string, number>
+  ceiling_ft_min: number | null
+  ceiling_ft_max: number | null
+  visibility_sm_min: number | null
+  visibility_sm_max: number | null
+  max_wind_kt: number | null
+  temperature_c_min: number | null
+  temperature_c_max: number | null
+  checkpoints: BundleHistoryCheckpoint[]
+}
+
+export interface BundleHistoryCheckpoint {
+  observed_at: string
+  flight_category: string | null
+  ceiling_ft: number | null
+  visibility_sm: number | null
+  wind_speed_kt: number | null
+  wind_gust_kt: number | null
+  temperature_c: number | null
+  weather: string[]
+}
+
 export interface BundleHumidity {
   ref: string
   relative_pct: number
@@ -110,6 +180,7 @@ export interface BundleMetar {
   raw: string
   observed_at: string
   age_seconds: number
+  age_minutes?: number | null
   station: string
   is_automated: boolean
   flight_category: BundleCategory
@@ -149,9 +220,12 @@ export interface BundleStation {
   name: string
   lat: number
   lon: number
+  distance_nm?: number | null
   metar: BundleMetar | null
   taf: BundleTaf | null
   advisories: BundleAdvisory[]
+  history?: BundleHistory | null
+  taf_history?: BundleTafHistory | null
 }
 
 export interface BundleTaf {
@@ -162,6 +236,29 @@ export interface BundleTaf {
   is_amended: boolean
   is_corrected: boolean
   periods: BundlePeriod[]
+}
+
+export interface BundleTafHistory {
+  ref: string
+  forecast_count: number
+  earliest_issued_at: string
+  latest_issued_at: string
+  amended_count: number
+  corrected_count: number
+  issuances: BundleTafIssuance[]
+}
+
+export interface BundleTafIssuance {
+  issued_at: string
+  valid_from: string
+  valid_to: string
+  is_amended: boolean
+  is_corrected: boolean
+  period_count: number
+  min_ceiling_ft: number | null
+  min_visibility_sm: number | null
+  max_wind_kt: number | null
+  weather: string[]
 }
 
 export interface BundleTemperature {

@@ -53,6 +53,7 @@ export function citationLabel(refPath: string): string {
     return `${icao} ${METAR_FIELD_LABELS[field] ?? field.replace(/_/g, ' ')}`
   }
   if (kind === 'taf' && icao) {
+    if (parts[2] === 'history') return `${icao} TAF history`
     if (parts[2] === 'period' && parts[3] !== undefined) {
       let index = Number(parts[3])
       return Number.isFinite(index)
@@ -61,11 +62,23 @@ export function citationLabel(refPath: string): string {
     }
     return `${icao} TAF`
   }
+  if (kind === 'history' && icao) {
+    return `${icao} history`
+  }
   if (kind === 'adv' && icao) {
     let index = Number(parts[2])
     return Number.isFinite(index)
       ? `${icao} advisory #${index + 1}`
       : `${icao} advisory`
+  }
+  if (kind === 'area' && icao === 'summary') {
+    return 'Area summary'
+  }
+  if (kind === 'definitions' && icao) {
+    return `${icao.replace(/_/g, ' ')} definition`
+  }
+  if (kind === 'station' && icao) {
+    return `${icao} station`
   }
   return refPath
 }
@@ -83,6 +96,9 @@ export function citationTarget(refPath: string): CitationTarget {
   }
   if (parts[0] === 'adv') {
     return { section: 'conditions', field: 'advisories' }
+  }
+  if (parts[0] === 'history') {
+    return { section: 'conditions', field: 'history' }
   }
   if (parts[0] === 'metar') {
     return { section: 'conditions', field: parts[2] ?? null }

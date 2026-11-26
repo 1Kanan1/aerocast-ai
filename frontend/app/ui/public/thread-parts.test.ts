@@ -55,7 +55,12 @@ describe('citations', () => {
     assert.equal(citationLabel('metar.KSFO.flight_category'), 'KSFO category')
     assert.equal(citationLabel('metar.KSFO'), 'KSFO METAR')
     assert.equal(citationLabel('taf.KSFO.period.0'), 'KSFO TAF #1')
+    assert.equal(citationLabel('taf.KSFO.history'), 'KSFO TAF history')
+    assert.equal(citationLabel('history.KSFO'), 'KSFO history')
     assert.equal(citationLabel('adv.KSFO.2'), 'KSFO advisory #3')
+    assert.equal(citationLabel('area.summary'), 'Area summary')
+    assert.equal(citationLabel('definitions.MVFR'), 'MVFR definition')
+    assert.equal(citationLabel('station.KSFO'), 'KSFO station')
     assert.equal(citationLabel('custom.ref'), 'custom.ref')
   })
 
@@ -67,6 +72,10 @@ describe('citations', () => {
     assert.deepEqual(citationTarget('taf.KSFO.period.1'), {
       section: 'forecast',
       field: 'taf.KSFO.period.1',
+    })
+    assert.deepEqual(citationTarget('history.KSFO'), {
+      section: 'conditions',
+      field: 'history',
     })
     assert.deepEqual(citationTarget('adv.KSFO.0'), {
       section: 'conditions',

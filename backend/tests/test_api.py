@@ -403,10 +403,14 @@ async def test_brief_is_a_citable_bundle(monkeypatch) -> None:
     bundle = response.json()["data"]
     assert response.status_code == 200
     assert str(bundle["brief_hash"]).startswith("sha256:")
-    assert bundle["stations"][0]["metar"]["ref"] == "metar.KSFO"
-    assert bundle["stations"][0]["metar"]["wind"]["speed_kt"] == 9
-    assert bundle["stations"][0]["taf"]["periods"][0]["change"] == "INITIAL"
-    assert bundle["stations"][0]["advisories"][0]["ref"] == "adv.KSFO.0"
+    station = bundle["stations"][0]
+    assert station["metar"]["ref"] == "metar.KSFO"
+    assert isinstance(station["metar"]["age_minutes"], int)
+    assert station["metar"]["wind"]["speed_kt"] == 9
+    assert station["taf"]["periods"][0]["change"] == "INITIAL"
+    assert station["advisories"][0]["ref"] == "adv.KSFO.0"
+    assert station["history"]["ref"] == "history.KSFO"
+    assert station["taf_history"]["ref"] == "taf.KSFO.history"
     assert "MVFR" in bundle["definitions"]
 
 

@@ -223,6 +223,7 @@ class BundleMetar(BaseModel):
     raw: str
     observed_at: datetime
     age_seconds: int
+    age_minutes: int | None = None
     station: str
     is_automated: bool
     flight_category: BundleCategory
@@ -276,20 +277,113 @@ class BundleAdvisory(BaseModel):
     due_to: str | None
 
 
+class BundleHistoryCheckpoint(BaseModel):
+    observed_at: datetime
+    flight_category: str | None
+    ceiling_ft: int | None
+    visibility_sm: float | None
+    wind_speed_kt: int | None
+    wind_gust_kt: int | None
+    temperature_c: float | None
+    weather: list[str]
+
+
+class BundleHistory(BaseModel):
+    ref: str
+    observation_count: int
+    window_start: datetime
+    window_end: datetime
+    category_counts: dict[str, int]
+    ceiling_ft_min: int | None
+    ceiling_ft_max: int | None
+    visibility_sm_min: float | None
+    visibility_sm_max: float | None
+    max_wind_kt: int | None
+    temperature_c_min: float | None
+    temperature_c_max: float | None
+    checkpoints: list[BundleHistoryCheckpoint]
+
+
+class BundleTafIssuance(BaseModel):
+    issued_at: datetime
+    valid_from: datetime
+    valid_to: datetime
+    is_amended: bool
+    is_corrected: bool
+    period_count: int
+    min_ceiling_ft: int | None
+    min_visibility_sm: float | None
+    max_wind_kt: int | None
+    weather: list[str]
+
+
+class BundleTafHistory(BaseModel):
+    ref: str
+    forecast_count: int
+    earliest_issued_at: datetime
+    latest_issued_at: datetime
+    amended_count: int
+    corrected_count: int
+    issuances: list[BundleTafIssuance]
+
+
 class BundleStation(BaseModel):
     icao: str
     name: str
     lat: float
     lon: float
+    distance_nm: float | None = None
     metar: BundleMetar | None
     taf: BundleTaf | None
     advisories: list[BundleAdvisory]
+    history: BundleHistory | None = None
+    taf_history: BundleTafHistory | None = None
+
+
+class BundleAreaRange(BaseModel):
+    weighted_avg: float
+    min: float
+    max: float
+
+
+class BundleAreaTemperature(BundleAreaRange):
+    min_station: str
+    max_station: str
+
+
+class BundleAreaCeiling(BaseModel):
+    weighted_avg: int
+    min: int
+    max: int
+    reporting_count: int
+
+
+class BundleAreaWind(BaseModel):
+    direction_deg: int | None
+    speed_kt: int | None
+    gust_kt: int | None
+    max_speed_kt: int
+    max_gust_kt: int | None
+
+
+class BundleAreaSummary(BaseModel):
+    ref: str
+    station_count: int
+    reporting_count: int
+    category_counts: dict[str, int]
+    temperature_c: BundleAreaTemperature | None
+    dewpoint_c: BundleAreaRange | None
+    humidity_pct: BundleAreaRange | None
+    visibility_sm: BundleAreaRange | None
+    ceiling_ft: BundleAreaCeiling | None
+    wind: BundleAreaWind | None
 
 
 class Bundle(BaseModel):
     generated_at: datetime
     definition_version: str
     stations: list[BundleStation]
+    area_summary: BundleAreaSummary | None = None
     definitions: dict[str, str]
     brief_hash: str
 
