@@ -16,6 +16,7 @@ import logging
 
 from app.config import Settings
 from app.llm.client import complete
+from app.llm.prompts import sanitize_question
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +65,15 @@ async def classify_scope(
     budget_seconds: float = SCOPE_BUDGET_SECONDS,
 ) -> bool | None:
     """True or False when a provider answers, None when none could."""
+    safe_question = sanitize_question(question)
     completion = await complete(
         settings,
         [
             {"role": "system", "content": SCOPE_PROMPT},
-            {"role": "user", "content": f"<question>{question}</question>"},
+            {
+                "role": "user",
+                "content": f"<question>{safe_question}</question>",
+            },
         ],
         SCOPE_SCHEMA,
         budget_seconds=budget_seconds,

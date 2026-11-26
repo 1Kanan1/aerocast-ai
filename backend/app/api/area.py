@@ -14,15 +14,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.api import models
-from app.api.ask import cached_answer, explain
+from app.api.ask import explain
 from app.api.envelope import wrap
 from app.api.ratelimit import enforce_ask_limit
 from app.api.stations import brief_stations, nearby_stations
-from app.config import get_settings
 from app.domain.brief import build_brief
 from app.llm.contract import Answer, wire_answer
 from app.llm.guardrails import asks_for_verdict, fixed_refusal
-from app.llm.scope import classify_scope
 
 router = APIRouter(prefix="/api", tags=["area"])
 
@@ -69,15 +67,11 @@ async def area_ask(
         )
 
     if asks_for_verdict(question):
-        return wire_answer(Answer("", (), (), fixed_refusal("decision")))
+        return wire_answer(
+            Answer("", (), (), fixed_refusal("decision", area=True))
+        )
 
     bundle = await area_brief(rows)
-    cached = cached_answer(bundle, question, area=True, started=started)
-    if cached is not None:
-        return cached
-
-    if await classify_scope(get_settings(), question) is False:
-        return wire_answer(Answer("", (), (), fixed_refusal("out_of_scope")))
 
     return await explain(bundle, question, area=True, started=started)
 

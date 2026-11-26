@@ -93,7 +93,7 @@ class Rung:
     #: Kept out of the repr: a failing assertion must not print a key.
     api_key: str | None = field(repr=False)
     response_format: Literal["schema", "json", "none"]
-    temperature: float | None = 0.0
+    temperature: float | None = 0.2
     reasoning_effort: str | None = None
 
 

@@ -468,7 +468,7 @@ async def test_a_model_that_only_takes_its_default_temperature(monkeypatch):
     # left out rather than pinned to a number the model will refuse.
     assert len(bodies) == 2
     assert "temperature" not in bodies[0]
-    assert bodies[1]["temperature"] == 0
+    assert bodies[1]["temperature"] == 0.2
 
 
 async def test_a_rung_that_names_a_reasoning_effort_sends_it(monkeypatch):
@@ -539,6 +539,17 @@ async def test_every_rung_receives_the_system_prompt(monkeypatch):
 
     assert len(bodies) == 2
     assert all(body["messages"] == messages for body in bodies)
+    assert bodies[0]["model"] == "groq-only"
+    assert bodies[0]["response_format"] == {"type": "json_object"}
+    assert bodies[1]["model"] == "gemini-only"
+    assert bodies[1]["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "aerocast_answer",
+            "strict": True,
+            "schema": {},
+        },
+    }
 
 
 async def test_race_skips_a_rejected_reply_and_takes_a_valid_slower_one(

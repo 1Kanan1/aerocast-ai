@@ -21,7 +21,7 @@ class Provider(NamedTuple):
     base_url: str
     api_key: SecretStr | None
     response_format: Literal["schema", "json", "none"]
-    temperature: float | None = 0.0
+    temperature: float | None = 0.2
     reasoning_effort: str | None = None
 
     @property

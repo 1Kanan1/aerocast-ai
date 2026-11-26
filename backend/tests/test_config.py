@@ -85,7 +85,7 @@ def test_each_provider_carries_its_own_transport() -> None:
     assert groq.reasoning_effort == "low"
     # Every other provider takes a pinned temperature; Luna rejects it.
     assert openai.temperature is None
-    assert gemini.temperature == groq.temperature == 0.0
+    assert gemini.temperature == groq.temperature == 0.2
 
 
 def test_a_provider_is_configured_by_a_non_empty_key() -> None:

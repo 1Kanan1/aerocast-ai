@@ -27,6 +27,11 @@
   question: What does the TAF say for this evening?
   expect: answer
 
+- id: forecast_history
+  category: on_topic
+  question: How has the forecast changed over recent TAF issuances?
+  expect: answer
+
 - id: advisories
   category: on_topic
   question: Are there any advisories near the airport?

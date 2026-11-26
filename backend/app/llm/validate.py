@@ -14,29 +14,34 @@ import re
 from app.llm.contract import Answer, DraftClaim, ModelAnswer
 from app.llm.guardrails import contains_verdict, fixed_refusal
 
-MAX_SUMMARY = 700
+MAX_SUMMARY = 1000
 #: The floor for the claim cap; a bundle with more stations than this may
 #: claim once per station.
 MAX_CLAIMS = 12
-MAX_CLAIM_TEXT = 300
+MAX_CLAIM_TEXT = 400
 MAX_CAVEATS = 3
 MAX_CAVEAT = 200
 
-_NUMBER = re.compile(r"-?\d+(?:,\d{3})*(?:\.\d+)?")
+_NUMBER = re.compile(
+    r"(?<![0-9A-Za-z])-?\d+(?:,\d{3})*(?:\.\d+)?|\d+(?:,\d{3})*(?:\.\d+)?"
+)
+_ISO_TIME = re.compile(r"T(\d{2}):(\d{2})")
 
 
 class InvalidAnswerError(ValueError):
     """The draft failed a rule. The caller shows the template instead."""
 
 
-def validate_answer(model: ModelAnswer, bundle: object) -> Answer:
+def validate_answer(
+    model: ModelAnswer, bundle: object, *, area: bool = False
+) -> Answer:
     kind = model.refusal_kind
     if kind is not None:
         if kind not in ("decision", "out_of_scope", "not_in_bundle"):
             raise InvalidAnswerError(f"unknown refusal kind: {kind}")
         if model.claims:
             raise InvalidAnswerError("refusal carries claims")
-        return Answer("", (), (), fixed_refusal(kind))
+        return Answer("", (), (), fixed_refusal(kind, area=area))
 
     summary = model.summary.strip()
     if not summary:
@@ -91,6 +96,12 @@ def validate_answer(model: ModelAnswer, bundle: object) -> Answer:
     if not _numbers_grounded(summary, cited_values):
         raise InvalidAnswerError("number in summary not in the cited facts")
 
+    if caveats:
+        bundle_values = list(index.values())
+        for text in caveats:
+            if not _numbers_grounded(text, bundle_values):
+                raise InvalidAnswerError("number in caveat not in the bundle")
+
     return Answer(summary, tuple(claims), tuple(caveats), None)
 
 
@@ -134,8 +145,8 @@ def _ref_index(bundle: object) -> dict[str, object]:
                 if isinstance(key, str) and isinstance(value, str):
                     index[f"definitions.{key}"] = value
 
-        # Identity only. Indexing the whole station node would let a weather
-        # claim borrow its numbers through the station ref.
+        # Identity and distance only. Indexing the whole station node would
+        # let a weather claim borrow its numbers through the station ref.
         stations = bundle.get("stations")
         if isinstance(stations, list):
             for station in stations:
@@ -144,12 +155,39 @@ def _ref_index(bundle: object) -> dict[str, object]:
                 icao = station.get("icao")
                 name = station.get("name")
                 if isinstance(icao, str) and isinstance(name, str):
-                    index[f"station.{icao}"] = {
-                        "icao": icao,
-                        "name": name,
-                    }
+                    index[f"station.{icao}"] = [
+                        icao,
+                        name,
+                        station.get("distance_nm"),
+                    ]
+
+                metar = station.get("metar")
+                if isinstance(icao, str) and isinstance(metar, dict):
+                    _index_metar_fields(index, icao, metar)
 
     return index
+
+
+def _index_metar_fields(
+    index: dict[str, object], icao: str, metar: dict[str, object]
+) -> None:
+    """Expose METAR fields that lack an inline ref key on the wire."""
+    prefix = f"metar.{icao}"
+    if "clouds" in metar:
+        index[f"{prefix}.clouds"] = metar["clouds"]
+    if "weather" in metar:
+        index[f"{prefix}.weather"] = metar["weather"]
+    if metar.get("altimeter_in_hg") is not None:
+        index[f"{prefix}.altimeter"] = metar["altimeter_in_hg"]
+        index[f"{prefix}.altimeter_in_hg"] = metar["altimeter_in_hg"]
+    if metar.get("remarks") is not None:
+        index[f"{prefix}.remarks"] = metar["remarks"]
+    if "observed_at" in metar:
+        index[f"{prefix}.age"] = [
+            metar.get("observed_at"),
+            metar.get("age_seconds"),
+            metar.get("age_minutes"),
+        ]
 
 
 def _numbers_grounded(text: str, values: list[object]) -> bool:
@@ -180,6 +218,8 @@ def _all_numbers(values: list[object]) -> list[float]:
             found.append(float(node))
         elif isinstance(node, str):
             found.extend(_numbers(node))
+            for match in _ISO_TIME.finditer(node):
+                found.append(float(int(match.group(1) + match.group(2))))
         elif isinstance(node, dict):
             for value in node.values():
                 walk(value)

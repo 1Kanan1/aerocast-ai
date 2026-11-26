@@ -6,7 +6,6 @@ from typing import Any
 
 import httpx
 
-from app.api import area as area_module
 from app.api import ask as ask_module
 from app.api import ratelimit as ratelimit_module
 from app.api import stations as stations_module
@@ -180,16 +179,9 @@ def install(monkeypatch, **tables: list[dict[str, Any]]) -> FakeDb:
     monkeypatch.setattr(stations_module, "fetch_one", db.fetch_one)
     monkeypatch.setattr(weather_module, "fetch_all", db.fetch_all)
 
-    async def no_scope(*args: object, **kwargs: object) -> None:
-        return None
-
     async def no_history(*args: object, **kwargs: object) -> bool:
         return False
 
-    # The scope check is a provider call; tests never make one.
-    monkeypatch.setattr(ask_module, "classify_scope", no_scope)
-    monkeypatch.setattr(area_module, "classify_scope", no_scope)
-    ask_module.reset_cache()
     ratelimit_module.reset_rate_limits()
     # The history backfill reaches AWC; tests say whether it ran.
     monkeypatch.setattr(stations_module, "ensure_history", no_history)
@@ -551,17 +543,22 @@ async def test_ask_refuses_a_verdict_without_a_model(monkeypatch) -> None:
     assert body["claims"] == []
 
 
-async def test_ask_refuses_out_of_scope_before_the_answer(monkeypatch) -> None:
+async def test_ask_names_no_model_for_model_returned_refusal(
+    monkeypatch,
+) -> None:
     install(monkeypatch)
 
-    async def off_topic(*args: object, **kwargs: object) -> bool:
-        return False
+    async def refuse(*args: object, **kwargs: object):
+        return completion(
+            {
+                "summary": "",
+                "claims": [],
+                "caveats": [],
+                "refusal_kind": "out_of_scope",
+            }
+        )
 
-    async def fail(*args: object, **kwargs: object):
-        raise AssertionError("an off-topic question must not reach the model")
-
-    monkeypatch.setattr(ask_module, "classify_scope", off_topic)
-    monkeypatch.setattr(ask_module, "complete", fail)
+    monkeypatch.setattr(ask_module, "complete", refuse)
 
     response = await post(
         "/api/ask", {"icao": "KSFO", "question": "Who won the game?"}
@@ -571,48 +568,40 @@ async def test_ask_refuses_out_of_scope_before_the_answer(monkeypatch) -> None:
     assert response.status_code == 200
     assert body["refusal"] == fixed_refusal("out_of_scope")
     assert body["claims"] == []
+    assert body["model"] is None
+    assert body["elapsed_ms"] is None
 
 
-async def test_ask_answers_when_the_scope_check_has_no_opinion(
-    monkeypatch,
-) -> None:
-    install(monkeypatch)
+async def test_area_ask_uses_area_refusal_copy(monkeypatch) -> None:
+    install(monkeypatch, stations=[KSFO, KOAK])
 
-    async def unsure(*args: object, **kwargs: object) -> None:
-        return None
+    async def refuse(*args: object, **kwargs: object):
+        return completion(
+            {
+                "summary": "",
+                "claims": [],
+                "caveats": [],
+                "refusal_kind": "not_in_bundle",
+            }
+        )
 
-    async def fake_complete(*args: object, **kwargs: object):
-        return completion(grounded_answer())
-
-    monkeypatch.setattr(ask_module, "classify_scope", unsure)
-    monkeypatch.setattr(ask_module, "complete", fake_complete)
+    monkeypatch.setattr(ask_module, "complete", refuse)
 
     response = await post(
-        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
+        "/api/area/ask",
+        {
+            "lat": 37.62,
+            "lon": -122.4,
+            "question": "Are there any NOTAMs?",
+        },
     )
 
+    body = response.json()
     assert response.status_code == 200
-    assert response.json()["claims"]
-
-
-async def test_a_bare_station_code_is_answered_without_the_scope_check(
-    monkeypatch,
-) -> None:
-    install(monkeypatch)
-
-    async def fail(*args: object, **kwargs: object):
-        raise AssertionError("a station code must not be classified")
-
-    async def fake_complete(*args: object, **kwargs: object):
-        return completion(grounded_answer())
-
-    monkeypatch.setattr(ask_module, "classify_scope", fail)
-    monkeypatch.setattr(ask_module, "complete", fake_complete)
-
-    response = await post("/api/ask", {"icao": "KSFO", "question": "KSFO"})
-
-    assert response.status_code == 200
-    assert response.json()["refusal"] is None
+    assert body["refusal"] == fixed_refusal("not_in_bundle", area=True)
+    assert "around this point" in body["refusal"]
+    assert body["model"] is None
+    assert body["elapsed_ms"] is None
 
 
 async def test_area_gathers_the_stations_around_a_point(monkeypatch) -> None:
@@ -760,7 +749,6 @@ async def test_area_ask_refuses_a_verdict_without_calling_a_model(
         raise AssertionError("verdict question must not reach a model")
 
     monkeypatch.setattr(ask_module, "complete", fail)
-    monkeypatch.setattr(area_module, "classify_scope", fail)
 
     response = await post(
         "/api/area/ask",
@@ -850,16 +838,16 @@ async def test_ask_answers_404_for_an_unknown_station(monkeypatch) -> None:
     assert response.status_code == 404
 
 
-async def test_ask_caches_validated_answers_for_the_same_brief(
-    monkeypatch,
-) -> None:
+async def test_ask_reruns_fresh_on_repeated_questions(monkeypatch) -> None:
     install(monkeypatch)
+    summaries = ["KSFO is MVFR.", "KSFO currently reports MVFR."]
     calls = 0
 
     async def fake_complete(*args: object, **kwargs: object):
         nonlocal calls
+        summary = summaries[calls]
         calls += 1
-        return completion(grounded_answer())
+        return completion({**grounded_answer(), "summary": summary})
 
     monkeypatch.setattr(ask_module, "complete", fake_complete)
 
@@ -867,60 +855,13 @@ async def test_ask_caches_validated_answers_for_the_same_brief(
         "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
     )
     second = await post(
-        "/api/ask", {"icao": "KSFO", "question": "  what  is the ceiling? "}
+        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
     )
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert second.json()["summary"] == first.json()["summary"]
-    assert calls == 1
-
-
-async def test_ask_misses_the_cache_when_the_ttl_expires(monkeypatch) -> None:
-    install(monkeypatch)
-    calls = 0
-    now = [100.0]
-
-    async def fake_complete(*args: object, **kwargs: object):
-        nonlocal calls
-        calls += 1
-        return completion(grounded_answer())
-
-    monkeypatch.setattr(ask_module, "complete", fake_complete)
-    monkeypatch.setattr(ask_module.time, "monotonic", lambda: now[0])
-
-    await post(
-        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
-    )
-    now[0] += ask_module.CACHE_TTL_SECONDS + 1
-    await post(
-        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
-    )
-
     assert calls == 2
-
-
-async def test_ask_never_caches_a_template_fallback(monkeypatch) -> None:
-    install(monkeypatch)
-    calls = 0
-
-    async def fake_complete(*args: object, **kwargs: object):
-        nonlocal calls
-        calls += 1
-        return None if calls == 1 else completion(grounded_answer())
-
-    monkeypatch.setattr(ask_module, "complete", fake_complete)
-
-    first = await post(
-        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
-    )
-    second = await post(
-        "/api/ask", {"icao": "KSFO", "question": "What is the ceiling?"}
-    )
-
-    assert first.json()["notice"] is not None
-    assert second.json()["notice"] is None
-    assert calls == 2
+    assert first.json()["summary"] != second.json()["summary"]
 
 
 async def test_station_detail_and_brief_run_independent_queries_in_parallel(
@@ -964,22 +905,17 @@ async def test_station_detail_and_brief_run_independent_queries_in_parallel(
         assert max_in_flight == 3
 
 
-async def test_area_ask_skips_scope_check_on_cache_hit(monkeypatch) -> None:
+async def test_area_ask_reruns_fresh_on_repeated_questions(
+    monkeypatch,
+) -> None:
     install(monkeypatch)
-    scope_calls = 0
     model_calls = 0
-
-    async def fake_scope(*args: object, **kwargs: object) -> bool:
-        nonlocal scope_calls
-        scope_calls += 1
-        return True
 
     async def fake_complete(*args: object, **kwargs: object):
         nonlocal model_calls
         model_calls += 1
         return completion(grounded_answer())
 
-    monkeypatch.setattr(area_module, "classify_scope", fake_scope)
     monkeypatch.setattr(ask_module, "complete", fake_complete)
 
     body: dict[str, object] = {
@@ -992,9 +928,7 @@ async def test_area_ask_skips_scope_check_on_cache_hit(monkeypatch) -> None:
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert second.json()["summary"] == first.json()["summary"]
-    assert scope_calls == 1
-    assert model_calls == 1
+    assert model_calls == 2
 
 
 async def test_ask_rate_limits_a_single_ip_across_station_and_area(
