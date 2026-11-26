@@ -141,7 +141,7 @@ describe('station session', () => {
     assert.equal(session.selected?.icao, 'KJFK')
   })
 
-  it('drops the old station when a question needs a choice', async (t) => {
+  it('shows clarification when nothing is open and several matches come back', async (t) => {
     mockFetch(t, (path) =>
       path.includes('/resolve')
         ? Response.json({
@@ -161,7 +161,6 @@ describe('station session', () => {
         : stationApi(path),
     )
     let session = new StationSession()
-    await session.select('KSFO')
 
     await session.askQuestion('weather in Springfield')
 
@@ -289,6 +288,113 @@ describe('station session', () => {
       focus: true,
     })
     assert.equal(session.areaLoading, false)
+  })
+
+  it('opens an area for a city, stays locked to the open location, and resolves again once closed', async (t) => {
+    let requested: string[] = []
+    mockFetch(t, (path) => {
+      requested.push(path)
+      if (path.includes('/api/resolve?q=Seattle')) {
+        return Response.json({
+          station: null,
+          area: {
+            lat: 47.5,
+            lon: -122.31,
+            label: 'Seattle, WA',
+            ask: false,
+          },
+          candidates: [],
+          suggested: [],
+          message: null,
+        })
+      }
+      if (path.includes('/api/resolve?q=ksfo')) {
+        return Response.json({
+          station: {
+            icao: 'KSFO',
+            name: 'San Francisco Intl',
+            state: 'CA',
+            lat: 37.62,
+            lon: -122.37,
+            ask: false,
+          },
+          area: null,
+          candidates: [],
+          suggested: [],
+          message: null,
+        })
+      }
+      if (path.includes('/api/area/ask')) {
+        return Response.json({
+          summary: 'Area temperature averages 11 °C.',
+          claims: [],
+          caveats: [],
+          refusal: null,
+          notice: null,
+        })
+      }
+      if (path.includes('/api/area?')) {
+        return Response.json({
+          data: {
+            lat: 47.5,
+            lon: -122.31,
+            radius_nm: 15,
+            stations: [],
+            brief: null,
+          },
+          meta: { source: 'aviationweather.gov' },
+        })
+      }
+      if (path.includes('/ask')) {
+        return Response.json({
+          summary: 'KSFO is VFR.',
+          claims: [],
+          caveats: [],
+          refusal: null,
+          notice: null,
+        })
+      }
+      return stationApi(path)
+    })
+    let session = new StationSession()
+
+    await session.askQuestion('Seattle')
+    assert.deepEqual(session.area, {
+      lat: 47.5,
+      lon: -122.31,
+      label: 'Seattle, WA',
+      focus: true,
+    })
+    assert.equal(session.areaThread.length, 0)
+
+    // While Seattle is open, follow-up questions stay locked to Seattle without calling /api/resolve.
+    requested = []
+    await session.askQuestion('What is the temperature at each station?')
+    assert.equal(
+      requested.some((p) => p.includes('/api/resolve')),
+      false,
+    )
+    assert.equal(session.area?.label, 'Seattle, WA')
+    assert.equal(session.areaThread.length, 1)
+
+    // Once closed, the bar resolves a new station code case-insensitively without auto-asking.
+    session.closeArea()
+    requested = []
+    await session.askQuestion('ksfo')
+    assert.equal(session.area, null)
+    assert.equal(session.selected?.icao, 'KSFO')
+    assert.equal(session.selected?.thread.length, 0)
+    assert.ok(requested.some((p) => p.includes('/api/resolve?q=ksfo')))
+
+    // While KSFO is open, messages stay locked to KSFO without calling /api/resolve.
+    requested = []
+    await session.askQuestion('What is the temperature at each station?')
+    assert.equal(
+      requested.some((p) => p.includes('/api/resolve')),
+      false,
+    )
+    assert.equal(session.selected?.icao, 'KSFO')
+    assert.equal(session.selected?.thread.length, 1)
   })
 
   it('stops an answer in flight', async (t) => {

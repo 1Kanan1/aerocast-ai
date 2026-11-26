@@ -22,13 +22,22 @@ import {
 } from '#app/ui/public/sheet-drag.ts'
 import {
   AssistantTurn,
+  type Suggestion,
   ThreadAnnouncer,
+  ThreadWelcome,
   UserTurn,
 } from '#app/ui/public/thread-parts.tsx'
 
 type AreaSection = 'overview' | 'ask'
 
 const PANEL_EXIT_MS = 180
+
+const AREA_SUGGESTIONS: readonly Suggestion[] = [
+  { prompt: 'How do conditions compare across nearby stations?' },
+  { prompt: 'What is the ceiling and visibility around here?' },
+  { prompt: 'What is the wind doing and what does the forecast say?' },
+  { prompt: 'Are there any active advisories or recent trend changes?' },
+]
 
 /**
  * Area drawer for a clicked map point: segmented Overview (blended summary +
@@ -193,7 +202,9 @@ export const AreaPanel = clientEntry(
             ]}
           >
             <div mix={identityStyle}>
-              <span mix={pointStyle}>{pointLabel(point.lat, point.lon)}</span>
+              <span mix={pointStyle}>
+                {point.label ?? pointLabel(point.lat, point.lon)}
+              </span>
               <span mix={countStyle}>
                 {loading
                   ? 'Reading nearby stations…'
@@ -317,10 +328,13 @@ export const AreaPanel = clientEntry(
             ) : (
               <div key="ask" mix={[tabPaneStyle, threadColumnStyle]}>
                 {thread.length === 0 ? (
-                  <p mix={mutedStyle}>
-                    Ask about the weather here. Answers cite each nearby station
-                    by name while Overview blends them for this point.
-                  </p>
+                  <ThreadWelcome
+                    disabled={loading || stations.length === 0}
+                    onAsk={(prompt) => void session.askArea(prompt)}
+                    subtitle="Answers summarize the area average by default, or compare individual stations when you ask."
+                    suggestions={AREA_SUGGESTIONS}
+                    title={`Ask about ${point.label ?? 'this area'}`}
+                  />
                 ) : (
                   thread.map((entry, index) => (
                     <div key={`${entry.question}-${index}`} mix={exchangeStyle}>

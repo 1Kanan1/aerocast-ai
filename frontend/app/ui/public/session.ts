@@ -54,7 +54,9 @@ export interface NearbyChoice {
 export interface AreaPoint {
   lat: number
   lon: number
-  /** A searched coordinate: the map should travel to it once. */
+  /** City label when opened from a place search instead of a raw click. */
+  label?: string
+  /** A searched coordinate or city: the map should travel to it once. */
   focus?: boolean
 }
 
@@ -657,26 +659,29 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
   }
 
   /**
-   * Ask-first: resolve the place in the question before any model call.
-   * A station is asked directly, several matches wait for a choice, and no
-   * match falls back to the station already on screen.
+   * Ask-first: when a station or area is already open, every message stays
+   * locked to that location. When nothing is open, resolve coordinates, a
+   * station code, or a city name first.
    */
   async askQuestion(question: string): Promise<void> {
     let text = question.trim()
     if (text === '') return
+
+    if (this.area !== null) {
+      await this.askArea(text)
+      return
+    }
+
+    if (this.selected !== null) {
+      await this.ask(text)
+      return
+    }
 
     // A coordinate is a place, the same as a click: it opens the weather
     // around that point instead of resolving to a station next to it.
     let coordinates = parseCoordinates(text)
     if (coordinates !== null) {
       await this.openArea({ ...coordinates, focus: true })
-      return
-    }
-
-    // An open area answers for the place the reader clicked, not for a
-    // station the resolver would have to guess.
-    if (this.area !== null) {
-      await this.askArea(text)
       return
     }
 
@@ -693,7 +698,22 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
 
     if (payload?.station) {
       await this.select(payload.station.icao, payload.suggested)
-      await this.ask(text)
+      if (payload.station.ask !== false) {
+        await this.ask(text)
+      }
+      return
+    }
+
+    if (payload?.area) {
+      await this.openArea({
+        lat: payload.area.lat,
+        lon: payload.area.lon,
+        label: payload.area.label,
+        focus: true,
+      })
+      if (payload.area.ask) {
+        await this.askArea(text)
+      }
       return
     }
 
@@ -713,14 +733,9 @@ export class StationSession extends TypedEventTarget<{ change: Event }> {
       return
     }
 
-    if (this.selected !== null) {
-      await this.ask(text)
-      return
-    }
-
     this.clarification = {
       question: text,
-      message: payload?.message ?? 'No station matches that question.',
+      message: payload?.message ?? 'No station or city matches that question.',
       options: [],
     }
     this.notify()

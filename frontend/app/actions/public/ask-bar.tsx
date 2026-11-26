@@ -153,8 +153,8 @@ export const AskBar = clientEntry(
                 station !== null
                   ? `Ask about ${station.icao}'s weather…`
                   : inArea
-                    ? 'Ask about the weather here…'
-                    : 'Ask about the weather anywhere…'
+                    ? `Ask about ${session.area?.label ?? 'this area'}…`
+                    : 'Station code (KSFO), city (Seattle), or coords…'
               }
               rows={1}
               title="Press the up arrow to reuse an earlier question"

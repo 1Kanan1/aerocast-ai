@@ -25,9 +25,11 @@ export interface Suggestion {
 }
 
 interface WelcomeProps {
-  icao: string
-  name: string
-  category: string | null
+  icao?: string
+  name?: string
+  category?: string | null
+  title?: string
+  subtitle?: string
   disabled: boolean
   onAsk: (prompt: string) => void
   suggestions: readonly Suggestion[]
@@ -125,17 +127,26 @@ export function collectCitations(
 /** The new-chat view: what this drawer can answer, and starter prompts. */
 export function ThreadWelcome(handle: Handle<WelcomeProps>) {
   return () => {
-    let { icao, name, category, disabled, onAsk, suggestions } = handle.props
+    let {
+      icao,
+      name,
+      category = null,
+      title,
+      subtitle,
+      disabled,
+      onAsk,
+      suggestions,
+    } = handle.props
+    let heading = title ?? `Ask about ${icao ?? 'the weather'}`
+    let description =
+      subtitle ??
+      `${name ?? ''}${category === null ? '' : ` · ${category}`} · answers cite the facts shown in Conditions and Forecast`
 
     return (
       <div mix={welcomeStyle}>
         <div mix={welcomeHeadStyle}>
-          <h2 mix={welcomeTitleStyle}>Ask about {icao}</h2>
-          <p mix={welcomeSubStyle}>
-            {name}
-            {category === null ? '' : ` · ${category}`} · answers cite the facts
-            shown in Conditions and Forecast
-          </p>
+          <h2 mix={welcomeTitleStyle}>{heading}</h2>
+          <p mix={welcomeSubStyle}>{description}</p>
         </div>
 
         <div mix={suggestionListStyle}>

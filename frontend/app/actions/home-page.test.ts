@@ -79,7 +79,7 @@ describe('map page', () => {
 
     assert.doesNotMatch(html, /aria-label="Search stations"/)
     assert.doesNotMatch(html, /id="station-search"/)
-    assert.match(html, /Ask about the weather anywhere/)
+    assert.match(html, /Station code \(KSFO\), city \(Seattle\), or coords/)
   })
 
   it('proxies layer requests same-origin', async (t) => {
