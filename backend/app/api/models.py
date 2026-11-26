@@ -447,6 +447,7 @@ class ResolveStation(BaseModel):
     state: str | None
     lat: float
     lon: float
+    ask: bool = True
 
 
 class ResolveCandidate(ResolveStation):
@@ -469,10 +470,20 @@ class NearbyStation(ResolveStation):
 class NearbyStations(Envelope[list[NearbyStation]]): ...
 
 
+class ResolveArea(BaseModel):
+    """A resolved city or place opened as an area on the map."""
+
+    lat: float
+    lon: float
+    label: str
+    ask: bool = False
+
+
 class ResolveResponse(BaseModel):
     """What a free-text question resolves to, or the stations it might mean."""
 
     station: ResolveStation | None
+    area: ResolveArea | None = None
     candidates: list[ResolveCandidate]
     suggested: list[ResolveSuggestion]
     message: str | None

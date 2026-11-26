@@ -402,6 +402,7 @@ export interface NearbyStation {
   state: string | null
   lat: number
   lon: number
+  ask?: boolean
   distance_nm: number
 }
 
@@ -446,17 +447,26 @@ export interface ProviderStatus {
   configured: boolean
 }
 
+export interface ResolveArea {
+  lat: number
+  lon: number
+  label: string
+  ask?: boolean
+}
+
 export interface ResolveCandidate {
   icao: string
   name: string
   state: string | null
   lat: number
   lon: number
+  ask?: boolean
   metar: BundleMetar | null
 }
 
 export interface ResolveResponse {
   station: ResolveStation | null
+  area?: ResolveArea | null
   candidates: ResolveCandidate[]
   suggested: ResolveSuggestion[]
   message: string | null
@@ -468,6 +478,7 @@ export interface ResolveStation {
   state: string | null
   lat: number
   lon: number
+  ask?: boolean
 }
 
 export interface ResolveSuggestion {
@@ -476,6 +487,7 @@ export interface ResolveSuggestion {
   state: string | null
   lat: number
   lon: number
+  ask?: boolean
   distance_nm: number
   age_seconds: number
 }

@@ -1,9 +1,8 @@
-"""Resolve a free-text question to a station, or to the stations it might mean.
+"""Resolve a free-text question to a station or a city area.
 
-Ask-first has to guess which airport a question is about before any model
-call. The guess is deliberately conservative: an exact ICAO wins, a place
-name that matches several stations comes back as candidates, and a place
-that matches none says so instead of picking one.
+Ask-first resolves the place before any model call: an ICAO code selects
+that station, a city name opens the area around its location as if clicked
+on the map, and an unmatched place says so.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ from typing import Any
 from fastapi import APIRouter, Query
 
 from app.api import models
-from app.api.stations import station_metar
 from app.db.session import fetch_all, fetch_one
 from app.domain.geo import distance_nm
 
@@ -43,12 +41,22 @@ _WORD = re.compile(r"[a-z0-9]+")
 _STOPWORDS = frozenset(
     {
         "about",
+        "active",
+        "advisories",
+        "advisory",
         "after",
+        "afternoon",
+        "age",
         "ago",
+        "airport",
+        "airports",
         "all",
+        "altimeter",
         "and",
         "any",
         "are",
+        "area",
+        "around",
         "at",
         "average",
         "back",
@@ -57,13 +65,20 @@ _STOPWORDS = frozenset(
         "before",
         "being",
         "between",
+        "both",
         "briefing",
+        "broken",
         "can",
         "ceiling",
+        "ceilings",
         "change",
         "changed",
         "changes",
+        "clear",
+        "closest",
+        "cloud",
         "clouds",
+        "coldest",
         "compare",
         "comparison",
         "condition",
@@ -73,57 +88,125 @@ _STOPWORDS = frozenset(
         "currently",
         "day",
         "days",
+        "depart",
+        "describe",
+        "dewpoint",
         "did",
+        "different",
         "do",
         "does",
+        "doing",
         "done",
         "during",
+        "each",
         "earlier",
+        "evening",
+        "every",
+        "explain",
+        "few",
+        "flight",
+        "fly",
+        "flying",
+        "fog",
         "for",
         "forecast",
+        "forecasts",
         "from",
+        "give",
+        "going",
+        "gust",
+        "gusting",
+        "gusts",
         "had",
         "has",
         "have",
+        "haze",
         "here",
+        "high",
+        "highest",
         "history",
         "hour",
         "hours",
         "how",
+        "humidity",
+        "icing",
         "if",
+        "ifr",
         "in",
+        "individual",
         "is",
         "it",
         "its",
+        "land",
         "last",
         "later",
+        "lifr",
+        "like",
+        "list",
+        "local",
+        "low",
+        "lowest",
+        "max",
         "maybe",
         "me",
         "mean",
         "metar",
         "might",
+        "min",
+        "mist",
+        "morning",
         "must",
+        "mvfr",
         "my",
         "near",
+        "nearby",
+        "nearest",
         "next",
+        "night",
+        "notam",
+        "notams",
         "now",
         "of",
+        "old",
         "or",
+        "outside",
         "over",
+        "overcast",
         "past",
         "please",
+        "point",
+        "pressure",
         "previous",
+        "rain",
         "recent",
         "recently",
+        "remarks",
         "report",
         "reported",
+        "reports",
+        "safe",
+        "same",
+        "scattered",
         "should",
         "show",
         "since",
+        "sky",
+        "snow",
+        "stale",
+        "station",
+        "stations",
+        "storm",
+        "storms",
+        "summarize",
+        "summary",
         "taf",
+        "tafs",
         "temp",
         "temperature",
+        "temperatures",
         "tell",
+        "tfr",
+        "tfrs",
         "that",
         "the",
         "there",
@@ -133,9 +216,13 @@ _STOPWORDS = frozenset(
         "to",
         "today",
         "tomorrow",
+        "tonight",
         "trend",
         "trends",
+        "turbulence",
+        "vfr",
         "visibility",
+        "warmest",
         "was",
         "weather",
         "week",
@@ -143,13 +230,21 @@ _STOPWORDS = frozenset(
         "were",
         "what",
         "when",
+        "where",
+        "which",
+        "who",
+        "why",
         "will",
         "wind",
+        "windiest",
         "winds",
         "with",
         "would",
     }
 )
+
+#: Words that only count as part of a place name when preceded by another word.
+_PLACE_SUFFIXES = frozenset({"city", "point", "station"})
 
 #: Words that usually introduce the place a question is about.
 _LOCATORS = frozenset({"at", "around", "for", "from", "in", "near", "over"})
@@ -208,139 +303,251 @@ _STATE_NAMES = {
 }
 
 
+#: Stations within this radius of the top city match form its area centroid.
+CITY_CLUSTER_NM = 15.0
+
+_STATE_ABBRS = frozenset(_STATE_NAMES.values())
+
+
 @router.get("/resolve", response_model=models.ResolveResponse)
 async def resolve(
     q: str = Query(min_length=1, max_length=400),
 ) -> dict[str, Any]:
-    """The station a question names, the ones it might mean, or a message."""
+    """The station or city area a question names, or a message."""
     code = await _by_code(q)
     if code is not None:
-        return await _resolved(code)
+        return await _resolved(code, ask=len(_WORD.findall(q)) > 1)
 
-    for phrase in _phrases(q):
-        rows = await _by_place(phrase)
+    words = _WORD.findall(q.lower())
+    for phrase, state_hint in _phrases(q):
+        rows = await _by_place(phrase, state_hint=state_hint)
         if not rows:
             continue
 
-        if len(rows) == 1:
-            return await _resolved(rows[0])
-
         state = _STATE_NAMES.get(phrase)
-        if state is not None and all(
-            phrase not in row["name"].lower() for row in rows
-        ):
+        named = [
+            row for row in rows if _matches_city_prefix(row["name"], phrase)
+        ]
+        if state is not None and state_hint is None and not named:
             return _empty(
                 f"{phrase.title()} has many stations. Name a city or an "
                 "airport code."
             )
 
-        return {
-            "station": None,
-            "candidates": await _candidates(rows[:CANDIDATE_LIMIT]),
-            "suggested": [],
-            "message": f"\u201c{phrase}\u201d matches several stations.",
-        }
+        pool = named or rows
+        return _resolved_area(phrase, pool, words, state_hint=state_hint)
 
-    return _empty("No station matches that question. Try an airport code.")
+    return _empty(
+        "No station or city matches that question. Try a station code "
+        "(KSFO) or city name."
+    )
 
 
-def _phrases(question: str) -> list[str]:
-    """Place guesses: the tail after a locator, then the content words."""
+def _phrases(question: str) -> list[tuple[str, str | None]]:
+    """Place guesses: locator tail, then content words, with state hint."""
     words = _WORD.findall(question.lower())
 
-    phrases: list[str] = []
+    def split_state(tokens: list[str]) -> tuple[str, str | None]:
+        if len(tokens) >= 2 and tokens[-1].upper() in _STATE_ABBRS:
+            return " ".join(tokens[:-1]), tokens[-1].upper()
+        for tail_len in (2, 1):
+            if len(tokens) > tail_len:
+                candidate = " ".join(tokens[-tail_len:])
+                if candidate in _STATE_NAMES:
+                    return (
+                        " ".join(tokens[:-tail_len]),
+                        _STATE_NAMES[candidate],
+                    )
+        return " ".join(tokens), None
+
+    def subphrases(tokens: list[str]) -> list[tuple[str, str | None]]:
+        out: list[tuple[str, str | None]] = [split_state(tokens)]
+        for size in range(min(3, len(tokens) - 1), 1, -1):
+            for start in range(len(tokens) - size + 1):
+                out.append((" ".join(tokens[start : start + size]), None))
+        return out
+
+    def keep(tokens: list[str]) -> list[str]:
+        kept: list[str] = []
+        for index, word in enumerate(tokens):
+            is_trailing_state = (
+                index == len(tokens) - 1
+                and len(kept) >= 1
+                and word.upper() in _STATE_ABBRS
+            )
+            is_place_suffix = len(kept) >= 1 and word in _PLACE_SUFFIXES
+            if (
+                is_trailing_state
+                or is_place_suffix
+                or (word not in _STOPWORDS and len(word) >= 3)
+            ):
+                kept.append(word)
+        return kept
+
+    phrases: list[tuple[str, str | None]] = []
     for index in range(len(words) - 1, -1, -1):
         if words[index] not in _LOCATORS:
             continue
-        tail = [
-            word
-            for word in words[index + 1 :]
-            if word not in _STOPWORDS and len(word) >= 3
-        ]
+        tail = keep(words[index + 1 :])
         if tail:
-            phrases.append(" ".join(tail))
+            phrases.extend(subphrases(tail))
         break
 
-    content = [
-        word for word in words if word not in _STOPWORDS and len(word) >= 3
-    ]
+    content = keep(words)
     if content:
-        phrases.append(" ".join(content))
-    phrases.extend(sorted(set(content), key=len, reverse=True))
+        phrases.extend(subphrases(content))
+    for word in sorted(
+        {w for w in content if w not in _STOPWORDS and len(w) >= 3},
+        key=len,
+        reverse=True,
+    ):
+        phrases.append((word, None))
 
-    seen: set[str] = set()
-    unique: list[str] = []
-    for phrase in phrases:
-        if phrase in seen:
+    seen: set[tuple[str, str | None]] = set()
+    unique: list[tuple[str, str | None]] = []
+    for item in phrases:
+        if not item[0] or item in seen:
             continue
-        seen.add(phrase)
-        unique.append(phrase)
+        seen.add(item)
+        unique.append(item)
     return unique
 
 
 async def _by_code(question: str) -> dict[str, Any] | None:
-    codes = list(
-        dict.fromkeys(
-            token.upper()
-            for token in _WORD.findall(question.lower())
-            if 3 <= len(token) <= 5
-        )
-    )
+    tokens = _WORD.findall(question.lower())
+    codes: list[str] = []
+    for token in tokens:
+        if 3 <= len(token) <= 5 and token not in _STOPWORDS:
+            upper = token.upper()
+            if upper not in codes:
+                codes.append(upper)
+            if len(tokens) == 1 and len(token) == 3:
+                prefixed = f"K{upper}"
+                if prefixed not in codes:
+                    codes.append(prefixed)
     if not codes:
         return None
     rows = await fetch_all(
-        f"select {STATION_COLUMNS} from stations where icao = any(:codes)",
+        f"select {STATION_COLUMNS} from stations "
+        "where upper(icao) = any(:codes)",
         {"codes": codes},
     )
-    by_icao = {row["icao"]: row for row in rows}
+    by_icao = {row["icao"].upper(): row for row in rows}
     for code in codes:
         if code in by_icao:
             return by_icao[code]
     return None
 
 
-async def _by_place(phrase: str) -> list[dict[str, Any]]:
-    state = _STATE_NAMES.get(phrase)
-    # A TAF is the best proxy we have for "the airport people mean": the
-    # larger fields have one, and a weather office never does.
-    order = (
-        "order by exists ("
-        "  select 1 from taf_forecasts t where t.station_icao = stations.icao"
-        ") desc, (name ilike :prefix) desc, length(name), name"
+def _matches_city_prefix(name: str, phrase: str) -> bool:
+    """True when a station name starts with the city phrase at a boundary."""
+    lowered = name.lower()
+    if not lowered.startswith(phrase):
+        return False
+    if len(lowered) == len(phrase):
+        return True
+    return lowered[len(phrase)] in (" ", "/", "-", ",")
+
+
+async def _by_place(
+    phrase: str, *, state_hint: str | None = None
+) -> list[dict[str, Any]]:
+    state = state_hint or _STATE_NAMES.get(phrase)
+    # Match city names at the start of station names on a delimiter boundary
+    # so words like "station" never match "College Station/Easterwood Arpt".
+    prefix_match = (
+        "(name ilike :exact or name ilike :sp or name ilike :sl "
+        "or name ilike :hy or name ilike :cm)"
     )
-    if state is None:
+    # City-prefix matches always rank ahead of state-only matches so "New York"
+    # and "Washington" resolve to the city rather than shorter airports in the
+    # same state. A TAF is the best proxy for the primary airport in a city.
+    order = (
+        f"order by ({prefix_match}) desc, exists ("
+        "  select 1 from taf_forecasts t where t.station_icao = stations.icao"
+        ") desc, length(name), name"
+    )
+    params: dict[str, object] = {
+        "exact": phrase,
+        "sp": f"{phrase} %",
+        "sl": f"{phrase}/%",
+        "hy": f"{phrase}-%",
+        "cm": f"{phrase},%",
+        "limit": CANDIDATE_LIMIT + 1,
+    }
+    if state_hint is not None:
         sql = (
             f"select {STATION_COLUMNS} from stations "
-            "where name ilike :pattern and name not ilike '%WFO%' "
-            f"{order} limit :limit"
-        )
-        params: dict[str, Any] = {
-            "pattern": f"%{phrase}%",
-            "prefix": f"{phrase}%",
-            "limit": CANDIDATE_LIMIT + 1,
-        }
-    else:
-        sql = (
-            f"select {STATION_COLUMNS} from stations "
-            "where (name ilike :pattern or state = :state) "
+            f"where {prefix_match} and state = :state "
             "and name not ilike '%WFO%' "
             f"{order} limit :limit"
         )
-        params = {
-            "pattern": f"%{phrase}%",
-            "prefix": f"{phrase}%",
-            "state": state,
-            "limit": CANDIDATE_LIMIT + 1,
-        }
+        params["state"] = state_hint
+    elif state is None:
+        sql = (
+            f"select {STATION_COLUMNS} from stations "
+            f"where {prefix_match} and name not ilike '%WFO%' "
+            f"{order} limit :limit"
+        )
+    else:
+        sql = (
+            f"select {STATION_COLUMNS} from stations "
+            f"where ({prefix_match} or state = :state) "
+            "and name not ilike '%WFO%' "
+            f"{order} limit :limit"
+        )
+        params["state"] = state
 
     return await fetch_all(sql, params)
 
 
-async def _resolved(row: dict[str, Any]) -> dict[str, Any]:
+def _resolved_area(
+    phrase: str,
+    rows: list[dict[str, Any]],
+    words: list[str],
+    *,
+    state_hint: str | None = None,
+) -> dict[str, Any]:
+    anchor = rows[0]
+    cluster = [
+        row
+        for row in rows
+        if distance_nm(anchor["lat"], anchor["lon"], row["lat"], row["lon"])
+        <= CITY_CLUSTER_NM
+    ]
+    lat = round(sum(row["lat"] for row in cluster) / len(cluster), 4)
+    lon = round(sum(row["lon"] for row in cluster) / len(cluster), 4)
+    state_code = anchor.get("state")
+    label = f"{phrase.title()}, {state_code}" if state_code else phrase.title()
+    base = phrase.split()
+    bare_forms = [base, [*base, "city"]]
+    if state_hint is not None:
+        bare_forms.append([*base, state_hint.lower()])
+        for full_name, abbr in _STATE_NAMES.items():
+            if abbr == state_hint:
+                bare_forms.append([*base, *full_name.split()])
+    return {
+        "station": None,
+        "area": {
+            "lat": lat,
+            "lon": lon,
+            "label": label,
+            "ask": words not in bare_forms,
+        },
+        "candidates": [],
+        "suggested": [],
+        "message": None,
+    }
+
+
+async def _resolved(
+    row: dict[str, Any], *, ask: bool = True
+) -> dict[str, Any]:
     now = datetime.now(UTC)
     age = await latest_age(row["icao"], now)
     return {
-        "station": _place(row),
+        "station": {**_place(row), "ask": ask},
+        "area": None,
         "candidates": [],
         "suggested": await suggestions(row, age, now),
         "message": None,
@@ -350,6 +557,7 @@ async def _resolved(row: dict[str, Any]) -> dict[str, Any]:
 def _empty(message: str) -> dict[str, Any]:
     return {
         "station": None,
+        "area": None,
         "candidates": [],
         "suggested": [],
         "message": message,
@@ -364,30 +572,6 @@ def _place(row: dict[str, Any]) -> dict[str, Any]:
         "lat": row["lat"],
         "lon": row["lon"],
     }
-
-
-async def _candidates(
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Candidate places, each paired with its newest report in one query."""
-    if not rows:
-        return []
-    icaos = [row["icao"].upper() for row in rows]
-    observations = await fetch_all(
-        "select distinct on (station_icao) station_icao, raw, obs_time "
-        "from metar_observations "
-        "where station_icao = any(:icaos) "
-        "order by station_icao, obs_time desc",
-        {"icaos": icaos},
-    )
-    by_icao = {obs["station_icao"]: obs for obs in observations}
-    return [
-        {
-            **_place(row),
-            "metar": station_metar(row, by_icao.get(row["icao"])),
-        }
-        for row in rows
-    ]
 
 
 async def latest_age(icao: str, now: datetime) -> int | None:

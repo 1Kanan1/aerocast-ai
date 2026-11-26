@@ -77,9 +77,9 @@ class FakeDb:
     ) -> list[dict[str, Any]]:
         self.queries.append(sql)
         params = params or {}
-        if "where icao = any(:codes)" in sql:
-            wanted = set(params.get("codes", ()))
-            return [s for s in self.stations if s["icao"] in wanted]
+        if "upper(icao) = any(:codes)" in sql:
+            wanted = {str(code).upper() for code in params.get("codes", ())}
+            return [s for s in self.stations if s["icao"].upper() in wanted]
         if "where station_icao = any(:icaos)" in sql:
             return [
                 {
@@ -97,20 +97,31 @@ class FakeDb:
                 if (age := self.ages.get(station["icao"])) is not None
             ]
         if "from stations" in sql and "name ilike" in sql:
-            phrase = str(params["pattern"]).strip("%").lower()
+            phrase = str(params["exact"]).lower()
             rows = [
                 station
                 for station in self.stations
-                if phrase in station["name"].lower()
+                if (
+                    resolve_module._matches_city_prefix(
+                        station["name"], phrase
+                    )
+                    and (
+                        "and state = :state" not in sql
+                        or station["state"] == params.get("state")
+                    )
+                )
                 or (
-                    "state = :state" in sql
+                    "or state = :state" in sql
                     and station["state"] == params.get("state")
                 )
             ]
             return sorted(
                 rows,
                 key=lambda station: (
-                    not station["name"].lower().startswith(phrase),
+                    not resolve_module._matches_city_prefix(
+                        station["name"], phrase
+                    ),
+                    len(station["name"]),
                     station["name"],
                 ),
             )[: int(params.get("limit", 20))]
@@ -133,38 +144,106 @@ async def get(path: str) -> httpx.Response:
 async def test_a_station_code_wins_over_everything(monkeypatch) -> None:
     install(monkeypatch, FakeDb([KDEN, KIXD], {"KIXD": 60}))
 
-    response = await get("/api/resolve?q=what+is+the+wind+at+KIXD")
+    response = await get("/api/resolve?q=what+is+the+wind+at+kixd")
 
     body = response.json()
     assert response.status_code == 200
     assert body["station"]["icao"] == "KIXD"
+    assert body["station"]["ask"] is True
+    assert body["area"] is None
     assert body["candidates"] == []
 
 
-async def test_a_place_with_one_match_resolves(monkeypatch) -> None:
+async def test_a_bare_three_letter_code_matches_case_insensitively(
+    monkeypatch,
+) -> None:
     install(monkeypatch, FakeDb([KDEN], {"KDEN": 60}))
 
-    response = await get("/api/resolve?q=weather+in+Denver")
+    response = await get("/api/resolve?q=den")
 
     body = response.json()
+    assert response.status_code == 200
     assert body["station"]["icao"] == "KDEN"
-    assert body["candidates"] == []
+    assert body["station"]["ask"] is False
 
 
-async def test_a_city_with_two_airports_asks_which(monkeypatch) -> None:
+async def test_a_city_name_resolves_to_its_area_point(monkeypatch) -> None:
+    install(monkeypatch, FakeDb([KDEN], {"KDEN": 60}))
+
+    bare = await get("/api/resolve?q=Denver")
+    bare_body = bare.json()
+    assert bare_body["station"] is None
+    assert bare_body["candidates"] == []
+    assert bare_body["area"] == {
+        "lat": 39.86,
+        "lon": -104.67,
+        "label": "Denver, CO",
+        "ask": False,
+    }
+
+    asked = await get("/api/resolve?q=weather+in+Denver")
+    asked_body = asked.json()
+    assert asked_body["station"] is None
+    assert asked_body["area"]["label"] == "Denver, CO"
+    assert asked_body["area"]["ask"] is True
+
+
+async def test_a_city_with_multiple_airports_clusters_into_an_area(
+    monkeypatch,
+) -> None:
+    seattle_bfi = {
+        "icao": "KBFI",
+        "name": "Seattle/Boeing Fld",
+        "state": "WA",
+        "lat": 47.55,
+        "lon": -122.31,
+    }
+    seattle_sea = {
+        "icao": "KSEA",
+        "name": "Seattle-Tacoma Intl",
+        "state": "WA",
+        "lat": 47.45,
+        "lon": -122.31,
+    }
+    far_other = {
+        "icao": "KZZZ",
+        "name": "Port Seattle Far",
+        "state": "CA",
+        "lat": 38.0,
+        "lon": -122.0,
+    }
     install(
         monkeypatch,
-        FakeDb([KSGF, KSPI], {"KSGF": 60, "KSPI": 60}),
+        FakeDb([seattle_bfi, seattle_sea, far_other], {"KBFI": 60}),
     )
 
-    response = await get("/api/resolve?q=weather+in+Springfield")
+    response = await get("/api/resolve?q=Seattle")
 
     body = response.json()
     assert body["station"] is None
-    assert {item["icao"] for item in body["candidates"]} == {"KSGF", "KSPI"}
-    assert all(item["metar"] is not None for item in body["candidates"])
-    assert body["candidates"][0]["metar"]["flight_category"]["value"] == "VFR"
-    assert body["message"] is not None
+    assert body["candidates"] == []
+    assert body["area"] == {
+        "lat": 47.5,
+        "lon": -122.31,
+        "label": "Seattle, WA",
+        "ask": False,
+    }
+
+
+async def test_a_city_with_state_hint_picks_that_state(monkeypatch) -> None:
+    install(monkeypatch, FakeDb([KSGF, KSPI]))
+
+    response = await get("/api/resolve?q=Springfield+IL")
+
+    body = response.json()
+    assert body["station"] is None
+    assert body["candidates"] == []
+    assert body["area"] == {
+        "lat": 39.84,
+        "lon": -89.68,
+        "label": "Springfield, IL",
+        "ask": False,
+    }
 
 
 async def test_an_unmatched_place_says_so(monkeypatch) -> None:
@@ -174,22 +253,68 @@ async def test_an_unmatched_place_says_so(monkeypatch) -> None:
 
     body = response.json()
     assert body["station"] is None
+    assert body["area"] is None
     assert body["candidates"] == []
-    assert "No station matches" in body["message"]
+    assert "No station or city matches" in body["message"]
 
 
 async def test_a_follow_up_question_stays_with_the_station(
     monkeypatch,
 ) -> None:
-    install(monkeypatch, FakeDb([KDEN], {"KDEN": 60}))
+    college_station = {
+        "icao": "KCLL",
+        "name": "College Station/Easterwood Arpt",
+        "state": "TX",
+        "lat": 30.59,
+        "lon": -96.36,
+    }
+    install(monkeypatch, FakeDb([KDEN, college_station], {"KDEN": 60}))
 
-    response = await get(
-        "/api/resolve?q=What+was+its+temperature+in+the+last+24+hours%3F"
-    )
+    for query in (
+        "What+was+its+temperature+in+the+last+24+hours%3F",
+        "What+is+the+temperature+at+each+station%3F",
+    ):
+        response = await get(f"/api/resolve?q={query}")
+        body = response.json()
+        assert body["station"] is None
+        assert body["area"] is None
+        assert body["candidates"] == []
 
-    body = response.json()
-    assert body["station"] is None
-    assert body["candidates"] == []
+    explicit = await get("/api/resolve?q=College+Station")
+    assert explicit.json()["area"]["label"] == "College Station, TX"
+
+
+async def test_city_sharing_a_state_name_resolves_to_the_city(
+    monkeypatch,
+) -> None:
+    ny_state = [
+        {
+            "icao": f"KNY{i}",
+            "name": f"Town {i}",
+            "state": "NY",
+            "lat": 42.5 + i * 0.1,
+            "lon": -75.0,
+        }
+        for i in range(8)
+    ]
+    kjfk = {
+        "icao": "KJFK",
+        "name": "New York/JF Kennedy Intl",
+        "state": "NY",
+        "lat": 40.64,
+        "lon": -73.76,
+    }
+    install(monkeypatch, FakeDb([*ny_state, kjfk]))
+
+    for query in ("new+york", "new+york+new+york", "new+york+city"):
+        response = await get(f"/api/resolve?q={query}")
+        body = response.json()
+        assert body["area"] == {
+            "lat": 40.64,
+            "lon": -73.76,
+            "label": "New York, NY",
+            "ask": False,
+        }
 
 
 async def test_a_stale_station_suggests_a_fresh_neighbour(monkeypatch) -> None:
@@ -214,10 +339,15 @@ async def test_a_stale_station_suggests_a_fresh_neighbour(monkeypatch) -> None:
 
 def test_the_place_phrase_prefers_what_follows_a_locator() -> None:
     assert resolve_module._phrases("What is the weather in Denver?")[0] == (
-        "denver"
+        "denver",
+        None,
     )
-    assert resolve_module._phrases("wind at new york")[0] == "new york"
-    assert resolve_module._phrases("KIXD tomorrow")[0] == "kixd"
+    assert resolve_module._phrases("wind at new york")[0] == ("new york", None)
+    assert resolve_module._phrases("Springfield, IL")[0] == (
+        "springfield",
+        "IL",
+    )
+    assert resolve_module._phrases("KIXD tomorrow")[0] == ("kixd", None)
 
 
 async def test_code_lookup_batches_all_words_into_one_query(
@@ -227,22 +357,10 @@ async def test_code_lookup_batches_all_words_into_one_query(
     install(monkeypatch, db)
 
     response = await get(
-        "/api/resolve?q=compare+wind+near+KIXD+and+KDEN+this+hour"
+        "/api/resolve?q=compare+wind+near+kixd+and+kden+this+hour"
     )
 
     assert response.status_code == 200
     assert response.json()["station"]["icao"] == "KIXD"
-    code_queries = [q for q in db.queries if "icao = any(:codes)" in q]
+    code_queries = [q for q in db.queries if "upper(icao) = any(:codes)" in q]
     assert len(code_queries) == 1
-
-
-async def test_candidate_reports_are_fetched_in_one_query(monkeypatch) -> None:
-    db = FakeDb([KSGF, KSPI], {"KSGF": 60, "KSPI": 60})
-    install(monkeypatch, db)
-
-    response = await get("/api/resolve?q=weather+in+Springfield")
-
-    assert response.status_code == 200
-    assert len(response.json()["candidates"]) == 2
-    metar_queries = [q for q in db.queries if "from metar_observations" in q]
-    assert len(metar_queries) == 1
